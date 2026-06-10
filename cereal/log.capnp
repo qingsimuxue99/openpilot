@@ -141,6 +141,7 @@ enum LongitudinalPersonality {
   aggressive @0;
   standard @1;
   relaxed @2;
+  veryRelaxed @3;   # 新增：放松/最远跟车
 }
 
 struct InitData {
