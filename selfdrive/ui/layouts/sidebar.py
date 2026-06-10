@@ -115,7 +115,7 @@ class Sidebar(Widget, SidebarSP):
     self._update_temperature_status(device_state)
     self._update_connection_status(device_state)
     self._update_panda_status()
-    # SidebarSP._update_sunnylink_status(self)
+    SidebarSP._update_sunnylink_status(self)
 
   def _update_network_status(self, device_state):
     self._net_type = NETWORK_TYPES.get(device_state.networkType.raw, tr_noop("Unknown"))
@@ -123,20 +123,13 @@ class Sidebar(Widget, SidebarSP):
     self._net_strength = max(0, min(5, strength.raw + 1)) if strength.raw > 0 else 0
 
   def _update_temperature_status(self, device_state):
-    # Get max CPU temperature across all cores
-    cpu_temps = device_state.cpuTempC
-    max_temp = max(cpu_temps) if cpu_temps else 0.0
-    temp_str = f"{max_temp:.0f}°C"
-    
-    thermal_status = device_state.thermalStatus
+    temp_str = f"{device_state.maxTempC:.0f}°C"
 
-    if thermal_status == ThermalStatus.green:
+    if device_state.thermalStatus == ThermalStatus.ok:
       self._temp_status.update(tr_noop("TEMP"), temp_str, Colors.GOOD)
-    elif thermal_status == ThermalStatus.yellow:
-      self._temp_status.update(tr_noop("TEMP"), temp_str, Colors.WARNING)
     else:
       self._temp_status.update(tr_noop("TEMP"), temp_str, Colors.DANGER)
-    
+
   def _update_connection_status(self, device_state):
     last_ping = device_state.lastAthenaPingTime
     if last_ping == 0:
@@ -209,7 +202,7 @@ class Sidebar(Widget, SidebarSP):
     rl.draw_text_ex(self._font_regular, tr(self._net_type), text_pos, FONT_SIZE, 0, Colors.WHITE)
 
   def _draw_metrics(self, rect: rl.Rectangle):
-    if False:  # gui_app.sunnypilot_ui()  ← 改为 False
+    if False and gui_app.sunnypilot_ui():
       metrics, start_y, spacing = SidebarSP._draw_metrics_w_sunnylink(self, rect, self._temp_status, self._panda_status, self._connect_status)
       for idx, metric in enumerate(metrics):
         self._draw_metric(rect, metric, start_y + idx * spacing)
