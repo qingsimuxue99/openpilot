@@ -130,11 +130,13 @@ class Sidebar(Widget, SidebarSP):
     
     thermal_status = device_state.thermalStatus
 
-    if thermal_status == ThermalStatus.ok:
-      self._temp_status.update(tr_noop("TEMP"), tr_noop("GOOD"), Colors.GOOD)
+    if thermal_status == ThermalStatus.green:
+      self._temp_status.update(tr_noop("TEMP"), temp_str, Colors.GOOD)
+    elif thermal_status == ThermalStatus.yellow:
+      self._temp_status.update(tr_noop("TEMP"), temp_str, Colors.WARNING)
     else:
-      self._temp_status.update(tr_noop("TEMP"), tr_noop("HIGH"), Colors.DANGER)
-
+      self._temp_status.update(tr_noop("TEMP"), temp_str, Colors.DANGER)
+    
   def _update_connection_status(self, device_state):
     last_ping = device_state.lastAthenaPingTime
     if last_ping == 0:
@@ -207,7 +209,7 @@ class Sidebar(Widget, SidebarSP):
     rl.draw_text_ex(self._font_regular, tr(self._net_type), text_pos, FONT_SIZE, 0, Colors.WHITE)
 
   def _draw_metrics(self, rect: rl.Rectangle):
-    if gui_app.sunnypilot_ui():
+    if False:  # gui_app.sunnypilot_ui()  ← 改为 False
       metrics, start_y, spacing = SidebarSP._draw_metrics_w_sunnylink(self, rect, self._temp_status, self._panda_status, self._connect_status)
       for idx, metric in enumerate(metrics):
         self._draw_metric(rect, metric, start_y + idx * spacing)
