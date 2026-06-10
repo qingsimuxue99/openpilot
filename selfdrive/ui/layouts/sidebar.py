@@ -115,7 +115,7 @@ class Sidebar(Widget, SidebarSP):
     self._update_temperature_status(device_state)
     self._update_connection_status(device_state)
     self._update_panda_status()
-    SidebarSP._update_sunnylink_status(self)
+    # SidebarSP._update_sunnylink_status(self)
 
   def _update_network_status(self, device_state):
     self._net_type = NETWORK_TYPES.get(device_state.networkType.raw, tr_noop("Unknown"))
@@ -123,6 +123,11 @@ class Sidebar(Widget, SidebarSP):
     self._net_strength = max(0, min(5, strength.raw + 1)) if strength.raw > 0 else 0
 
   def _update_temperature_status(self, device_state):
+    # Get max CPU temperature across all cores
+    cpu_temps = device_state.cpuTempC
+    max_temp = max(cpu_temps) if cpu_temps else 0.0
+    temp_str = f"{max_temp:.0f}°C"
+    
     thermal_status = device_state.thermalStatus
 
     if thermal_status == ThermalStatus.ok:
