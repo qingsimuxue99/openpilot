@@ -1,25 +1,25 @@
-from cereal import log
+从 cereals 导入 log
 
-from openpilot.system.ui.widgets.scroller import NavScroller
-from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl, BigMultiParamToggle
-from openpilot.system.ui.lib.application import gui_app
-from openpilot.selfdrive.ui.layouts.settings.common import restart_needed_callback
-from openpilot.selfdrive.ui.ui_state import ui_state
+来自openpilot。系统。ui。小部件滚动条 导入NavScroller
+从openpilot.selfdrive.ui.mici.widgets.button 导入BigParamControl, BigMultiParamToggle
+从openpilot.system.ui.lib.application 导入gui_app
+从openpilot.selfdrive.ui.layouts.settings.common 导入restart_needed_callback
+从openpilot.自驾.ui.ui_state 导入ui_state
 
-PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
+PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.枚举值
 
 
-class TogglesLayoutMici(NavScroller):
-  def __init__(self):
+类TogglesLayoutMici(NavScroller):
+   __init__(self):
     super().__init__()
 
-    self._personality_toggle = BigMultiParamToggle("driving personality", "LongitudinalPersonality", ["aggressive", "standard", "relaxed"])
-    self._experimental_btn = BigParamControl("experimental mode", "ExperimentalMode")
-    is_metric_toggle = BigParamControl("use metric units", "IsMetric")
-    ldw_toggle = BigParamControl("lane departure warnings", "IsLdwEnabled")
-    always_on_dm_toggle = BigParamControl("always-on driver monitor", "AlwaysOnDM")
-    record_front = BigParamControl("record & upload driver camera", "RecordFront", toggle_callback=restart_needed_callback)
-    record_mic = BigParamControl("record & upload mic audio", "RecordAudio", toggle_callback=restart_needed_callback)
+    self._personality_toggle = BigMultiParamToggle("驾驶个性", "纵向个性", ["激进", "标准", "放松", "非常放松"])
+    self._experimental_btn = BigParamControl("实验模式", "ExperimentalMode")
+    is_metric_toggle = BigParamControl("使用公制单位", "IsMetric")
+    ldw_toggle = BigParamControl("车道偏离警告", "IsLdwEnabled")
+    always_on_dm_toggle = BigParamControl("始终开启的驱动程序监控", "AlwaysOnDM")
+    record_front = BigParamControl("录制并上传驾驶员摄像头", "RecordFront", toggle_callback=restart_needed_callback)
+    record_mic = BigParamControl("录制并上传麦克风音频", "RecordAudio", toggle_callback=restart_needed_callback)
     enable_openpilot = BigParamControl("enable sunnypilot", "OpenpilotEnabledToggle", toggle_callback=restart_needed_callback)
 
     self._scroller.add_widgets([
@@ -28,9 +28,9 @@ class TogglesLayoutMici(NavScroller):
       is_metric_toggle,
       ldw_toggle,
       always_on_dm_toggle,
-      record_front,
-      record_mic,
-      enable_openpilot,
+      前置记录,
+      麦克风记录,
+      启用OpenPilot,
     ])
 
     # Toggle lists
