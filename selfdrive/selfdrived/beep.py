@@ -58,10 +58,10 @@ class Beepd:
       self._beep(False)
       time.sleep(0.01)
 
-  #def startup_beep(self):
-    #self._beep(True)
-    #time.sleep(0.1)
-    #self._beep(False)
+  def startup_beep(self):
+    self._beep(True)
+    time.sleep(0.1)
+    self._beep(False)
 
   def dispatch_beep(self, func):
     threading.Thread(target=func, daemon=True).start()
