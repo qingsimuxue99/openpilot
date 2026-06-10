@@ -61,9 +61,7 @@ def get_default_route_iface():
 class Tici(HardwareBase):
   @cached_property
   def amplifier(self):
-    if self.get_device_type() == "mici":
-      return None
-    return Amplifier()
+   return None
 
   def get_modem_state(self) -> dict:
     try:
