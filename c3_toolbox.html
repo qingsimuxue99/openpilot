@@ -472,6 +472,28 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         <div class="fg"><input type="file" id="rFile" accept=".json" style="color:var(--ink)"></div>
         <button class="btn bw" onclick="doRestore()" style="margin-top:8px">恢复到设备</button>
       </div>
+      <div class="cd"><div class="ct">完整备份 (openpilot 整目录)</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">将 <code style="background:var(--bg);padding:1px 6px;border-radius:4px;font-size:11px">/data/openpilot</code> 整体打包为 .tar.gz 备份包（含全部文件、模型与配置）。耗时可能数分钟。</p>
+        <button class="btn bp" onclick="startOpBackup()">创建完整备份</button>
+        <div id="opBkProg" style="font-size:11px;margin-top:8px;color:var(--accent)"></div>
+      </div>
+      <div class="cd"><div class="ct">完整备份包 / 恢复</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">设备内已有备份包：</p>
+        <div id="opBkList" style="margin-bottom:8px"></div>
+        <select id="opBkSelect" style="width:100%;padding:6px;border-radius:6px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);font-size:12px">
+          <option value="">— 请选择备份包 —</option>
+        </select>
+        <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;margin:8px 0">
+          <input type="checkbox" id="opReboot" checked> 恢复后重启设备（推荐，确保 openpilot 重新加载）
+        </label>
+        <button class="btn bw" onclick="restoreOpDevice()">从设备备份包恢复</button>
+        <div style="border-top:1px dashed var(--rule);margin:12px 0"></div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">或上传本地备份包恢复：</p>
+        <div class="fg"><input type="file" id="opUpFile" accept=".tar.gz,.tgz" style="color:var(--ink)"></div>
+        <button class="btn bp" onclick="restoreOpUpload()" style="margin-top:8px">上传并恢复</button>
+        <div id="opResProg" style="font-size:11px;margin-top:8px;color:var(--accent)"></div>
+        <p style="font-size:11px;color:var(--dim);margin-top:8px">备份包保存于 <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/备份恢复包openpilot_backup_*.tar.gz</code></p>
+      </div>
       <div class="cd"><div class="ct">自定义写入</div>
         <div class="fg"><textarea id="cParams" rows="5" placeholder='{"AutoCruiseControl": "1"}' style="font-family:monospace;font-size:11px"></textarea></div>
         <button class="btn bp" onclick="applyCustom()" style="margin-top:8px">应用</button>
@@ -738,7 +760,7 @@ function updBadge(){}
 
 function onTabSwitch(id){
   if(id==='dashboard'){loadInfo()}
-  else if(id==='backup'){checkAutoBackup();loadBkList();checkUpdate();}
+  else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
   else if(id!=='terminal'){loadParams()}
 }
 
@@ -776,6 +798,75 @@ async function doRestore(){var f=document.getElementById('rFile');if(!f.files.le
 async function applyCustom(){var t=document.getElementById('cParams').value.trim();if(!t){toast('请输入JSON','er');return}
   try{var p=JSON.parse(t);var r=await fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});var d=await r.json();
   toast(d.message,d.success?'ok':'er');if(d.success){Object.assign(AP,p);CP={};fillSortedParams()}}catch(e){toast('JSON格式错误','er')}}
+
+// === 完整备份 / 恢复（/data/openpilot）===
+function pollOpTask(taskId, progEl, onDone){
+  var timer = setInterval(function(){
+    fetch('/api/op_task/'+taskId).then(function(r){return r.json()}).then(function(d){
+      if(progEl) progEl.textContent = d.message || (d.status==='running' ? '处理中...' : '');
+      if(d.done){
+        clearInterval(timer);
+        if(progEl) progEl.textContent = d.message || '';
+        if(onDone) onDone(d);
+      }
+    }).catch(function(){
+      if(progEl) progEl.textContent = '状态查询失败，请稍后手动刷新备份列表';
+      clearInterval(timer);
+    });
+  }, 2000);
+}
+async function startOpBackup(){
+  if(!confirm('将打包 /data/openpilot 整体，可能耗时数分钟且占用磁盘空间，确定开始？'))return;
+  var prog=document.getElementById('opBkProg');prog.textContent='正在打包...';prog.style.color='var(--accent)';
+  try{
+    var r=await fetch('/api/op_backup',{method:'POST'});var d=await r.json();
+    if(!d.success){toast('备份启动失败','er');prog.textContent='';return;}
+    pollOpTask(d.task_id, prog, function(res){
+      toast(res.message, res.status==='done'?'ok':'er');
+      if(res.status==='done') loadOpBackups();
+    });
+  }catch(e){toast('失败','er');prog.textContent='';}
+}
+function loadOpBackups(){
+  fetch('/api/op_backups').then(function(r){return r.json()}).then(function(d){
+    var list=document.getElementById('opBkList');var sel=document.getElementById('opBkSelect');
+    if(!list||!sel)return;
+    if(!d.backups||!d.backups.length){list.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无完整备份包</p>';sel.innerHTML='<option value="">— 暂无备份包 —</option>';return;}
+    var h='';var opts='';
+    d.backups.forEach(function(b){
+      var mb=(b.size/1024/1024).toFixed(0);
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+'</span><span style="color:var(--dim)">'+b.time+' · '+mb+'MB <a class="upd-link" onclick="dlOpBk(\''+esc(b.name)+'\')">下载</a></span></div>';
+      opts+='<option value="'+esc(b.name)+'">'+esc(b.name)+' ('+mb+'MB)</option>';
+    });
+    list.innerHTML=h;sel.innerHTML='<option value="">— 请选择备份包 —</option>'+opts;
+  }).catch(function(){});
+}
+function dlOpBk(name){window.open('/api/op_backup/download/'+encodeURIComponent(name));}
+async function restoreOpDevice(){
+  var sel=document.getElementById('opBkSelect');var fn=sel.value;
+  if(!fn){toast('请先选择备份包','er');return;}
+  if(!confirm('将从备份包 '+fn+' 恢复整个 /data/openpilot，此操作会覆盖现有文件，确定？'))return;
+  var prog=document.getElementById('opResProg');prog.textContent='正在恢复...';prog.style.color='var(--accent)';
+  var reboot=document.getElementById('opReboot').checked;
+  try{
+    var r=await fetch('/api/op_restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:fn,reboot:reboot})});var d=await r.json();
+    if(!d.success){toast(d.message,'er');prog.textContent='';return;}
+    pollOpTask(d.task_id,prog,function(res){toast(res.message,res.status==='done'?'ok':'er');});
+  }catch(e){toast('失败','er');prog.textContent='';}
+}
+async function restoreOpUpload(){
+  var f=document.getElementById('opUpFile');
+  if(!f.files.length){toast('请选择本地备份包','er');return;}
+  if(!confirm('将上传并恢复该备份包到 /data/openpilot，确定？'))return;
+  var prog=document.getElementById('opResProg');prog.textContent='正在上传并恢复...';prog.style.color='var(--accent)';
+  var reboot=document.getElementById('opReboot').checked;
+  var fd=new FormData();fd.append('file',f.files[0]);fd.append('reboot',reboot?'1':'0');
+  try{
+    var r=await fetch('/api/op_restore_upload',{method:'POST',body:fd});var d=await r.json();
+    if(!d.success){toast(d.message,'er');prog.textContent='';return;}
+    pollOpTask(d.task_id,prog,function(res){toast(res.message,res.status==='done'?'ok':'er');});
+  }catch(e){toast('失败','er');prog.textContent='';}
+}
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 

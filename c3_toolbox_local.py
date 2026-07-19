@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.6"
+VERSION = "1.0.8"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -54,6 +54,12 @@ CHECK_MIRRORS = [
 # 兼容旧引用
 UPDATE_BASE = CHECK_MIRRORS[0]
 UPDATE_MIRRORS = CHECK_MIRRORS
+
+# ============= 完整备份/恢复（/data/openpilot 整目录 tar 包）=============
+OP_BK_PREFIX = "备份恢复包openpilot_backup_"
+OP_BK_DIR = "/data"
+# 后台任务状态（备份/恢复可能耗时数分钟，前端轮询获取进度）
+OP_TASKS = {}
 
 # 启动时确保目录存在
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -658,6 +664,147 @@ def api_download_backup(filename):
     if os.path.isfile(fp):
         return send_from_directory(os.path.dirname(fp), os.path.basename(fp), as_attachment=True)
     return jsonify({'success': False, 'message': '文件不存在'})
+
+
+# ============= 完整备份/恢复（/data/openpilot 整目录）=============
+
+@app.route('/api/op_backup', methods=['POST'])
+def api_op_backup():
+    """后台打包 /data/openpilot 为 tar.gz 备份包（命名含时间戳）"""
+    ts = time.strftime('%Y-%m-%d_%H-%M-%S')
+    fname = OP_BK_PREFIX + ts + '.tar.gz'
+    out_path = os.path.join(OP_BK_DIR, fname)
+    task_id = str(int(time.time() * 1000))
+    OP_TASKS[task_id] = {'status': 'running', 'message': '正在打包 /data/openpilot ...', 'done': False}
+    def run():
+        try:
+            # 用列表参数调用，避免中文文件名在 shell 中被转义出错
+            proc = subprocess.run(['tar', '-zcvf', out_path, '/data/openpilot'],
+                                  capture_output=True, text=True, timeout=1800)
+            if proc.returncode == 0 and os.path.isfile(out_path):
+                sz = os.path.getsize(out_path)
+                OP_TASKS[task_id] = {
+                    'status': 'done', 'done': True,
+                    'message': f'备份完成: {fname} ({sz/1024/1024:.0f} MB)',
+                    'filename': fname, 'size': sz,
+                }
+            else:
+                err = (proc.stderr or '未知错误')[-600:]
+                OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'备份失败: {err}'}
+        except subprocess.TimeoutExpired:
+            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': '备份超时（>30 分钟）'}
+        except Exception as e:
+            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'备份异常: {e}'}
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'success': True, 'task_id': task_id})
+
+
+@app.route('/api/op_task/<task_id>')
+def api_op_task(task_id):
+    """查询后台任务（备份/恢复）状态"""
+    t = OP_TASKS.get(task_id)
+    if not t:
+        return jsonify({'done': True, 'status': 'error', 'message': '任务不存在或已过期'})
+    return jsonify(t)
+
+
+@app.route('/api/op_backups')
+def api_op_backups():
+    """列出 /data 下所有完整备份包"""
+    items = []
+    try:
+        for f in os.listdir(OP_BK_DIR):
+            if f.startswith(OP_BK_PREFIX) and f.endswith('.tar.gz'):
+                fp = os.path.join(OP_BK_DIR, f)
+                if os.path.isfile(fp):
+                    sz = os.path.getsize(fp)
+                    mt = time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(fp)))
+                    items.append({'name': f, 'size': sz, 'time': mt})
+    except Exception:
+        pass
+    items.sort(key=lambda x: x['time'], reverse=True)
+    return jsonify({'backups': items})
+
+
+@app.route('/api/op_backup/download/<path:filename>')
+def api_op_backup_download(filename):
+    """下载完整备份包（仅允许前缀匹配的备份包，防路径穿越）"""
+    if not (filename.startswith(OP_BK_PREFIX) and filename.endswith('.tar.gz')):
+        return jsonify({'success': False, 'message': '非法文件名'}), 400
+    fp = os.path.join(OP_BK_DIR, filename)
+    if os.path.isfile(fp):
+        return send_from_directory(OP_BK_DIR, filename, as_attachment=True)
+    return jsonify({'success': False, 'message': '文件不存在'}), 404
+
+
+def _restore_package(pkg_path, reboot_after, task_id):
+    """实际的恢复逻辑：停 openpilot → 解包到 / → 可选重启。在后台线程执行。"""
+    try:
+        # 先停 openpilot，避免运行中文件被覆盖导致不一致（不影响工具箱本身）
+        subprocess.run("pkill -f manager.py", shell=True, timeout=5)
+        time.sleep(2)
+        proc = subprocess.run(['tar', '-zxvf', pkg_path, '-C', '/'],
+                              capture_output=True, text=True, timeout=1800)
+        try:
+            os.remove(pkg_path)  # 上传的临时包用完后清理
+        except Exception:
+            pass
+        if proc.returncode == 0:
+            msg = '恢复完成: ' + os.path.basename(pkg_path)
+            if reboot_after:
+                msg += '，设备即将重启...'
+                OP_TASKS[task_id] = {'status': 'done', 'done': True, 'message': msg}
+                time.sleep(1)
+                subprocess.Popen(["sudo", "reboot"])
+            else:
+                OP_TASKS[task_id] = {
+                    'status': 'done', 'done': True,
+                    'message': msg + '（建议手动重启设备使 openpilot 重新加载）',
+                }
+        else:
+            err = (proc.stderr or '未知错误')[-600:]
+            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'恢复失败: {err}'}
+    except subprocess.TimeoutExpired:
+        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': '恢复超时（>30 分钟）'}
+    except Exception as e:
+        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'恢复异常: {e}'}
+
+
+@app.route('/api/op_restore', methods=['POST'])
+def api_op_restore():
+    """从设备内已有备份包恢复"""
+    data = request.json or {}
+    fname = data.get('filename', '')
+    if not (isinstance(fname, str) and fname.startswith(OP_BK_PREFIX) and fname.endswith('.tar.gz')):
+        return jsonify({'success': False, 'message': '非法的备份包名称'})
+    pkg = os.path.join(OP_BK_DIR, fname)
+    if not os.path.isfile(pkg):
+        return jsonify({'success': False, 'message': '备份包不存在'})
+    reboot_after = bool(data.get('reboot', False))
+    task_id = str(int(time.time() * 1000))
+    OP_TASKS[task_id] = {'status': 'running', 'message': f'正在恢复: {fname}', 'done': False}
+    threading.Thread(target=_restore_package, args=(pkg, reboot_after, task_id), daemon=True).start()
+    return jsonify({'success': True, 'task_id': task_id})
+
+
+@app.route('/api/op_restore_upload', methods=['POST'])
+def api_op_restore_upload():
+    """上传本地备份包并恢复"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': '未收到文件'})
+    f = request.files['file']
+    if not (f.filename.endswith('.tar.gz') or f.filename.endswith('.tgz')):
+        return jsonify({'success': False, 'message': '仅支持 .tar.gz / .tgz 备份包'})
+    tmp = os.path.join(OP_BK_DIR, OP_BK_PREFIX + 'upload_' + str(int(time.time() * 1000)) + '.tar.gz')
+    try:
+        f.save(tmp)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'保存上传文件失败: {e}'})
+    reboot_after = request.form.get('reboot', 'false') in ('1', 'true', 'True')
+    task_id = str(int(time.time() * 1000))
+    OP_TASKS[task_id] = {'status': 'running', 'message': '正在从上传的备份包恢复...', 'done': False}
+    threading.Thread(target=_restore_package, args=(tmp, reboot_after, task_id), daemon=True).start()
+    return jsonify({'success': True, 'task_id': task_id})
 
 
 if __name__ == '__main__':
