@@ -35,14 +35,22 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 
 # 工具箱版本与在线更新源
 # 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
-# 更新源用多镜像回退，国内优先 jsdelivr（raw.githubusercontent.com 在国内常不可达）
-# 注意：更新源锁定在 @latest，发新版本后设备自动发现，无需再手动改 UPDATE_BASE
-VERSION = "1.0.5"
-UPDATE_BASE = "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@latest/"
-UPDATE_MIRRORS = [
-    "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@latest/",
-    "https://raw.githubusercontent.com/qingsimuxue99/openpilot/c3-toolbox/",
+# ============= 在线更新配置（版本指针机制，彻底解耦）=============
+# 设备端只固定"读 version.json 的源"（CHECK_MIRRORS）；具体下载哪个发布包，由
+# 远程 version.json 里的 tag/tarball 字段动态指定。发新版本只需：更新 version.json
+# + 打 tag 推送，设备端代码永不需要修改，也不会再出现"锁死旧 tag 看不到新版"的问题。
+#   - version.json 通过 @latest 读取（jsdelivr 的 @latest 随最新 git tag 自动更新）
+#   - 下载包按 version.json 的 tag 拼具体 tag URL（tag 是不可变缓存，最新鲜可靠）
+REPO = "qingsimuxue99/openpilot"
+VERSION = "1.0.6"
+# 读 version.json 的源：@latest 自动跟随最新 tag（jsdelivr），raw 分支兜底
+CHECK_MIRRORS = [
+    "https://cdn.jsdelivr.net/gh/%s@latest/" % REPO,
+    "https://raw.githubusercontent.com/%s/c3-toolbox/" % REPO,
 ]
+# 兼容旧引用
+UPDATE_BASE = CHECK_MIRRORS[0]
+UPDATE_MIRRORS = CHECK_MIRRORS
 
 # 启动时确保目录存在
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -235,6 +243,40 @@ def fetch_text(suffix, timeout=20):
     return try_fetch_bytes(suffix, timeout).decode('utf-8')
 
 
+def fetch_bytes_from_urls(urls, timeout=60):
+    """按给定的完整 URL 列表逐个尝试下载，返回首个成功的字节；全部失败抛最后一个异常"""
+    last_err = None
+    for u in urls:
+        if not u:
+            continue
+        try:
+            return _fetch_bytes(u, timeout)
+        except Exception as e:
+            last_err = e
+    if last_err:
+        raise last_err
+    raise RuntimeError('无可用下载地址')
+
+
+def resolve_tarball_urls(remote):
+    """由远程 version.json（版本指针）解析出发布包下载地址，按优先级返回：
+    1) version.json 显式给出的 tarball 完整 URL（最高优先）
+    2) 按 tag 拼出的 jsdelivr（不可变缓存）+ raw 具体 tag 地址
+    3) 兜底：CHECK_MIRRORS 下的 release 路径
+    """
+    urls = []
+    tb = remote.get('tarball')
+    if tb:
+        urls.append(tb)
+    tag = remote.get('tag')
+    if tag:
+        urls.append("https://cdn.jsdelivr.net/gh/%s@%s/release/c3_toolbox.tar.gz" % (REPO, tag))
+        urls.append("https://raw.githubusercontent.com/%s/%s/release/c3_toolbox.tar.gz" % (REPO, tag))
+    for base in CHECK_MIRRORS:
+        urls.append(base.rstrip('/') + '/release/c3_toolbox.tar.gz')
+    return urls
+
+
 def schedule_restart():
     """下载完成后，延迟杀掉旧端口并启动新实例，避免端口抢占"""
     script = os.path.abspath(__file__)
@@ -275,8 +317,11 @@ def _delayed_restart(delay=1.5):
 @app.route('/api/update', methods=['POST'])
 def api_update():
     try:
+        # 版本指针：先读远程 version.json，由它指定要下载哪个发布包（tag/tarball）
+        remote = json.loads(fetch_text('version.json', 20))
+        urls = resolve_tarball_urls(remote)
         # 下载发布包并解压到 BASE_DIR（原子替换，避免 py/html 版本错配）
-        data = try_fetch_bytes('release/c3_toolbox.tar.gz', 60)
+        data = fetch_bytes_from_urls(urls, 60)
         with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tf:
             # Python 3.12+ 要求显式指定 filter，否则拒绝解压（PEP 706）；3.11 无该参数
             if sys.version_info >= (3, 12):

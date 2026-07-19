@@ -1,4 +1,6 @@
 {
-  "version": "1.0.6",
-  "changelog": "在线更新新增「更新内容」展示：发现新版本后，点「查看更新内容 ▾」可展开本次更新说明。\n更新源改为 @latest 自动指向最新版，今后发版设备自动发现，无需再手动改 UPDATE_BASE。\n修复刷新信息无反馈提示的问题。"
+  "version": "1.0.7",
+  "tag": "v1.0.7",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.7/release/c3_toolbox.tar.gz",
+  "changelog": "在线更新改为「版本指针」机制，彻底解耦：设备端不再写死任何 tag，下载哪个包由本 version.json 的 tag/tarball 字段动态指定，今后发版设备端代码零改动、自动发现新版本。\n新增「更新内容」弹层：发现新版本后点「查看更新内容 ▾」即可展开本次更新说明。"
 }
