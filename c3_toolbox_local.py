@@ -271,11 +271,15 @@ def api_update():
         # 下载发布包并解压到 BASE_DIR（原子替换，避免 py/html 版本错配）
         data = try_fetch_bytes('release/c3_toolbox.tar.gz', 60)
         with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tf:
-            tf.extractall(BASE_DIR)
+            # Python 3.12+ 要求显式指定 filter，否则拒绝解压（PEP 706）；3.11 无该参数
+            if sys.version_info >= (3, 12):
+                tf.extractall(BASE_DIR, filter='data')
+            else:
+                tf.extractall(BASE_DIR)
         schedule_restart()
         return jsonify({'success': True, 'message': '更新完成，正在重启服务...'})
     except Exception as e:
-        return jsonify({'success': False, 'message': '更新失败: ' + str(e)})
+        return jsonify({'success': False, 'message': '更新失败 [%s]: %s' % (type(e).__name__, e)})
 
 
 # ============= 路由 =============

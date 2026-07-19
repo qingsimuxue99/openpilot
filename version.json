@@ -1,4 +1,4 @@
 {
-  "version": "1.0.1",
-  "changelog": "后端加 no-store 缓存头，避免手机端缓存旧版页面导致显示不全；教程修正在线更新位置说明"
+  "version": "1.0.2",
+  "changelog": "修复在线更新解压失败（Python 3.12+ 要求 tarfile.extractall 显式 filter）、错误信息细化"
 }
