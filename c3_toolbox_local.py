@@ -5,7 +5,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 直接运行在 C3 设备上，浏览器访问 http://设备IP:5588 即可
 """
 
-import json, os, sys, time, subprocess, urllib.request
+import json, os, sys, time, subprocess, urllib.request, tarfile, io
 
 try:
     from flask import Flask, request, jsonify, send_file, send_from_directory
@@ -23,9 +23,15 @@ AUTO_BACKUP_DIR = os.path.join(BASE_DIR, "auto_backup")
 AUTO_BACKUP_FILE = os.path.join(AUTO_BACKUP_DIR, "auto_full_params.json")
 LOG_FILE = os.path.join(BASE_DIR, "server.log")
 
-# 工具箱版本与在线更新源（发布新版本时，把新文件推到 UPDATE_BASE 指向的仓库，并更新 version.json 的 version）
+# 工具箱版本与在线更新源
+# 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
+# 更新源用多镜像回退，国内优先 jsdelivr（raw.githubusercontent.com 在国内常不可达）
 VERSION = "1.0.0"
-UPDATE_BASE = "https://raw.githubusercontent.com/qingsimuxue99/openpilot/c3-toolbox/"
+UPDATE_BASE = "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/"
+UPDATE_MIRRORS = [
+    "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/",
+    "https://raw.githubusercontent.com/qingsimuxue99/openpilot/c3-toolbox/",
+]
 
 # 启动时确保目录存在
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -188,13 +194,34 @@ def cmp_version(a, b):
     return (pa > pb) - (pa < pb)
 
 
-def download_file(url, dest):
+def _fetch_bytes(url, timeout=20):
     req = urllib.request.Request(url, headers={'User-Agent': 'c3-toolbox-update'})
-    data = urllib.request.urlopen(req, timeout=30).read()
+    return urllib.request.urlopen(req, timeout=timeout).read()
+
+
+def try_fetch_bytes(suffix, timeout=30):
+    """遍历镜像源拉取文件字节，逐源回退；全部失败抛最后一个异常"""
+    last_err = None
+    for base in UPDATE_MIRRORS:
+        try:
+            return _fetch_bytes(base.rstrip('/') + '/' + suffix, timeout)
+        except Exception as e:
+            last_err = e
+    raise last_err
+
+
+def download_file(suffix, dest, timeout=30):
+    """从更新源镜像拉取文件，逐镜像回退；成功写入 dest"""
+    data = try_fetch_bytes(suffix, timeout)
     tmp = dest + '.tmp'
     with open(tmp, 'wb') as f:
         f.write(data)
     os.replace(tmp, dest)
+
+
+def fetch_text(suffix, timeout=20):
+    """从更新源镜像拉取文本（如 version.json），逐镜像回退"""
+    return try_fetch_bytes(suffix, timeout).decode('utf-8')
 
 
 def schedule_restart():
@@ -215,9 +242,7 @@ def api_version():
 @app.route('/api/check_update')
 def api_check_update():
     try:
-        url = UPDATE_BASE.rstrip('/') + '/version.json'
-        req = urllib.request.Request(url, headers={'User-Agent': 'c3-toolbox-update'})
-        remote = json.loads(urllib.request.urlopen(req, timeout=20).read().decode('utf-8'))
+        remote = json.loads(fetch_text('version.json', 20))
         remote_ver = remote.get('version', '0')
         return jsonify({
             'local_version': VERSION,
@@ -233,13 +258,10 @@ def api_check_update():
 @app.route('/api/update', methods=['POST'])
 def api_update():
     try:
-        base = UPDATE_BASE.rstrip('/') + '/'
-        for fn in ('c3_toolbox_local.py', 'c3_toolbox.html'):
-            download_file(base + fn, os.path.join(BASE_DIR, fn))
-        try:
-            download_file(base + 'c3_toolbox_autostart.sh', os.path.join(BASE_DIR, 'c3_toolbox_autostart.sh'))
-        except Exception:
-            pass
+        # 下载发布包并解压到 BASE_DIR（原子替换，避免 py/html 版本错配）
+        data = try_fetch_bytes('release/c3_toolbox.tar.gz', 60)
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tf:
+            tf.extractall(BASE_DIR)
         schedule_restart()
         return jsonify({'success': True, 'message': '更新完成，正在重启服务...'})
     except Exception as e:
