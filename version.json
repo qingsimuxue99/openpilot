@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
-  "tag": "v1.0.10",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.10/release/c3_toolbox.tar.gz",
-  "changelog": "修复参数控制严重 bug：\n- 之前按“当前值是否为 0/1”判断开关，导致大量数值参数（如转向比、跟车距离、扭矩增益、刹车减速度等，默认值恰好是 0/1）被误渲染成“关/开”按钮，无法输入数值；\n- 改为按参数名显式判定类型：仅在布尔集合里的参数渲染为开关，其余一律渲染为可输入控件；数值参数使用数字输入框（整数 step=1、小数 step=0.1），字符串参数用文本框；\n- 受影响参数现在可直接修改数值并保存。"
+  "version": "1.0.11",
+  "tag": "v1.0.11",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.11/release/c3_toolbox.tar.gz",
+  "changelog": "界面对齐优化：\n- 参数控制卡片改为固定列宽的 Grid 布局，中间「当前 / 待存 / 默认」三列和右侧输入/开关控件全部垂直对齐，不再因数值位数不同导致歪歪扭扭；\n- 桌面端列宽固定（标题自适应 + 数值区 230px + 控件区 120px + 操作区自适应），移动端恢复堆叠布局。"
 }
