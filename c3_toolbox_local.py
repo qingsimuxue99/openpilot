@@ -36,7 +36,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 # 工具箱版本与在线更新源
 # 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
 # 更新源用多镜像回退，国内优先 jsdelivr（raw.githubusercontent.com 在国内常不可达）
-VERSION = "1.0.0"
+VERSION = "1.0.2"
 UPDATE_BASE = "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/"
 UPDATE_MIRRORS = [
     "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/",
