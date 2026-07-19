@@ -5,7 +5,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 直接运行在 C3 设备上，浏览器访问 http://设备IP:5588 即可
 """
 
-import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback
+import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re
 
 try:
     from flask import Flask, request, jsonify, send_file, send_from_directory
@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.11"
+VERSION = "1.0.12"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -286,10 +286,36 @@ def resolve_tarball_urls(remote):
     return urls
 
 
+def _semver_key(v):
+    """把 'v1.0.12' / '1.0.12' 解析为可比较的 (major,minor,patch) 元组"""
+    m = re.match(r'v?(\d+)\.(\d+)\.(\d+)', str(v))
+    return tuple(int(x) for x in m.groups()) if m else (0, 0, 0)
+
+
+def discover_latest_version_github():
+    """通过 GitHub API 实时发现最新版本号（tag）。
+    GitHub 在 git push 新 tag 后立即可见，不受 jsdelivr 数据 API 索引延迟影响（根治‘发布后点更新认不到新版’的问题）。
+    返回如 '1.0.12'；失败返回 None。"""
+    try:
+        url = "https://api.github.com/repos/%s/tags?per_page=100" % REPO
+        data = json.loads(_fetch_bytes(url, 15).decode('utf-8'))
+        tags = [t.get('name') for t in data if isinstance(t, dict) and t.get('name')]
+        # 只保留 vX.Y.Z / X.Y.Z 形态，按语义版本降序取最新
+        cand = [t for t in tags if re.match(r'^v?\d+\.\d+\.\d+$', t)]
+        if cand:
+            cand.sort(key=_semver_key, reverse=True)
+            return cand[0].lstrip('v')
+    except Exception:
+        pass
+    return None
+
+
 def discover_latest_version():
-    """通过 jsdelivr 数据 API 实时发现最新版本号（tag）。
-    该 API 属 jsdelivr 域、国内可达，且实时反映最新 git tag，不受 CDN 文件缓存影响。
-    返回如 '1.0.7'；失败返回 None。"""
+    """发现最新版本号。优先 GitHub API（实时，推送 tag 后立即可见）；
+    失败回退 jsdelivr 数据 API（国内可达兜底）。返回如 '1.0.12'；失败返回 None。"""
+    v = discover_latest_version_github()
+    if v:
+        return v
     try:
         data = json.loads(_fetch_bytes(JSDELIVR_DATA_API, 15).decode('utf-8'))
         versions = data.get('versions') or []

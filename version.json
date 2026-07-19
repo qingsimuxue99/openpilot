@@ -1,6 +1,6 @@
 {
-  "version": "1.0.11",
-  "tag": "v1.0.11",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.11/release/c3_toolbox.tar.gz",
-  "changelog": "界面对齐优化：\n- 参数控制卡片改为固定列宽的 Grid 布局，中间「当前 / 待存 / 默认」三列和右侧输入/开关控件全部垂直对齐，不再因数值位数不同导致歪歪扭扭；\n- 桌面端列宽固定（标题自适应 + 数值区 230px + 控件区 120px + 操作区自适应），移动端恢复堆叠布局。"
+  "version": "1.0.12",
+  "tag": "v1.0.12",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.12/release/c3_toolbox.tar.gz",
+  "changelog": "在线更新发现机制升级 + 界面对齐：\n- 发现最新版本改为优先直连 GitHub API（实时，推送 tag 后立即可见），jsdelivr 数据 API 仅作回退；彻底根治之前“发布后点更新仍显示已是最新（jsdelivr 索引滞后）”的问题，以后发版秒级可更新；\n- 参数控制卡片保持固定列宽 Grid 布局，中间「当前 / 待存 / 默认」三列与右侧控件垂直对齐。"
 }
