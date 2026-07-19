@@ -15,6 +15,16 @@ except ImportError:
 
 app = Flask(__name__)
 
+
+# 禁止浏览器缓存页面与接口，避免手机端停留在旧版 HTML（导致设备信息等内容显示不全）
+@app.after_request
+def no_cache(resp):
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
 BASE_DIR = "/data/c3_toolbox"                 # 固定设备端数据目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # 脚本所在目录(放 HTML 用)
 PARAMS_DIR = "/data/params/d"
