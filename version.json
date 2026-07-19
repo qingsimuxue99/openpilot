@@ -1,6 +1,6 @@
 {
-  "version": "1.0.9",
-  "tag": "v1.0.9",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.9/release/c3_toolbox.tar.gz",
-  "changelog": "新增「完整备份 / 恢复」功能（备份面板内）：\n- 一键将 /data/openpilot 整体打包为 tar.gz 备份包（/data/备份恢复包openpilot_backup_*.tar.gz），后台执行并实时显示进度；\n- 支持从设备内已有备份包恢复，也可上传本地备份包恢复（tar -zxvf -C /）；\n- 恢复前自动停止 openpilot、恢复后可选重启设备，确保干净加载；\n- 备份包可在界面直接下载。"
+  "version": "1.0.10",
+  "tag": "v1.0.10",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.10/release/c3_toolbox.tar.gz",
+  "changelog": "修复参数控制严重 bug：\n- 之前按“当前值是否为 0/1”判断开关，导致大量数值参数（如转向比、跟车距离、扭矩增益、刹车减速度等，默认值恰好是 0/1）被误渲染成“关/开”按钮，无法输入数值；\n- 改为按参数名显式判定类型：仅在布尔集合里的参数渲染为开关，其余一律渲染为可输入控件；数值参数使用数字输入框（整数 step=1、小数 step=0.1），字符串参数用文本框；\n- 受影响参数现在可直接修改数值并保存。"
 }

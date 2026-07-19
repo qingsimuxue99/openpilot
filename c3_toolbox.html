@@ -676,9 +676,38 @@ function fillSortedParams(){
   }
 }
 
+// ===== 参数类型判定 =====
+// 关键修复：数值参数即便当前值恰好是 0/1，也必须渲染为“数字输入框”，否则无法改成其他数值。
+// 因此只在“显式布尔集合”里的参数才渲染为开关（关/开），其余一律渲染为可输入控件。
+var BOOL_PARAMS = {
+  'OpenpilotEnabledToggle':1,'IsMetric':1,'DisengageOnAccelerator':1,'CommunityFeatureToggle':1,
+  'IsLdwEnabled':1,'Ssh':1,'Adb':1,'Hotspot':1,'Gsm':1,'Record':1,'LongitudinalControl':1,
+  'Mute':1,'NNFF':1,'SameSpi':1,'SoftwareMenu':1,'Blinker':1,'StockBlinkerCtrl':1,'Bsd':1,
+  'SideBsd':1,'EVTable':1,'HDPuse':1,'IsLdws':1,'SideRadar':1,'SideRel':1,'SidevRel':1,
+  'CanfdDebug':1,'CruiseButtonMode':1,'CancelButtonMode':1,'LfaButtonMode':1,'PaddleMode':1,
+  'CruiseSpeedUnit':1,'CruiseSpeedUnitBasic':1,'Language':1,'BlinkerMode':1,
+  'LaneChange':1,'ContinuousLaneChange':1,'AutoLaneChange':1,'AutoTurnLeft':1,
+  'AutoTurnInNotRoadEdge':1,'AutoTurnControl':1,'AutoTurnMapChange':1,'AutoEngage':1,
+  'AutoCruiseControl':1,'ShowDebugLog':1
+};
+var BOOL_RE = /^(Show|CameraDebug|DriverCameraDebug|WideCameraDebug)/i;
+function isBoolParam(k){
+  if(BOOL_PARAMS[k]===1) return true;
+  if(BOOL_PARAMS[k]===0) return false;   // 显式标记为非布尔（如数值参数默认值恰为 0/1）
+  return BOOL_RE.test(k);
+}
+function isIntStr(s){return /^-?\d+$/.test((s||'').trim());}
+function isFloatStr(s){return /^-?\d+\.\d+$/.test((s||'').trim()) || /^-?\.\d+$/.test((s||'').trim());}
+function isNumericStr(s){return isIntStr(s) || isFloatStr(s);}
+function inputAttrs(v){
+  if(isIntStr(v))   return 'type="number" step="1"';
+  if(isFloatStr(v)) return 'type="number" step="0.1"';
+  return 'type="text"';
+}
+
 function renderParamCard(k){
   var v=AP[k]||'',c=cn(k),dsc=PN_DESC[k]||'';
-  var isToggle=(v==='0'||v==='1');
+  var bool=isBoolParam(k);
   var pending=CP[k]!==undefined?CP[k]:v;
   var hasChange=CP[k]!==undefined;
   var defVal=PD[k]||'—';
@@ -693,14 +722,15 @@ function renderParamCard(k){
   h+='<div class="val-box"><div class="vlabel">待存</div><div class="vval'+(hasChange?' pending':'')+'" id="pv-'+k+'">'+esc(pending)+'</div></div>';
   h+='<div class="val-box"><div class="vlabel">默认</div><div class="vval" style="color:var(--muted)">'+esc(defVal)+'</div></div>';
   h+='</div>';
-  // 控件
-  if(isToggle){
+  // 控件：布尔参数→开关；数值参数→数字输入框；其余→文本输入框
+  if(bool){
     h+='<div class="pc-ctrl"><div class="tg-btns">';
     h+='<button class="tg-btn'+(pending!=='1'?' on':'')+'" id="tg-off-'+k+'" onclick="setToggle(\''+k+'\',0)">关</button>';
     h+='<button class="tg-btn'+(pending==='1'?' on':'')+'" id="tg-on-'+k+'" onclick="setToggle(\''+k+'\',1)">开</button>';
     h+='</div></div>';
   }else{
-    h+='<div class="pc-ctrl"><input type="text" value="'+esc(pending)+'" data-key="'+esc(k)+'" id="inp-'+k+'" oninput="onValChange(\''+k+'\',this.value)"></div>';
+    var pv0=(pending===undefined?'' : ''+pending).trim();
+    h+='<div class="pc-ctrl"><input '+inputAttrs(pv0)+' value="'+esc(pv0)+'" data-key="'+esc(k)+'" id="inp-'+k+'" oninput="onValChange(\''+k+'\',this.value)" style="width:110px"></div>';
   }
   // 操作按钮
   h+='<div class="ca">';
@@ -736,7 +766,7 @@ function resetDefault(k){
   if(inp)inp.value=defVal;
   var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=defVal;pv.classList.remove('pending');}
   var sv=document.getElementById('sv-'+k);if(sv)sv.classList.remove('ready');
-  if(AP[k]==='0'||AP[k]==='1'){
+  if(isBoolParam(k)){
     var offBtn=document.getElementById('tg-off-'+k);var onBtn=document.getElementById('tg-on-'+k);
     if(offBtn)offBtn.classList.toggle('on',defVal!=='1');
     if(onBtn)onBtn.classList.toggle('on',defVal==='1');
