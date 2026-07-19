@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>晚風的OP工具箱</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f5f2ec;--bg2:#ffffff;--bg3:#f9f7f3;--bg4:#eeebe4;
+  --ink:#2d2d2d;--muted:#8a8690;--dim:#c5c0ba;
+  --accent:#1aab8a;--accent2:#e85d50;--accent3:#4a90d9;
+  --rule:#e8e4dd;--glow:rgba(26,171,138,.08);--radius:12px;
+}
+html,body{height:100%}
+body{font-family:'PingFang SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden}
+body::before{content:'';position:fixed;top:-30%;right:-15%;width:500px;height:500px;background:radial-gradient(circle,rgba(26,171,138,.07) 0%,transparent 65%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:400px;background:radial-gradient(circle,rgba(74,144,217,.05) 0%,transparent 65%);pointer-events:none;z-index:0}
+
+/* === Header === */
+.hdr{height:52px;background:rgba(255,255,255,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 20px;position:relative;z-index:100;gap:16px}
+.logo{font-size:17px;font-weight:800;letter-spacing:1.5px;background:linear-gradient(135deg,var(--accent),var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo i{font-style:normal;font-weight:400;font-size:12px;opacity:.6;-webkit-text-fill-color:var(--muted);margin-left:6px;letter-spacing:0}
+.hdr-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:var(--bg3);padding:5px 14px;border-radius:20px;border:1px solid var(--rule)}
+.hdr-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hdr-actions{margin-left:auto;display:flex;gap:8px}
+
+/* === Layout === */
+.wrap{display:flex;height:calc(100vh - 52px);position:relative;z-index:1}
+.side{width:200px;min-width:200px;background:rgba(255,255,255,.7);backdrop-filter:blur(12px);border-right:1px solid var(--rule);overflow-y:auto;padding:6px;scrollbar-width:thin}
+.side::-webkit-scrollbar{width:4px}
+.side::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.body{flex:1;overflow-y:auto;padding:24px 28px;scrollbar-width:thin}
+.body::-webkit-scrollbar{width:5px}
+.body::-webkit-scrollbar-thumb{background:var(--dim);border-radius:3px}
+
+/* === Nav === */
+.ng{margin-bottom:8px}
+.ng-t{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;padding:10px 12px 4px;font-weight:700}
+.ni{padding:9px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);transition:all .15s;margin:1px 0;font-weight:500}
+.ni:hover{background:var(--bg3);color:var(--ink)}
+.ni.on{background:linear-gradient(135deg,rgba(34,211,167,.15),rgba(34,211,167,.05));color:var(--accent);font-weight:600;border:1px solid rgba(34,211,167,.2)}
+.ni .ic{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+
+/* === Panel === */
+.pnl{display:none;animation:fadeIn .25s ease}
+.pnl.on{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.ph{margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.ph h2{font-size:20px;font-weight:800;letter-spacing:.5px}
+.ph p{color:var(--muted);font-size:12px;margin-top:3px}
+
+/* === Cards === */
+.cd{background:var(--bg2);border:1px solid var(--rule);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;transition:border-color .2s}
+.cd:hover{border-color:rgba(34,211,167,.15)}
+.ct{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px}
+.ct::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:2px}
+
+/* === Info Grid === */
+.ig{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-bottom:20px}
+.ii{background:var(--bg3);border:1px solid var(--rule);border-radius:6px;padding:8px 10px;position:relative;overflow:hidden}
+.ii::after{content:'';position:absolute;top:0;left:0;width:2px;height:100%;border-radius:0 2px 2px 0}
+.ii.g::after{background:var(--accent)}.ii.b::after{background:var(--accent3)}.ii.o::after{background:var(--accent2)}
+.ii .lb{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;padding-left:6px}
+.ii .vl{font-size:11px;font-weight:600;padding-left:6px;word-break:break-word;line-height:1.3}
+
+/* === Quick Actions === */
+.qa{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.qb{background:var(--bg3);border:1px solid var(--rule);border-radius:10px;padding:16px 12px;cursor:pointer;text-align:center;transition:all .2s}
+.qb:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.qb .qi{font-size:22px;margin-bottom:6px;display:block}
+.qb .qt{font-size:11px;color:var(--muted);font-weight:500}
+.qb.warn:hover{border-color:var(--accent2)}
+
+/* === Toggle === */
+.tw{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(37,42,58,.5)}
+.tw:last-child{border-bottom:none}
+.tl .n{font-size:13px;font-weight:500}
+.tl .d{font-size:11px;color:var(--muted);display:block;margin-top:1px}
+.tg{position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0}
+.tg input{opacity:0;width:0;height:0}
+.tg .sl{position:absolute;inset:0;background:var(--bg);border:1px solid var(--rule);border-radius:22px;transition:.25s}
+.tg .sl::before{content:'';position:absolute;width:16px;height:16px;left:2px;bottom:2px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.15);transition:.25s}
+.tg input:checked+.sl{background:var(--accent);border-color:var(--accent)}
+.tg input:checked+.sl::before{transform:translateX(18px);background:#fff}
+
+/* === Range === */
+.rr{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(37,42,58,.3)}
+.rr:last-child{border-bottom:none}
+.rr label{min-width:180px;font-size:12.5px;font-weight:500;color:var(--ink);flex-shrink:0}
+.rr input[type=range]{flex:1;-webkit-appearance:none;background:var(--dim);height:4px;border-radius:2px;outline:none;border:none;padding:0;cursor:pointer}
+.rr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 6px rgba(34,211,167,.4);transition:.15s}
+.rr input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2);box-shadow:0 0 12px rgba(34,211,167,.6)}
+.rr .rv{min-width:54px;text-align:center;font-size:12px;font-weight:700;color:var(--accent);background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--rule);font-family:'Cascadia Code','Fira Code',monospace}
+
+/* === Buttons === */
+.btn{padding:7px 16px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:inherit}
+.bp{background:var(--accent);color:#000}.bp:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.bs{background:var(--bg3);color:var(--ink);border:1px solid var(--rule)}.bs:hover{background:var(--rule)}
+.bd{background:var(--accent2);color:#fff}.bd:hover{filter:brightness(1.15)}
+.bw{background:#ffc857;color:#000}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+
+/* === Terminal === */
+.term{background:#0a0c12;border-radius:var(--radius);overflow:hidden;height:520px;display:flex;flex-direction:column;border:1px solid var(--rule)}
+.th{background:#12151e;padding:8px 14px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--rule)}
+.td{width:10px;height:10px;border-radius:50%}.td.r{background:#ff5f57}.td.y{background:#febc2e}.td.g{background:#28c840}
+.th span{margin-left:8px;color:var(--dim);font-size:11px;font-family:monospace}
+.to{flex:1;padding:12px 14px;overflow-y:auto;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:12px;line-height:1.65;color:#c9d1d9;white-space:pre-wrap;word-break:break-all}
+.ti{display:flex;align-items:center;padding:8px 14px;background:#0d0f16;border-top:1px solid var(--rule)}
+.tp{color:var(--accent);font-family:monospace;font-size:12px;margin-right:8px;user-select:none}
+.ti input{flex:1;background:transparent;border:none;color:#c9d1d9;font-family:'Cascadia Code','Fira Code',monospace;font-size:12px;outline:none}
+
+/* === Quick Cmds === */
+.qcmds{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.qcmd{padding:5px 12px;background:var(--bg3);border:1px solid var(--rule);border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'Cascadia Code',monospace;transition:all .15s;white-space:nowrap}
+.qcmd:hover{border-color:var(--accent);color:var(--accent);background:rgba(34,211,167,.05)}
+
+/* === Table === */
+.pt{width:100%;border-collapse:collapse}
+.pt th{text-align:left;padding:8px 12px;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--rule);position:sticky;top:0;background:var(--bg2);z-index:2}
+.pt td{padding:6px 12px;border-bottom:1px solid rgba(37,42,58,.4);font-size:12px}
+.pt tr:hover td{background:var(--bg3)}
+.pt .ky{font-family:'Cascadia Code',monospace;color:var(--accent3);font-size:11px}
+.pt .vl input{background:var(--bg);border:1px solid var(--rule);color:var(--ink);padding:4px 8px;border-radius:5px;font-size:11px;width:120px;font-family:'Cascadia Code',monospace;transition:.2s}
+.pt .vl input:focus{border-color:var(--accent);outline:none}
+
+/* === Search === */
+.sb{position:relative;margin-bottom:14px}
+.sb input{width:100%;padding:10px 14px 10px 38px;background:var(--bg3);border:1px solid var(--rule);border-radius:8px;color:var(--ink);font-size:13px;outline:none;transition:.2s}
+.sb input:focus{border-color:var(--accent)}
+.sb::before{content:'';position:absolute;left:13px;top:50%;transform:translateY(-50%);width:14px;height:14px;border:2px solid var(--dim);border-radius:50%}
+.sb::after{content:'';position:absolute;left:25px;top:60%;width:2px;height:6px;background:var(--dim);border-radius:1px;transform:rotate(-45deg)}
+
+/* === Toast === */
+.tc{position:fixed;top:60px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.tst{padding:10px 18px;border-radius:8px;font-size:12px;animation:slideIn .3s ease;min-width:220px;backdrop-filter:blur(12px)}
+.tst.ok{background:rgba(34,211,167,.12);border:1px solid var(--accent);color:var(--accent)}
+.tst.er{background:rgba(249,112,102,.12);border:1px solid var(--accent2);color:var(--accent2)}
+.tst.in{background:rgba(96,165,250,.12);border:1px solid var(--accent3);color:var(--accent3)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* === Form === */
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;letter-spacing:.3px}
+.fg input,.fg textarea,.fg select{width:100%;background:var(--bg);border:1px solid var(--rule);color:var(--ink);padding:8px 12px;border-radius:6px;font-size:12px;outline:none;transition:.2s;font-family:inherit}
+.fg input:focus,.fg textarea:focus{border-color:var(--accent)}
+
+/* === Modal === */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.mo.show{display:flex}
+.md{background:var(--bg2);border:1px solid var(--rule);border-radius:14px;padding:28px;max-width:440px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,.1)}
+.md h3{margin-bottom:12px;font-size:16px}
+.md p{color:var(--muted);font-size:13px;margin-bottom:4px}
+.md .ma{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* === Mobile Nav Toggle === */
+.mnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);border-top:1px solid var(--rule);padding:6px 0 env(safe-area-inset-bottom,6px);overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.mnav::-webkit-scrollbar{display:none}
+.mnav-in{display:flex;gap:4px;padding:0 8px;min-width:max-content;margin:0 auto}
+.mn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px;border-radius:8px;cursor:pointer;transition:all .15s;font-size:10px;color:var(--muted);min-width:40px}
+.mn.on{color:var(--accent);background:rgba(34,211,167,.1)}
+.mn .mi{font-size:18px;line-height:1}
+.mn .mt{font-weight:500;letter-spacing:.3px}
+
+/* === Responsive === */
+@media(max-width:900px){
+  .hdr{padding:0 12px;gap:8px}
+  .logo{font-size:14px;letter-spacing:1px}
+  .logo i{display:none}
+  .hdr-status{padding:4px 10px;font-size:11px}
+  .body{padding:16px 14px}
+  .ig{grid-template-columns:repeat(2,1fr)}
+  .qa{grid-template-columns:repeat(3,1fr)}
+  .cd{padding:14px 12px;margin-bottom:10px}
+  .rr{gap:8px;padding:6px 0}
+  .rr label{min-width:120px;font-size:12px}
+  .rr .rv{min-width:48px;font-size:11px;padding:3px 6px}
+  .term{height:400px}
+  .qcmd{font-size:10px;padding:4px 8px}
+}
+
+@media(max-width:640px){
+  .side{width:150px;min-width:150px}
+  .hdr-status{display:none}
+  .hdr-actions{gap:5px}
+  .hdr-actions .btn{padding:6px 10px;font-size:11px}
+  .body{padding:12px 10px}
+  .ph{margin-bottom:16px;padding-bottom:12px}
+  .ph h2{font-size:17px}
+  .ig{grid-template-columns:repeat(2,1fr);gap:8px}
+  .ii{padding:10px}
+  .ii .lb{font-size:9px}
+  .ii .vl{font-size:12px}
+  .qa{grid-template-columns:repeat(3,1fr);gap:8px}
+  .qb{padding:12px 8px;border-radius:8px}
+  .qb .qi{font-size:20px}
+  .qb .qt{font-size:10px}
+  .cd{padding:12px 10px;margin-bottom:8px;border-radius:8px}
+  .ct{font-size:10px;margin-bottom:10px}
+  /* Range: stack vertically */
+  .rr{flex-wrap:wrap;gap:4px 8px;padding:8px 0}
+  .rr label{min-width:0;flex:1 1 100%;font-size:12px;margin-bottom:2px}
+  .rr input[type=range]{flex:1;min-width:0}
+  .rr .rv{flex-shrink:0;min-width:44px;font-size:11px;padding:3px 6px}
+  /* Toggle */
+  .tw{padding:8px 0}
+  .tl .n{font-size:13px}
+  /* Terminal */
+  .term{height:320px;border-radius:8px}
+  .th{padding:6px 10px}
+  .th span{font-size:10px;margin-left:6px}
+  .to{padding:8px 10px;font-size:11px}
+  .ti{padding:6px 10px}
+  .qcmds{gap:5px;margin-top:8px}
+  .qcmd{font-size:10px;padding:4px 8px}
+  /* Table */
+  .pt th,.pt td{padding:5px 6px;font-size:10px}
+  .pt .vl input{width:80px;font-size:10px;padding:3px 6px}
+  /* Toast */
+  .tc{top:56px;right:8px;left:8px}
+  .tst{min-width:0;font-size:11px;padding:8px 12px}
+  /* Modal */
+  .md{padding:20px;border-radius:12px}
+  .md h3{font-size:15px}
+  /* Form */
+  .fg input,.fg textarea{padding:8px 10px;font-size:14px}
+  /* Buttons */
+  .btn{padding:8px 12px;font-size:12px}
+  /* Search */
+  .sb input{font-size:14px;padding:10px 12px 10px 36px}
+}
+
+/* Landscape phone */
+@media(max-width:480px) and (orientation:landscape){
+  .wrap{height:calc(100vh - 48px - 52px)}
+  .hdr{height:48px}
+  .term{height:240px}
+  .ig{grid-template-columns:repeat(3,1fr)}
+}
+
+/* Phone (portrait): bottom nav, hide sidebar */
+@media(max-width:480px){
+  .side{display:none!important}
+  .wrap{height:calc(100vh - 52px - 60px)}
+  .mnav{display:block}
+}
+
+/* === Carrotx-style Parameter Cards === */
+.cat-card{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:8px 6px;border-radius:14px;background:var(--bg2);border:1px solid var(--rule);cursor:pointer;transition:all .15s}
+.cat-card:hover{border-color:var(--accent)}
+.cat-card.on{background:rgba(26,171,138,.1);border-color:var(--accent)}
+.cat-card .cname{font-size:14px;font-weight:500;color:var(--ink)}
+.cat-card.on .cname{color:var(--accent);font-weight:600}
+.cat-card .cbadge{background:var(--bg4);color:var(--muted);font-size:12px;padding:3px 12px;border-radius:20px;font-weight:700;min-width:32px;text-align:center}
+.cat-card.on .cbadge{background:var(--accent);color:#fff}
+
+.param-card{background:var(--bg2);border:1px solid var(--rule);border-radius:10px;padding:10px 14px;margin-bottom:6px;position:relative;display:flex;align-items:center;gap:10px;flex-wrap:nowrap}
+.param-card .pc-left{flex:0 0 auto;min-width:0;max-width:200px}
+.param-card .ptitle{font-size:13px;font-weight:600;color:var(--ink);line-height:1.3}
+.param-card .pdesc{font-size:11px;color:var(--muted);margin-top:1px}
+.param-values{display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:auto}
+.val-box{background:var(--bg);border-radius:8px;padding:6px 12px;text-align:center;min-width:70px}
+.val-box .vlabel{font-size:10px;color:var(--muted);margin-bottom:2px}
+.val-box .vval{font-size:14px;font-weight:700;color:var(--ink);font-family:'Cascadia Code','Fira Code',monospace}
+.val-box .vval.pending{color:var(--accent2)}
+.pc-ctrl{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.pc-ctrl input[type=text]{width:80px;padding:5px 8px;background:var(--bg);border:1px solid var(--rule);color:var(--ink);border-radius:6px;font-size:13px;font-family:monospace;outline:none;text-align:center}
+.pc-ctrl input[type=text]:focus{border-color:var(--accent)}
+.tg-btns{display:flex;gap:4px}
+.tg-btn{padding:5px 16px;border-radius:6px;border:1px solid var(--rule);background:var(--bg2);color:var(--ink);font-size:12px;cursor:pointer;transition:all .15s}
+.tg-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ca{display:flex;gap:6px;flex-shrink:0;margin-left:auto}
+.ca .btn-rst{padding:5px 14px;border-radius:6px;border:1px solid var(--rule);background:var(--bg2);color:var(--accent);font-size:12px;cursor:pointer;transition:all .15s}
+.ca .btn-rst:hover{border-color:var(--accent)}
+.ca .btn-sv{padding:5px 14px;border-radius:6px;border:none;background:var(--dim);color:var(--bg2);font-size:12px;cursor:pointer;transition:all .15s}
+.ca .btn-sv.ready{background:var(--accent);color:#fff}
+.shc{font-size:12px;color:var(--accent);font-weight:500;margin-bottom:10px}
+
+/* Responsive cards */
+@media(max-width:640px){
+  .param-card{padding:8px 10px;margin-bottom:5px;flex-wrap:wrap;gap:6px}
+  .param-card .pc-left{min-width:0;max-width:100%;flex:0 0 100%}
+  .param-values{flex-wrap:wrap;margin-left:0}
+  .val-box{min-width:60px;flex:1}
+  .val-box .vval{font-size:13px}
+  .pc-ctrl input[type=text]{width:100%}
+  .ca{margin-left:0}
+  .cat-card{padding:10px 12px;margin:6px 4px}
+}
+</style>
+</head>
+<body>
+
+<div class="tc" id="TC"></div>
+
+<!-- Header -->
+<header class="hdr">
+  <div class="logo">晚風的OP工具箱 <i>Carrotpilot cpv9-dev</i></div>
+  <div class="hdr-status"><div class="hdr-dot"></div><span id="hdrSt">本地运行中</span></div>
+  <div class="hdr-actions">
+    <button class="btn bs" onclick="loadInfo()">刷新信息</button>
+    <button class="btn bp" onclick="loadParams()">刷新参数</button>
+    <button class="btn bd" onclick="doDisconnect()">断开连接</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Sidebar -->
+  <nav class="side" style="padding:12px 8px">
+    <div class="cat-card on" data-p="dashboard" onclick="go('dashboard')"><span class="cname">设备信息</span><span class="cbadge" id="bc-dashboard">—</span></div>
+    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">参数控制</div>
+    <div class="cat-card" data-p="lateral" onclick="go('lateral')"><span class="cname">横向</span><span class="cbadge" id="bc-lateral">0</span></div>
+    <div class="cat-card" data-p="longitudinal" onclick="go('longitudinal')"><span class="cname">纵向</span><span class="cbadge" id="bc-longitudinal">0</span></div>
+    <div class="cat-card" data-p="curve" onclick="go('curve')"><span class="cname">弯道</span><span class="cbadge" id="bc-curve">0</span></div>
+    <div class="cat-card" data-p="lanechange" onclick="go('lanechange')"><span class="cname">变道</span><span class="cbadge" id="bc-lanechange">0</span></div>
+    <div class="cat-card" data-p="nav" onclick="go('nav')"><span class="cname">导航</span><span class="cbadge" id="bc-nav">0</span></div>
+    <div class="cat-card" data-p="display" onclick="go('display')"><span class="cname">显示</span><span class="cbadge" id="bc-display">0</span></div>
+    <div class="cat-card" data-p="settings" onclick="go('settings')"><span class="cname">设置</span><span class="cbadge" id="bc-settings">0</span></div>
+    <div class="cat-card" data-p="info" onclick="go('info')"><span class="cname">其他</span><span class="cbadge" id="bc-info">0</span></div>
+    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">工具</div>
+    <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端</span><span class="cbadge" id="bc-terminal">—</span></div>
+    <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份</span><span class="cbadge" id="bc-backup">—</span></div>
+  </nav>
+
+  <!-- Content -->
+  <div class="body">
+
+    <!-- 设备信息 -->
+    <div class="pnl on" id="p-dashboard">
+      <div class="ph"><h2>设备信息</h2><p>设备运行状态一览</p></div>
+
+      <div class="cd">
+        <div class="ct">基本信息</div>
+        <div class="ig" id="infoBasic"></div>
+      </div>
+
+      <div class="cd">
+        <div class="ct">运行状态</div>
+        <div class="ig" id="infoHealth"></div>
+      </div>
+
+      <div class="cd">
+        <div class="ct">快捷操作</div>
+        <div class="qa">
+          <div class="qb" onclick="doRestartOp()"><span class="qi">🔄</span><span class="qt">重启 openpilot</span></div>
+          <div class="qb" onclick="doReboot()"><span class="qi">⟳</span><span class="qt">重启设备</span></div>
+          <div class="qb" onclick="loadParams()"><span class="qi">📥</span><span class="qt">刷新参数</span></div>
+          <div class="qb" onclick="go('backup')"><span class="qi">💾</span><span class="qt">备份参数</span></div>
+          <div class="qb" onclick="go('settings')"><span class="qi">⚙️</span><span class="qt">参数设置</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 横向 -->
+    <div class="pnl" id="p-lateral">
+      <div class="ph"><h2>横向控制</h2><p>转向、扭矩、MPC 参数</p></div>
+      <div class="shc" id="sh-lateral">已读取 0 项</div>
+      <div id="sp-lateral"></div>
+    </div>
+
+    <!-- 纵向 -->
+    <div class="pnl" id="p-longitudinal">
+      <div class="ph"><h2>纵向控制</h2><p>巡航、加减速、跟车、加加速度</p></div>
+      <div class="shc" id="sh-longitudinal">已读取 0 项</div>
+      <div id="sp-longitudinal"></div>
+    </div>
+
+    <!-- 弯道 -->
+    <div class="pnl" id="p-curve">
+      <div class="ph"><h2>弯道控制</h2><p>弯道速度、弯道限速</p></div>
+      <div class="shc" id="sh-curve">已读取 0 项</div>
+      <div id="sp-curve"></div>
+    </div>
+
+    <!-- 变道 -->
+    <div class="pnl" id="p-lanechange">
+      <div class="ph"><h2>变道控制</h2><p>变道扭矩、延迟、连续变道</p></div>
+      <div class="shc" id="sh-lanechange">已读取 0 项</div>
+      <div id="sp-lanechange"></div>
+    </div>
+
+    <!-- 导航 -->
+    <div class="pnl" id="p-nav">
+      <div class="ph"><h2>导航控制</h2><p>导航速度、限速、红绿灯、地图</p></div>
+      <div class="shc" id="sh-nav">已读取 0 项</div>
+      <div id="sp-nav"></div>
+    </div>
+
+    <!-- 显示 -->
+    <div class="pnl" id="p-display">
+      <div class="ph"><h2>显示设置</h2><p>图表、路径、车道路径颜色、调试界面</p></div>
+      <div class="shc" id="sh-display">已读取 0 项</div>
+      <div id="sp-display"></div>
+    </div>
+
+    <!-- 设置 -->
+    <div class="pnl" id="p-settings">
+      <div class="ph"><h2>系统设置</h2><p>系统开关、按钮模式、连接与录制</p></div>
+      <div class="shc" id="sh-settings">已读取 0 项</div>
+      <div id="sp-settings"></div>
+      <div class="cd" id="updateCard" style="margin-top:16px">
+        <div class="ct">在线更新</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">当前版本：<span id="curVer">-</span> ｜ 最新版本：<span id="remoteVer">-</span></p>
+        <div id="updateMsg" style="font-size:12px;margin-bottom:10px"></div>
+        <button class="btn bs" onclick="checkUpdate()">检查更新</button>
+        <button class="btn bp" id="btnUpdate" onclick="doUpdate()" style="display:none;margin-left:8px">立即更新</button>
+      </div>
+    </div>
+
+    <!-- 信息 -->
+    <div class="pnl" id="p-info">
+      <div class="ph"><h2>其他参数</h2><p>未归入上述分类的兜底参数</p></div>
+      <div class="shc" id="sh-info">已读取 0 项</div>
+      <div id="sp-info"></div>
+    </div>
+
+    <!-- 终端 -->
+    <div class="pnl" id="p-terminal">
+      <div class="ph"><h2>终端</h2><p>本地 Shell 命令执行</p></div>
+      <div class="term">
+        <div class="th"><div class="td r"></div><div class="td y"></div><div class="td g"></div><span>~ /data/openpilot</span></div>
+        <div class="to" id="tOut">晚風的OP工具箱 - 终端\n</div>
+        <div class="ti"><span class="tp">$</span><input type="text" id="tIn" placeholder="输入命令..." onkeydown="if(event.key==='Enter')execCmd()"></div>
+      </div>
+      <div class="qcmds">
+        <span class="qcmd" onclick="qc('echo -en &quot;1&quot; > /data/params/d/DisableUpdates && echo 已禁用重启更新')">禁用重启更新</span>
+        <span class="qcmd" onclick="qc('sudo reboot')" style="border-color:var(--accent2);color:var(--accent2)">重启设备</span>
+        <span class="qcmd" onclick="qc('echo &quot;版本: $(cat /data/params/d/Version 2>/dev/null)&quot; && echo &quot;分支: $(cat /data/params/d/GitBranch 2>/dev/null)&quot;')">版本/分支</span>
+        <span class="qcmd" onclick="qc('free -m')">内存</span>
+        <span class="qcmd" onclick="qc('df -h /data')">磁盘</span>
+        <span class="qcmd" onclick="qc('hostname -I')">IP地址</span>
+        <span class="qcmd" onclick="qc('tr -d &quot;\\0&quot; < /sys/firmware/devicetree/base/model')">设备型号</span>
+        <span class="qcmd" onclick="qc('tail -20 /data/c3_toolbox/server.log 2>/dev/null')">工具箱日志</span>
+      </div>
+    </div>
+
+    <!-- 备份恢复 -->
+    <div class="pnl" id="p-backup">
+      <div class="ph"><h2>备份恢复</h2><p>备份当前参数或从备份恢复</p></div>
+      <div class="cd"><div class="ct">自动备份</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:4px">每次连接工具箱时自动检查，不存在则自动创建完整参数备份</p>
+        <p style="font-size:11px;color:var(--dim);margin-bottom:4px">自动备份路径: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px">/data/c3_toolbox/auto_backup/auto_full_params.json</code></p>
+        <p style="font-size:11px;color:var(--dim);margin-bottom:8px">手动备份路径: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px">/data/c3_toolbox/backups/</code></p>
+        <div id="autoBkStatus" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+      </div>
+      <div class="cd"><div class="ct">手动备份</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">将所有参数导出为 JSON 文件</p>
+        <button class="btn bp" onclick="doBackup()">立即备份</button>
+      </div>
+      <div class="cd"><div class="ct">备份文件</div>
+        <div id="bkList" style="margin-top:8px"></div>
+      </div>
+      <div class="cd"><div class="ct">恢复</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">选择备份文件恢复到设备（支持自动备份和手动备份文件）</p>
+        <div class="fg"><input type="file" id="rFile" accept=".json" style="color:var(--ink)"></div>
+        <button class="btn bw" onclick="doRestore()" style="margin-top:8px">恢复到设备</button>
+      </div>
+      <div class="cd"><div class="ct">自定义写入</div>
+        <div class="fg"><textarea id="cParams" rows="5" placeholder='{"AutoCruiseControl": "1"}' style="font-family:monospace;font-size:11px"></textarea></div>
+        <button class="btn bp" onclick="applyCustom()" style="margin-top:8px">应用</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Mobile Bottom Nav -->
+<nav class="mnav">
+  <div class="mnav-in">
+    <div class="mn on" data-p="dashboard" onclick="go('dashboard')"><span class="mi">📊</span><span class="mt">设备</span></div>
+    <div class="mn" data-p="lateral" onclick="go('lateral')"><span class="mi">↔️</span><span class="mt">横向</span></div>
+    <div class="mn" data-p="longitudinal" onclick="go('longitudinal')"><span class="mi">↕️</span><span class="mt">纵向</span></div>
+    <div class="mn" data-p="curve" onclick="go('curve')"><span class="mi">🌀</span><span class="mt">弯道</span></div>
+    <div class="mn" data-p="lanechange" onclick="go('lanechange')"><span class="mi">↪️</span><span class="mt">变道</span></div>
+    <div class="mn" data-p="nav" onclick="go('nav')"><span class="mi">🧭</span><span class="mt">导航</span></div>
+    <div class="mn" data-p="display" onclick="go('display')"><span class="mi">🖥️</span><span class="mt">显示</span></div>
+    <div class="mn" data-p="settings" onclick="go('settings')"><span class="mi">⚙️</span><span class="mt">设置</span></div>
+    <div class="mn" data-p="info" onclick="go('info')"><span class="mi">📦</span><span class="mt">其他</span></div>
+    <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
+    <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
+  </div>
+</nav>
+
+<!-- Reboot Modal -->
+<div class="mo" id="rebootMo">
+  <div class="md"><h3>确认重启设备</h3><p>设备将立即重启，几秒后重新上线。确定？</p>
+    <div class="ma"><button class="btn bs" onclick="closeMo()">取消</button><button class="btn bd" onclick="confirmReboot()">确认重启</button></div>
+  </div>
+</div>
+
+<script>
+var AP={},CP={},SP=[];
+
+// === Toast ===
+function toast(m,t){var c=document.getElementById('TC'),e=document.createElement('div');e.className='tst '+(t||'in');e.textContent=m;c.appendChild(e);setTimeout(function(){e.style.opacity='0';e.style.transition='opacity .3s';setTimeout(function(){e.remove()},300)},3000)}
+
+// === Navigation ===
+function go(id){document.querySelectorAll('.pnl').forEach(function(p){p.classList.remove('on')});document.querySelectorAll('.cat-card').forEach(function(n){n.classList.remove('on')});document.querySelectorAll('.mn').forEach(function(n){n.classList.remove('on')});var p=document.getElementById('p-'+id);if(p)p.classList.add('on');var n=document.querySelector('.cat-card[data-p="'+id+'"]');if(n)n.classList.add('on');var m=document.querySelector('.mn[data-p="'+id+'"]');if(m){m.classList.add('on');var c=m.parentElement;c.scrollLeft=m.offsetLeft-c.offsetWidth/2+m.offsetWidth/2}CP={};updBadge();onTabSwitch(id)}
+
+// === 运行时间格式化 ===
+function formatUptime(s){
+  if(!s)return'-';
+  // 尝试匹配 "up X hours, Y minutes" 或 "up X days, Y hours, Z minutes"
+  var m=s.match(/up\s+(.*)/i);if(!m)return s;
+  var p=m[1],d=0,h=0,min=0;
+  var dm=p.match(/(\d+)\s*day/);if(dm)d=parseInt(dm[1]);
+  var hm=p.match(/(\d+)\s*hour/);if(hm)h=parseInt(hm[1]);
+  var mm=p.match(/(\d+)\s*min/);if(mm)min=parseInt(mm[1]);
+  // 也匹配中文格式
+  if(!dm){var dm2=p.match(/(\d+)\s*天/);if(dm2)d=parseInt(dm2[1])}
+  if(!hm){var hm2=p.match(/(\d+)\s*小时/);if(hm2)h=parseInt(hm2[1])}
+  if(!mm){var mm2=p.match(/(\d+)\s*分/);if(mm2)min=parseInt(mm2[1])}
+  if(d>0)return d+'天'+h+'小时'+min+'分钟';
+  if(h>0)return h+'小时'+min+'分钟';
+  return min+'分钟';
+}
+
+// === Device Info ===
+function loadInfo(){fetch('/api/device_info').then(function(r){return r.json()}).then(function(d){
+  // 基本信息
+  var g1=document.getElementById('infoBasic');
+  var basic=[
+    {l:'设备 ID',k:'dongle_id',c:'g'},{l:'版本',k:'version',c:'g'},{l:'分支',k:'branch',c:'b'},
+    {l:'Commit',k:'commit',c:'b'},{l:'设备型号',k:'model',c:'g'},{l:'车辆',k:'car_name',c:'o'},
+    {l:'CPU型号',k:'cpu_model',c:'b'},{l:'CPU核心',k:'cpu_cores',c:'b'},{l:'摄像头类型',k:'camera_type',c:'o'},
+    {l:'启动次数',k:'boot_count',c:'o'},{l:'IP地址',k:'ip',c:'b'},{l:'WiFi',k:'wifi',c:'g'}
+  ];
+  g1.innerHTML='';
+  basic.forEach(function(i){
+    var v=d[i.k]||'';if(!v)return;
+    g1.innerHTML+='<div class="ii '+i.c+'"><div class="lb">'+i.l+'</div><div class="vl">'+esc(v)+'</div></div>';
+  });
+
+  // 运行状态
+  var g2=document.getElementById('infoHealth');
+  var health=[
+    {l:'运行时间',k:'uptime',c:'b',fmt:'uptime'},
+    {l:'openpilot状态',k:'manager_running',c:'b',fmt:'status'},
+    {l:'内存',k:'memory',c:'g'},
+    {l:'CPU温度',k:'cpu_temp',c:'o'},
+    {l:'GPU温度',k:'gpu_temp',c:'o'},
+    {l:'环境温度',k:'ambient_temp',c:'o'},
+    {l:'BMS温度',k:'bms_temp',c:'o'},
+    {l:'电量',k:'battery',c:'g'},
+    {l:'充电状态',k:'charging',c:'b'},
+    {l:'屏幕亮度',k:'brightness',c:'b'},
+    {l:'数据分区',k:'disk',c:'g'},
+    {l:'系统分区',k:'system_disk',c:'g'},
+    {l:'系统负载',k:'load_avg',c:'o'},
+    {l:'进程数',k:'proc_count',c:'b'},
+    {l:'网络状态',k:'network',c:'g'}
+  ];
+  g2.innerHTML='';
+  health.forEach(function(i){
+    var v=d[i.k]||'';if(!v)return;
+    if(i.fmt==='status') v=d[i.k]?'运行中':'已停止';
+    if(i.fmt==='uptime') v=formatUptime(v);
+    g2.innerHTML+='<div class="ii '+i.c+'"><div class="lb">'+i.l+'</div><div class="vl">'+esc(v)+'</div></div>';
+  });
+}).catch(function(){})}
+
+// 自动备份检查（每次连接时调用），并顺带扫描备份列表
+function checkAutoBackup(){
+  fetch('/api/auto_backup').then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('autoBkStatus');
+    if(el)el.textContent=d.message||(d.exists?'自动备份已存在':'自动备份状态未知')+(d.path?' ('+d.path+')':'');
+    if(d.created) toast(d.message,'ok');
+    if(d.error) toast('自动备份失败: '+d.error,'er');
+    // 连接时立即扫描并展示所有备份文件
+    loadBkList();
+  }).catch(function(e){
+    var el=document.getElementById('autoBkStatus');
+    if(el)el.textContent='（后端未提供自动备份接口，请确认设备已部署最新版 c3_toolbox_local.py）';
+  });
+}
+
+// === Params ===
+function loadParams(){toast('正在获取参数...','in');fetch('/api/params').then(function(r){return r.json()}).then(function(d){
+  if(d.success){AP=d.params;SP=d.sorted_keys||[];CP={};fillSortedParams();toast(d.message,'ok')}else{toast(d.message,'er')}
+}).catch(function(e){toast('获取失败: '+e.message,'er')})}
+
+function cn(k){if(PN[k])return PN[k];var w=k.replace(/([A-Z])/g,' $1').trim();var r='';w.split(/\s+/).forEach(function(p){r+=(PK[p]||p)});return r}
+
+// 按参数名前缀/同义词自动分类
+function getCat(k){
+  // 显示：图表/图示/信息显示/车道路径/路径显示/路径颜色/调试界面/调试日志/地图样式
+  if(/^(Show|CameraDebug|DriverCameraDebug|WideCameraDebug|ShowDebugLog|MapboxStyle|GMapKey)/i.test(k)) return 'display';
+  // 变道（含变道专用转向速率，需在横向/纵向之前判定）
+  if(/^(LaneChange|ContinuousLaneChange|AutoLaneChange|DynamicTFollowLC|CustomSteerDeltaUpLC|CustomSteerDeltaDownLC)/i.test(k)) return 'lanechange';
+  // 横向：Lateral / Steer / Torque / LatMpc / PathOffset / AutoTurn / 车道·弯道偏移 / 转向角
+  if(/^(Lateral|Steer|Torque|LatMpc|PathOffset|AutoTurn|AutoEnTurn|CustomSteer|CustomSR|SteerRatio|UseLaneLineSpeed|RadarLatFactor|AdjustLane|LaneStab|NewLane|MaxAngle)/i.test(k)) return 'lateral';
+  // 设置：系统开关、按钮模式、连接/录制/调试/盲区/语言等配置
+  if(/^(OpenpilotEnabledToggle|IsMetric|DisengageOnAccelerator|Disable|Enable|Ssh|Adb|Hotspot|Gsm|Record|LongitudinalControl|CommunityFeatureToggle|IsLdwEnabled|IsRHD|Passive|CruiseButtonMode|CancelButtonMode|LfaButtonMode|PaddleMode|MaxTimeOffroadMin|CruiseSpeedUnit|CruiseSpeedUnitBasic|SoundVolume|HyundaiCameraSCC|CanfdHDA2|EnableRadarTracks|EnableCornerRadar|EnableEscc|AutoShutdown|Blinker|StockBlinkerCtrl|Bsd|SideBsd|EVTable|HDPuse|IsLdws|Language|Mute|NNFF|SameSpi|SoftwareMenu|SideRadar|SideRel|SidevRel|CanfdDebug)/i.test(k)) return 'settings';
+  // 纵向：Long / Cruise / TFollow / StopDistance / Stopping / VEgo / CommaLong / AutoGas / 刹车·减速度·油门
+  if(/^(Long|AutoCruise|CarrotCruise|AutoGas|CruiseMaxVals|CruiseOn|CruiseSpeed[0-9]|StopDistance|Stopping|VEgo|CommaLong|TFollow|LongTuning|MyDrivingMode|CruiseEco|AutoEngage|CruiseOnDist|JLeadFactor|RadarReactionFactor|DynamicTFollow|CarrotCruiseAtcDecel|ComfortBrake|DecelLimit|GasSmooth|LongPitch|LongitudinalPersonality|SmoothStop|SoftHold|SpeedFromPCM|StartAccel)/i.test(k)) return 'longitudinal';
+  // 弯道
+  if(/^(AutoCurve|UseLaneLineCurve|AdjustCurve)/i.test(k)) return 'curve';
+  // 导航（含分叉/岔道、道路限速、地图、红绿灯）
+  if(/^(AutoFork|AutoDoFork|AutoKeepFork|AutoNavi|Map|AutoSpeedUpto|RoadSpeed|TurnSpeed|TrafficLight|RedLight|SpeedCamera|HapticFeedbackWhenSpeedCamera|AutoNaviSpeed|RoadType|AutoUpRoad|AutoUpHighwayRoadLimit|AutoRoadSpeed|Navi)/i.test(k)) return 'nav';
+  return 'info';
+}
+
+function fillSortedParams(){
+  var HIDDEN=/^SoundVolume|^Audible|^Beep|^AudibleAlert/;
+  // 只读设备信息（不可调，设备信息页已展示），在设置列表里隐藏，避免干扰调参
+  // 隐藏项：状态/测试类（非可调设置）、只读设备信息（仪表盘已展示）
+  var EXCLUDE={'modelid':1,'CompletedTrainingVersion':1,'HasAcceptedTerms':1,'SearchInput':1,'CruiseButtonTest1':1,'CruiseButtonTest2':1,'CruiseButtonTest3':1,'ExtBlinkerCtrlTest':1,'DongleId':1,'Version':1,'GitBranch':1,'GitCommit':1,'CarName':1,'BootCount':1,'HasRadar':1,'HasRelief':1,'HasSrm':1,'HasAutoResumeFromStop':1,'PandaFirmwareVersion':1,'PandaHardwareType':1,'CameraType':1,'FirmwareVersion':1,'PendingBranchFetch':1,'LastUpdateCheck':1,'UpdateAvailable':1};
+  var catIds=['lateral','longitudinal','curve','lanechange','nav','display','settings','info'];
+  var keys=SP.length>0?SP:Object.keys(AP).sort();
+  var cats={};var catCounts={};
+  catIds.forEach(function(id){cats[id]=[];catCounts[id]=0});
+  var other=[];
+  keys.forEach(function(k){
+    if(HIDDEN.test(k)||EXCLUDE[k])return;
+    var cat=getCat(k);
+    if(cats[cat]){cats[cat].push(k);catCounts[cat]++;}
+    else other.push(k);
+  });
+  catIds.forEach(function(id){
+    var el=document.getElementById('sp-'+id);if(!el)return;
+    var list=cats[id];
+    var sh=document.getElementById('sh-'+id);if(sh)sh.textContent='已读取 '+list.length+' 项';
+    var bc=document.getElementById('bc-'+id);if(bc)bc.textContent=list.length;
+    if(list.length===0){el.innerHTML='<div class="cat-empty" style="padding:30px;color:var(--dim);font-size:13px;text-align:center">暂无参数</div>';return;}
+    var h='';
+    list.forEach(function(k){h+=renderParamCard(k);});
+    el.innerHTML=h;
+  });
+  if(other.length>0){
+    var infoEl=document.getElementById('sp-info');
+    if(infoEl){
+      var empty=infoEl.querySelector('.cat-empty');if(empty)empty.remove();
+      var div=document.createElement('div');div.style='margin-top:12px;padding-top:12px;border-top:1px solid var(--rule)';
+      div.innerHTML='<div class="shc">其他参数 ('+other.length+'项)</div>'+other.map(function(k){return renderParamCard(k);}).join('');
+      infoEl.appendChild(div);
+    }
+  }
+}
+
+function renderParamCard(k){
+  var v=AP[k]||'',c=cn(k),dsc=PN_DESC[k]||'';
+  var isToggle=(v==='0'||v==='1');
+  var pending=CP[k]!==undefined?CP[k]:v;
+  var hasChange=CP[k]!==undefined;
+  var defVal=PD[k]||'—';
+  var h='<div class="param-card" id="pc-'+k+'">';
+  // 左侧：名称+描述
+  h+='<div class="pc-left"><div class="ptitle">'+esc(c||k)+'</div>';
+  if(dsc)h+='<div class="pdesc">'+esc(dsc)+'</div>';
+  h+='</div>';
+  // 数值列
+  h+='<div class="param-values">';
+  h+='<div class="val-box"><div class="vlabel">当前</div><div class="vval" id="cv-'+k+'">'+esc(v)+'</div></div>';
+  h+='<div class="val-box"><div class="vlabel">待存</div><div class="vval'+(hasChange?' pending':'')+'" id="pv-'+k+'">'+esc(pending)+'</div></div>';
+  h+='<div class="val-box"><div class="vlabel">默认</div><div class="vval" style="color:var(--muted)">'+esc(defVal)+'</div></div>';
+  h+='</div>';
+  // 控件
+  if(isToggle){
+    h+='<div class="pc-ctrl"><div class="tg-btns">';
+    h+='<button class="tg-btn'+(pending!=='1'?' on':'')+'" id="tg-off-'+k+'" onclick="setToggle(\''+k+'\',0)">关</button>';
+    h+='<button class="tg-btn'+(pending==='1'?' on':'')+'" id="tg-on-'+k+'" onclick="setToggle(\''+k+'\',1)">开</button>';
+    h+='</div></div>';
+  }else{
+    h+='<div class="pc-ctrl"><input type="text" value="'+esc(pending)+'" data-key="'+esc(k)+'" id="inp-'+k+'" oninput="onValChange(\''+k+'\',this.value)"></div>';
+  }
+  // 操作按钮
+  h+='<div class="ca">';
+  h+='<button class="btn-rst" onclick="resetDefault(\''+k+'\')">恢复默认</button>';
+  h+='<button class="btn-sv'+(hasChange?' ready':'')+'" id="sv-'+k+'" onclick="saveParam(\''+k+'\')">保存</button>';
+  h+='</div>';
+  h+='</div>';
+  return h;
+}
+
+function onValChange(k,v){
+  CP[k]=v;
+  var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=v;pv.classList.add('pending');}
+  var sv=document.getElementById('sv-'+k);if(sv)sv.classList.add('ready');
+}
+
+function setToggle(k,v){
+  var val=v?'1':'0';
+  CP[k]=val;
+  var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=val;pv.classList.add('pending');}
+  var sv=document.getElementById('sv-'+k);if(sv)sv.classList.add('ready');
+  var offBtn=document.getElementById('tg-off-'+k);
+  var onBtn=document.getElementById('tg-on-'+k);
+  if(offBtn)offBtn.classList.toggle('on',val!=='1');
+  if(onBtn)onBtn.classList.toggle('on',val==='1');
+}
+
+function resetDefault(k){
+  var defVal=PD[k];
+  if(defVal===undefined||defVal==='—'){toast('无默认数值','er');return;}
+  delete CP[k];
+  var inp=document.getElementById('inp-'+k);
+  if(inp)inp.value=defVal;
+  var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=defVal;pv.classList.remove('pending');}
+  var sv=document.getElementById('sv-'+k);if(sv)sv.classList.remove('ready');
+  if(AP[k]==='0'||AP[k]==='1'){
+    var offBtn=document.getElementById('tg-off-'+k);var onBtn=document.getElementById('tg-on-'+k);
+    if(offBtn)offBtn.classList.toggle('on',defVal!=='1');
+    if(onBtn)onBtn.classList.toggle('on',defVal==='1');
+  }
+}
+
+async function saveParam(k){
+  var v=CP[k];if(v===undefined)v=AP[k]||'';
+  try{var r=await fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[k]:v})});var d=await r.json();
+  if(d.success){
+    AP[k]=v;delete CP[k];
+    var cv=document.getElementById('cv-'+k);if(cv)cv.textContent=v;
+    var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=v;pv.classList.remove('pending');}
+    var sv=document.getElementById('sv-'+k);if(sv)sv.classList.remove('ready');
+    toast('已保存到设备','ok');
+  }else toast(d.message,'er');
+  }catch(e){toast('保存失败','er');}
+}
+
+function updBadge(){}
+
+function onTabSwitch(id){
+  if(id==='dashboard'){loadInfo()}
+  else if(id==='backup'){checkAutoBackup();loadBkList();}
+  else if(id==='settings'){loadParams();checkUpdate();}
+  else if(id!=='terminal'){loadParams()}
+}
+
+
+
+// === All Params Table ===
+var PN={'AdjustCurveOffset':'弯道偏移调整','AdjustLaneOffset':'车道偏移调整','AutoCruiseControl':'自动巡航','AutoCurveSpeedAggressiveness':'弯道激进程度','AutoCurveSpeedAggressivenessH':'高速弯道激进程度','AutoCurveSpeedFactor':'弯道速度因子','AutoCurveSpeedFactorH':'高速弯道速度因子','AutoCurveSpeedLowerLimit':'弯道最低速度','AutoDoForkBlinkerDist':'岔道打灯距离','AutoDoForkBlinkerDistH':'高速岔道打灯距离','AutoDoForkCheckDist':'岔道确认距离','AutoDoForkCheckDistH':'高速岔道确认距离','AutoDoForkDecalDist':'岔道减速距离','AutoDoForkDecalDistH':'高速岔道减速距离','AutoDoForkNavDist':'岔道导航距离','AutoDoForkNavDistH':'高速岔道导航距离','AutoEnTurnNewLaneTime':'转向入弯新车道时间','AutoEnTurnNewLaneTimeH':'高速转向入弯新车道时间','AutoEngage':'自动启用','AutoForkDecalRate':'岔道减速率','AutoForkDecalRateH':'高速岔道减速率','AutoForkDistOffset':'岔道距离偏移','AutoForkDistOffsetH':'高速岔道距离偏移','AutoForkSpeedMin':'岔道最低速度','AutoForkSpeedMinH':'高速岔道最低速度','AutoGasSyncSpeed':'油门同步速度','AutoGasTokSpeed':'油门响应速度','AutoKeepForkSpeed':'岔道保持速度','AutoKeepForkSpeedH':'高速岔道保持速度','AutoLaneChangeMinSpeed':'自动变道最低速度','AutoNaviCountDownMode':'导航倒计时','AutoNaviSpeedBumpSpeed':'减速带速度','AutoNaviSpeedBumpTime':'减速带提前时间','AutoNaviSpeedCtrlEnd':'导航速度控制结束距离','AutoNaviSpeedCtrlMode':'导航速度模式','AutoNaviSpeedDecelRate':'导航减速率','AutoNaviSpeedSafetyFactor':'导航安全系数','AutoRoadSpeedAdjust':'道路限速调整','AutoRoadSpeedLimitOffset':'限速偏移','AutoSpeedUptoRoadSpeedLimit':'加速到限速','AutoTurnControl':'自动转向','AutoTurnControlSpeedTurn':'转向控制转弯速度','AutoTurnControlTurnEnd':'转向控制转弯结束','AutoTurnDistOffset':'转向距离偏移','AutoTurnInNotRoadEdge':'非道路边缘转向','AutoTurnLeft':'自动左转','AutoTurnMapChange':'地图转向切换','AutoUpHighwayRoadLimit':'高速道路限速','AutoUpHighwayRoadLimit40KMH':'高速40限速上限','AutoUpRoadLimit':'普通道路限速','AutoUpRoadLimit40KMH':'普通道路40限速上限','BlinkerMode':'转向灯模式','BsdDelayTime':'盲区检测延迟','CancelButtonMode':'取消按钮模式','CanfdDebug':'CAN FD调试','CanfdHDA2':'CAN FD HDA2','CarrotCruiseAtcDecel':'巡航ATC减速度','CarrotCruiseDecel':'巡航减速度','ComfortBrake':'舒适刹车','CommaLongAcc':'纵向加速度偏移','ContinuousLaneChange':'连续变道','ContinuousLaneChangeCnt':'连续变道次数','ContinuousLaneChangeInterval':'连续变道间隔','CruiseButtonMode':'巡航按钮模式','CruiseEcoControl':'经济巡航','CruiseMaxVals0':'加速度0-30','CruiseMaxVals1':'加速度30-60','CruiseMaxVals2':'加速度60-90','CruiseMaxVals3':'加速度90-120','CruiseMaxVals4':'加速度120-150','CruiseMaxVals5':'加速度150-180','CruiseMaxVals6':'加速度180+','CruiseOnDist':'巡航启动距离','CruiseSpeed1':'预设速度1','CruiseSpeed2':'预设速度2','CruiseSpeed3':'预设速度3','CruiseSpeed4':'预设速度4','CruiseSpeed5':'预设速度5','CruiseSpeedUnit':'速度单位','CruiseSpeedUnitBasic':'基本速度单位','CustomSR':'自定义转向比','CustomSteerDeltaDown':'转向下降速率','CustomSteerDeltaDownLC':'变道转向下降','CustomSteerDeltaUp':'转向上升速率','CustomSteerDeltaUpLC':'变道转向上升','CustomSteerMax':'最大转向角','CustomSteerOffset':'转向偏移量','DecelLimitAEgoMax':'减速度限制Ego最大','DecelLimitAEgoMin':'减速度限制Ego最小','DecelLimitVEgoMax':'减速度限速最大','DecelLimitVEgoMin':'减速度限速最小','DisableDM':'禁用驾驶员监控','DisableMinSteerSpeed':'禁用最小转向速度','DisengageOnAccelerator':'油门退出','DynamicTFollow':'动态跟车时距','DynamicTFollowLC':'变道动态跟车','EVTable':'电动车参数表','EnableConnect':'CommaConnect','EnableCornerRadar':'角雷达','EnableEscc':'电子巡航控制','EnableRadarTracks':'雷达追踪','GMapKey':'谷歌地图密钥','GasSmoothTime':'油门平滑时间','GsmMetered':'GSM计费网络','HDPuse':'HDA使用','HapticFeedbackWhenSpeedCamera':'测速震动反馈','HotspotOnBoot':'开机热点','HyundaiCameraSCC':'现代摄像头SCC','IsLdwsCar':'LDWS车辆','IsMetric':'公制单位','JLeadFactor3':'跟车距离因子','LaneChangeBsd':'变道盲区检测','LaneChangeDelay':'变道延迟','LaneChangeNeedTorque':'变道所需扭矩','LaneStabTime':'车道稳定时间','LanguageSetting':'语言设置','LatMpcAccelCost':'加速度代价','LatMpcInputOffset':'输入偏移量','LatMpcJerkCost':'急动度代价','LatMpcMotionCost':'运动代价','LatMpcPathCost':'路径代价','LatMpcSteeringRateCost':'转向速率代价','LateralTorqueAccelFactor':'横向扭矩加速度因子','LateralTorqueCustom':'自定义横向扭矩','LateralTorqueFriction':'横向扭矩摩擦系数','LateralTorqueKd':'横向扭矩Kd','LateralTorqueKf':'横向扭矩Kf','LateralTorqueKiV':'横向扭矩Ki','LateralTorqueKpV':'横向扭矩Kp','LfaButtonMode':'LFA按钮模式','LongActuatorDelay':'纵向执行器延迟','LongPitch':'纵向俯仰补偿','LongTuningKf':'纵向前馈Kf','LongTuningKiV':'纵向Ki','LongTuningKpV':'纵向Kp','LongitudinalPersonality':'纵向个性','LongitudinalPersonalityMax':'纵向个性上限','MapTurnSpeedFactor':'地图转弯速度因子','MapboxStyle':'Mapbox样式','MaxAngleFrames':'最大角度帧数','MaxTimeOffroadMin':'下路最大时间','MuteDoor':'静音车门提示','MuteSeatbelt':'静音安全带提示','MyDrivingMode':'驾驶模式','MyDrivingModeAuto':'驾驶模式自动切换','NNFF':'神经网络前馈','NNFFLite':'轻量神经网络前馈','NewLaneWidthDiff':'新车道宽度差','OpenpilotEnabledToggle':'系统总开关','PaddleMode':'拨片模式','PathOffset':'路径偏移','RadarLatFactor':'雷达横向因子','RadarReactionFactor':'雷达反应因子','RecordAudio':'录制音频','RecordRoadCam':'录制道路摄像头','RedLightDistOffset':'红灯停车偏移','RoadType':'道路类型','SameSpiCamFilter':'SPI摄像滤波','ShowCustomBrightness':'自定义亮度','ShowDateTime':'时间日期显示','ShowDebugLog':'调试日志显示','ShowDebugUI':'调试界面','ShowDeviceState':'设备状态显示','ShowLaneInfo':'车道信息显示','ShowPathColor':'路径颜色','ShowPathColorCruiseOff':'巡航关闭路径颜色','ShowPathColorLane':'车道路径颜色','ShowPathEnd':'路径终点显示','ShowPathMode':'路径显示模式','ShowPathModeLane':'车道路径模式','ShowPlotMode':'图表显示','ShowRadarInfo':'雷达信息显示','ShowRouteInfo':'路线信息显示','ShowTpms':'胎压显示','SideBsdDelayTime':'侧盲区检测延迟','SideRadarMinDist':'侧雷达最小距离','SideRelDistTime':'侧雷达相对距离时间','SidevRelDistTime':'侧雷达相对距离时间(v)','SmoothStopMode':'平滑停车模式','SoftHoldMode':'软保持模式','SoftwareMenu':'软件菜单','SoundVolumeAdjust':'音量调节','SoundVolumeAdjustEngage':'介入音量','SpeedFromPCM':'PCM速度源','StartAccel':'起步加速度','SteerActuatorDelay':'转向执行器延迟','SteerAngleOffset':'转向角度偏移','SteerRatioRate':'转向比变化率','StockBlinkerCtrl':'原厂转向灯控制','StopDistanceCarrot':'停车距离','StoppingAccel':'停车加速度','StoppingDecelRate':'停车减速率','TFollowGap1':'跟车时距1','TFollowGap2':'跟车时距2','TFollowGap3':'跟车时距3','TFollowGap4':'跟车时距4','TrafficLightDetectMode':'红绿灯检测模式','TurnSpeedControlMode':'转弯速度模式','UseLaneLineCurveSpeed':'车道线弯道限速','UseLaneLineSpeed':'车道线限速','VEgoStopping':'停车车速'};
+var PK={'Version':'版本','Branch':'分支','Commit':'提交','Car':'车辆','CarName':'车辆名称','Dongle':'设备','Boot':'启动','Enabled':'启用','Disable':'禁用','Toggle':'开关','Speed':'速度','Control':'控制','Auto':'自动','Custom':'自定义','Max':'最大','Min':'最小','Offset':'偏移','Factor':'因子','Mode':'模式','Cost':'代价','Rate':'速率/率','Time':'时间','Dist':'距离','Delay':'延迟','Gap':'时距','Show':'显示','Record':'录制','Cruise':'巡航','Steer':'转向','Torque':'扭矩','Lateral':'横向','Long':'纵向','Curve':'弯道','Fork':'岔道','Lane':'车道','Navi':'导航','Traffic':'交通','Signal':'信号','Debug':'调试','Update':'更新','Camera':'摄像头','Radar':'雷达','Dynamic':'动态','Continuous':'连续','Blinker':'打灯','Aggress':'激进','Safety':'安全','Decel':'减速','Accel':'加速','Stopping':'停车','Following':'跟车','Front':'前置','Audio':'音频','Road':'道路','Highway':'高速','Turn':'转弯','Path':'路径','Color':'颜色','Display':'显示','Brightness':'亮度','Volume':'音量','Sound':'声音','Haptic':'触觉','Feedback':'反馈','Button':'按钮','Paddle':'拨片','Cancel':'取消','Resume':'恢复','ResumeFrom':'恢复','Engage':'启用/介入','Eco':'经济','Passive':'被动','Metric':'公制','Firmware':'固件','Hardware':'硬件','Type':'类型','Connecting':'连接','Connect':'连接','Ssh':'SSH','Adb':'ADB','Hotspot':'热点','Roaming':'漫游','Logging':'日志','Power':'电源','Down':'下','Up':'上','Monitoring':'监控','Driver':'驾驶员','Wide':'广角','Plot':'图表','Route':'路线','Device':'设备','DateTime':'日期时间','Tpms':'胎压','Relief':'Relief','Srm':'SRM','Ldw':'LDW','RHD':'右舵','Community':'社区','Feature':'功能','Pending':'待处理','Available':'可用','Last':'最后','Check':'检查','Fetch':'获取','Setting':'设置','Param':'参数','Config':'配置','Network':'网络','Wireless':'无线','Wire':'线','Base':'基础','Basic':'基本','Unit':'单位','Bump':'减速带','Brake':'刹车','Throttle':'油门','Gas':'油门','Reaction':'反应','Corner':'角','Track':'追踪','Segment':'分段','Val':'值','Count':'次数','Number':'数量','Index':'索引','Level':'等级','Status':'状态','Running':'运行','Stopped':'停止','Active':'活跃','OnBoot':'开机','Reboot':'重启','Shutdown':'关机','Safe':'安全','Limit':'限速','Lower':'最低','Upper':'最高','Hold':'保持','Confirm':'确认','Countdown':'倒计时','Upto':'加速到','Radius':'半径','Angle':'角度','Ratio':'比例','Friction':'摩擦','Proportional':'比例','Integral':'积分','Derivative':'微分','Feed':'前馈','FeedForward':'前馈','Jerk':'急动度','Motion':'运动','Input':'输入','Output':'输出','Process':'进程','Memory':'内存','Disk':'磁盘','Temp':'温度','Cpu':'CPU','Ip':'IP','Address':'地址','Model':'型号','Info':'信息','Log':'日志','Terminal':'终端','Command':'命令','Backup':'备份','Restore':'恢复','Upload':'上传','Download':'下载','Delete':'删除','Save':'保存','Refresh':'刷新','Search':'搜索','Filter':'过滤','Sort':'排序','Export':'导出','Import':'导入','Clear':'清除','Reset':'重置','Default':'默认','Current':'当前','Original':'原始','Modified':'已修改','Changed':'已更改','Applied':'已应用','Scanned':'扫描','Detected':'检测','Width':'宽度','Height':'高度','Position':'位置','Location':'位置','Direction':'方向','Longitudinal':'纵向','Vertical':'垂直','Horizontal':'水平','Diagonal':'对角','Left':'左','Right':'右','Center':'中心','Top':'顶部','Bottom':'底部','Front':'前','Rear':'后','Side':'侧面','Inside':'内侧','Outside':'外侧','Near':'近','Far':'远','Approach':'接近','Depart':'离开','Enter':'进入','Exit':'退出','Merge':'合流','Split':'分流','Yield':'让行','Stop':'停车','Wait':'等待','Go':'通行','Green':'绿灯','Red':'红灯','Yellow':'黄灯','Flash':'闪烁','Solid':'常亮','Blink':'闪烁','Frequency':'频率','Channel':'通道','Band':'频段','Strength':'强度','Quality':'质量','Connected':'已连接','Disconnected':'断开','Scanning':'扫描中','Associating':'关联中','Authenticating':'认证中','Obtaining':'获取中','Configured':'已配置','Unconfigured':'未配置','Failed':'失败','Success':'成功','Error':'错误','Warning':'警告','Verbose':'详细','Quiet':'安静','Normal':'普通','High':'高','Low':'低','Medium':'中','Off':'关闭','On':'开启','Enable':'启用','Switch':'开关','Press':'按下','Release':'释放','Double':'双击','Triple':'三击','Swipe':'滑动','Pinch':'缩放','Rotate':'旋转','Pan':'平移','Zoom':'缩放','Scroll':'滚动','Flick':'轻扫','Drag':'拖动','Drop':'放下'};
+var PN_DESC={'AdjustCurveOffset':'弯道行驶时路径横向偏移修正量','AdjustLaneOffset':'车道保持时路径横向偏移修正量','AutoCruiseControl':'启动车辆后自动进入巡航模式','AutoCurveSpeedAggressiveness':'弯道速度激进程度','AutoCurveSpeedAggressivenessH':'','AutoCurveSpeedFactor':'弯道自动降速因子','AutoCurveSpeedFactorH':'','AutoCurveSpeedLowerLimit':'弯道最低限速','AutoDoForkBlinkerDist':'岔道打灯提前距离','AutoDoForkBlinkerDistH':'高速岔道打灯距离','AutoDoForkCheckDist':'岔道确认距离','AutoDoForkCheckDistH':'高速岔道确认距离','AutoDoForkDecalDist':'岔道减速距离','AutoDoForkDecalDistH':'高速岔道减速距离','AutoDoForkNavDist':'导航提示岔道前开始处理的距离','AutoDoForkNavDistH':'高速下导航提示岔道前开始处理的距离','AutoEnTurnNewLaneTime':'自动转向进入新车道所需时间','AutoEnTurnNewLaneTimeH':'高速下自动转向进入新车道所需时间','AutoEngage':'满足条件后自动启用openpilot','AutoForkDecalRate':'岔道减速率','AutoForkDecalRateH':'高速岔道减速率','AutoForkDistOffset':'岔道路口距离偏移','AutoForkDistOffsetH':'高速岔道距离偏移','AutoForkSpeedMin':'岔道最低速度','AutoForkSpeedMinH':'高速岔道最低速度','AutoGasSyncSpeed':'自动油门与车速同步的灵敏度','AutoGasTokSpeed':'自动油门响应速度','AutoKeepForkSpeed':'岔道保持速度','AutoKeepForkSpeedH':'高速岔道保持速度','AutoLaneChangeMinSpeed':'自动变道最低车速','AutoNaviCountDownMode':'导航倒计时模式','AutoNaviSpeedBumpSpeed':'','AutoNaviSpeedBumpTime':'','AutoNaviSpeedCtrlEnd':'导航速度控制结束的提前距离','AutoNaviSpeedCtrlMode':'导航速度控制模式','AutoNaviSpeedDecelRate':'导航减速速率','AutoNaviSpeedSafetyFactor':'导航安全系数','AutoRoadSpeedAdjust':'对道路限速的整体调整（正负偏移）','AutoRoadSpeedLimitOffset':'道路限速偏移量','AutoSpeedUptoRoadSpeedLimit':'自动加速到道路限速','AutoTurnControl':'自动转向控制开关','AutoTurnControlSpeedTurn':'转向控制触发的最小转弯速度','AutoTurnControlTurnEnd':'转向控制结束的转弯角度','AutoTurnDistOffset':'转向时路径距离偏移','AutoTurnInNotRoadEdge':'在没有道路边缘时是否允许自动转向','AutoTurnLeft':'是否允许自动左转','AutoTurnMapChange':'根据地图信息自动调整转向','AutoUpHighwayRoadLimit':'高速公路限速','AutoUpHighwayRoadLimit40KMH':'高速道路40限速段的上限速度','AutoUpRoadLimit':'普通道路限速','AutoUpRoadLimit40KMH':'普通道路40限速段的上限速度','BlinkerMode':'转向灯控制模式','BsdDelayTime':'盲区检测提示延迟时间','CancelButtonMode':'取消按钮工作模式','CanfdDebug':'CAN FD调试模式','CanfdHDA2':'','CarrotCruiseAtcDecel':'巡航ATC目标减速度','CarrotCruiseDecel':'巡航时目标减速度','ComfortBrake':'舒适刹车强度','CommaLongAcc':'纵向加速度补偿值','ContinuousLaneChange':'允许连续自动变道','ContinuousLaneChangeCnt':'连续变道次数限制','ContinuousLaneChangeInterval':'连续变道间隔时间','CruiseButtonMode':'方向盘巡航按钮功能模式','CruiseEcoControl':'经济巡航模式，更柔和的加速','CruiseMaxVals0':'','CruiseMaxVals1':'','CruiseMaxVals2':'','CruiseMaxVals3':'','CruiseMaxVals4':'','CruiseMaxVals5':'','CruiseMaxVals6':'','CruiseOnDist':'巡航启动的最小前车距离','CruiseSpeed1':'巡航预设速度1','CruiseSpeed2':'巡航预设速度2','CruiseSpeed3':'巡航预设速度3','CruiseSpeed4':'巡航预设速度4','CruiseSpeed5':'巡航预设速度5','CruiseSpeedUnit':'','CruiseSpeedUnitBasic':'','CustomSR':'自定义转向比','CustomSteerDeltaDown':'转向角下降速率限制','CustomSteerDeltaDownLC':'','CustomSteerDeltaUp':'转向角上升速率限制','CustomSteerDeltaUpLC':'','CustomSteerMax':'最大允许转向角','CustomSteerOffset':'','DecelLimitAEgoMax':'纵向减速度上限（Ego加速度）','DecelLimitAEgoMin':'纵向减速度下限','DecelLimitVEgoMax':'触发减速的车速上限','DecelLimitVEgoMin':'触发减速的车速下限','DisableDM':'禁用驾驶员监控（DMS）','DisableMinSteerSpeed':'禁用最小转向速度限制','DisengageOnAccelerator':'踩油门时退出openpilot','DynamicTFollow':'根据车速动态调整跟车时距','DynamicTFollowLC':'变道时的动态跟车时距','EVTable':'电动车参数表选择','EnableConnect':'启用Comma Connect云服务','EnableCornerRadar':'','EnableEscc':'','EnableRadarTracks':'','GMapKey':'谷歌地图密钥','GasSmoothTime':'油门平滑过渡时间','GsmMetered':'GSM是否计费网络','HDPuse':'使用现代HDA（高速公路驾驶辅助）','HapticFeedbackWhenSpeedCamera':'测速点震动反馈','HotspotOnBoot':'开机自动开启WiFi热点','HyundaiCameraSCC':'','IsLdwsCar':'是否为带LDWS（车道偏离预警）车辆','IsMetric':'使用公制单位（km/h）','JLeadFactor3':'前车距离因子','LaneChangeBsd':'变道盲区检测开关','LaneChangeDelay':'变道启动延迟时间','LaneChangeNeedTorque':'变道需要的手动扭矩','LaneStabTime':'车道保持稳定时间','LanguageSetting':'界面语言设置','LatMpcAccelCost':'横向MPC加速度代价权重','LatMpcInputOffset':'','LatMpcJerkCost':'横向MPC急动度代价权重','LatMpcMotionCost':'横向MPC运动平滑代价权重','LatMpcPathCost':'横向MPC路径跟踪代价权重','LatMpcSteeringRateCost':'横向MPC转向速率代价权重','LateralTorqueAccelFactor':'','LateralTorqueCustom':'自定义横向扭矩控制','LateralTorqueFriction':'','LateralTorqueKd':'','LateralTorqueKf':'','LateralTorqueKiV':'','LateralTorqueKpV':'','LfaButtonMode':'LFA车道保持按钮模式','LongActuatorDelay':'','LongPitch':'纵向俯仰补偿','LongTuningKf':'纵向控制前馈增益','LongTuningKiV':'纵向控制积分增益','LongTuningKpV':'纵向控制比例增益','LongitudinalPersonality':'纵向驾驶个性（激进度）','LongitudinalPersonalityMax':'纵向个性上限','MapTurnSpeedFactor':'地图转弯速度因子','MapboxStyle':'Mapbox地图样式','MaxAngleFrames':'最大转向角度帧数','MaxTimeOffroadMin':'','MuteDoor':'静音车门未关提示','MuteSeatbelt':'静音安全带提示','MyDrivingMode':'自定义驾驶模式选择','MyDrivingModeAuto':'','NNFF':'使用神经网络前馈（NNFF）','NNFFLite':'使用轻量版神经网络前馈','NewLaneWidthDiff':'新车道宽度差异阈值','OpenpilotEnabledToggle':'系统总开关，开启后openpilot才会工作','PaddleMode':'方向盘拨片功能模式','PathOffset':'行驶路径左右偏移量','RadarLatFactor':'雷达横向位置修正因子','RadarReactionFactor':'雷达反应灵敏度','RecordAudio':'','RecordRoadCam':'','RedLightDistOffset':'红灯停车距离偏移','RoadType':'道路类型选择','SameSpiCamFilter':'SPI摄像头滤波','ShowCustomBrightness':'自定义屏幕亮度','ShowDateTime':'显示日期时间','ShowDebugLog':'显示调试日志','ShowDebugUI':'显示调试界面','ShowDeviceState':'显示设备状态','ShowLaneInfo':'显示车道信息','ShowPathColor':'','ShowPathColorCruiseOff':'','ShowPathColorLane':'','ShowPathEnd':'显示路径终点','ShowPathMode':'','ShowPathModeLane':'','ShowPlotMode':'显示数据图表','ShowRadarInfo':'显示雷达信息','ShowRouteInfo':'显示路线信息','ShowTpms':'显示胎压信息','SideBsdDelayTime':'侧盲区检测提示延迟','SideRadarMinDist':'侧雷达最小探测距离','SideRelDistTime':'侧雷达相对距离时间','SidevRelDistTime':'侧雷达相对距离时间（v）','SmoothStopMode':'平滑停车模式','SoftHoldMode':'软保持模式','SoftwareMenu':'显示软件菜单','SoundVolumeAdjust':'音量调节','SoundVolumeAdjustEngage':'介入提示音量','SpeedFromPCM':'车速信号来源（PCM/总线）','StartAccel':'起步加速度','SteerActuatorDelay':'转向执行器延迟时间','SteerAngleOffset':'转向角度偏移修正','SteerRatioRate':'转向比变化速率','StockBlinkerCtrl':'使用原厂转向灯控制','StopDistanceCarrot':'停车时与前车保持的距离','StoppingAccel':'停车时的目标加速度','StoppingDecelRate':'停车减速率','TFollowGap1':'跟车时距等级1','TFollowGap2':'跟车时距等级2','TFollowGap3':'跟车时距等级3','TFollowGap4':'跟车时距等级4','TrafficLightDetectMode':'红绿灯检测模式','TurnSpeedControlMode':'转弯速度控制模式','UseLaneLineCurveSpeed':'使用车道线曲率计算弯道速度','UseLaneLineSpeed':'','VEgoStopping':'判定为停车状态的车速阈值'};
+var PD={'AdjustCurveOffset':'25','AdjustLaneOffset':'0','AutoCruiseControl':'0','AutoCurveSpeedAggressiveness':'50','AutoCurveSpeedAggressivenessH':'100','AutoCurveSpeedFactor':'1.0','AutoCurveSpeedFactorH':'100','AutoCurveSpeedLowerLimit':'30','AutoDoForkBlinkerDist':'80','AutoDoForkBlinkerDistH':'120','AutoDoForkCheckDist':'50','AutoDoForkCheckDistH':'80','AutoDoForkDecalDist':'100','AutoDoForkDecalDistH':'150','AutoDoForkNavDist':'20','AutoDoForkNavDistH':'80','AutoEnTurnNewLaneTime':'3','AutoEnTurnNewLaneTimeH':'10','AutoEngage':'0','AutoForkDecalRate':'1.0','AutoForkDecalRateH':'1.0','AutoForkDistOffset':'0','AutoForkDistOffsetH':'0','AutoForkSpeedMin':'30','AutoForkSpeedMinH':'50','AutoGasSyncSpeed':'1','AutoGasTokSpeed':'1','AutoKeepForkSpeed':'0','AutoKeepForkSpeedH':'0','AutoLaneChangeMinSpeed':'60','AutoNaviCountDownMode':'1','AutoNaviSpeedBumpSpeed':'30','AutoNaviSpeedBumpTime':'1','AutoNaviSpeedCtrlEnd':'10','AutoNaviSpeedCtrlMode':'1','AutoNaviSpeedDecelRate':'1.0','AutoNaviSpeedSafetyFactor':'100','AutoRoadSpeedAdjust':'-1','AutoRoadSpeedLimitOffset':'0','AutoSpeedUptoRoadSpeedLimit':'0','AutoTurnControl':'0','AutoTurnControlSpeedTurn':'25','AutoTurnControlTurnEnd':'4','AutoTurnDistOffset':'0','AutoTurnInNotRoadEdge':'1','AutoTurnLeft':'1','AutoTurnMapChange':'0','AutoUpHighwayRoadLimit':'120','AutoUpHighwayRoadLimit40KMH':'20','AutoUpRoadLimit':'80','AutoUpRoadLimit40KMH':'15','BlinkerMode':'0','BsdDelayTime':'15','CancelButtonMode':'0','CanfdDebug':'0','CanfdHDA2':'0','CarrotCruiseAtcDecel':'-1','CarrotCruiseDecel':'-2.0','ComfortBrake':'220','CommaLongAcc':'0','ContinuousLaneChange':'0','ContinuousLaneChangeCnt':'1','ContinuousLaneChangeInterval':'3','CruiseButtonMode':'0','CruiseEcoControl':'0','CruiseMaxVals0':'180','CruiseMaxVals1':'120','CruiseMaxVals2':'150','CruiseMaxVals3':'90','CruiseMaxVals4':'80','CruiseMaxVals5':'70','CruiseMaxVals6':'60','CruiseOnDist':'6','CruiseSpeed1':'60','CruiseSpeed2':'80','CruiseSpeed3':'100','CruiseSpeed4':'110','CruiseSpeed5':'120','CruiseSpeedUnit':'10','CruiseSpeedUnitBasic':'1','CustomSR':'1','CustomSteerDeltaDown':'7','CustomSteerDeltaDownLC':'0','CustomSteerDeltaUp':'3','CustomSteerDeltaUpLC':'0','CustomSteerMax':'255','CustomSteerOffset':'0','DecelLimitAEgoMax':'-50','DecelLimitAEgoMin':'-150','DecelLimitVEgoMax':'25','DecelLimitVEgoMin':'10','DisableDM':'0','DisableMinSteerSpeed':'0','DisengageOnAccelerator':'1','DynamicTFollow':'1','DynamicTFollowLC':'1','EVTable':'1','EnableConnect':'1','EnableCornerRadar':'0','EnableEscc':'1','EnableRadarTracks':'-1','GMapKey':'0','GasSmoothTime':'70','GsmMetered':'1','HDPuse':'0','HapticFeedbackWhenSpeedCamera':'1','HotspotOnBoot':'0','HyundaiCameraSCC':'0','IsLdwsCar':'0','IsMetric':'1','JLeadFactor3':'1.0','LaneChangeBsd':'1','LaneChangeDelay':'0.5','LaneChangeNeedTorque':'0','LaneStabTime':'50','LanguageSetting':'main_zh-CHS','LatMpcAccelCost':'1.0','LatMpcInputOffset':'4','LatMpcJerkCost':'1.0','LatMpcMotionCost':'1.0','LatMpcPathCost':'1.0','LatMpcSteeringRateCost':'1.0','LateralTorqueAccelFactor':'2500','LateralTorqueCustom':'0','LateralTorqueFriction':'85','LateralTorqueKd':'8','LateralTorqueKf':'100','LateralTorqueKiV':'15','LateralTorqueKpV':'100','LfaButtonMode':'0','LongActuatorDelay':'15','LongPitch':'1','LongTuningKf':'1.0','LongTuningKiV':'0.1','LongTuningKpV':'1.0','LongitudinalPersonality':'1','LongitudinalPersonalityMax':'4','MapTurnSpeedFactor':'1.0','MapboxStyle':'2','MaxAngleFrames':'89','MaxTimeOffroadMin':'60','MuteDoor':'0','MuteSeatbelt':'0','MyDrivingMode':'0','MyDrivingModeAuto':'0','NNFF':'1','NNFFLite':'0','NewLaneWidthDiff':'8','OpenpilotEnabledToggle':'1','PaddleMode':'0','PathOffset':'0','RadarLatFactor':'1.0','RadarReactionFactor':'1.0','RecordAudio':'0','RecordRoadCam':'0','RedLightDistOffset':'0','RoadType':'0','SameSpiCamFilter':'1','ShowCustomBrightness':'0','ShowDateTime':'1','ShowDebugLog':'0','ShowDebugUI':'0','ShowDeviceState':'0','ShowLaneInfo':'1','ShowPathColor':'13','ShowPathColorCruiseOff':'18','ShowPathColorLane':'13','ShowPathEnd':'0','ShowPathMode':'10','ShowPathModeLane':'10','ShowPlotMode':'0','ShowRadarInfo':'0','ShowRouteInfo':'1','ShowTpms':'0','SideBsdDelayTime':'15','SideRadarMinDist':'-10','SideRelDistTime':'15','SidevRelDistTime':'15','SmoothStopMode':'1','SoftHoldMode':'0','SoftwareMenu':'1','SoundVolumeAdjust':'50','SoundVolumeAdjustEngage':'70','SpeedFromPCM':'2','StartAccel':'80','SteerActuatorDelay':'0.2','SteerAngleOffset':'0','SteerRatioRate':'0.1','StockBlinkerCtrl':'0','StopDistanceCarrot':'5','StoppingAccel':'-0.5','StoppingDecelRate':'200','TFollowGap1':'1.0','TFollowGap2':'1.5','TFollowGap3':'2.0','TFollowGap4':'2.5','TrafficLightDetectMode':'1','TurnSpeedControlMode':'1','UseLaneLineCurveSpeed':'1','UseLaneLineSpeed':'5','VEgoStopping':'0.5'};
+
+
+// === Terminal ===
+async function execCmd(){var inp=document.getElementById('tIn'),cmd=inp.value.trim();if(!cmd)return;inp.value='';
+  appendT('$ '+cmd+'\n','var(--accent)');
+  try{var r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})});var d=await r.json();
+  if(d.success){var res=d.result;if(res.stdout)appendT(res.stdout);if(res.stderr)appendT(res.stderr,'var(--warn)');if(res.exit_code!==0)appendT('[退出码 '+res.exit_code+']\n','var(--accent2)')}
+  else appendT('错误: '+(d.result||d.message)+'\n','var(--accent2)')}catch(e){appendT('请求失败: '+e+'\n','var(--accent2)')}}
+
+function qc(c){document.getElementById('tIn').value=c;execCmd()}
+function appendT(t,c){var o=document.getElementById('tOut'),s=document.createElement('span');s.style.color=c||'#c9d1d9';s.textContent=t;o.appendChild(s);o.scrollTop=o.scrollHeight}
+
+// === Actions ===
+async function doRestartOp(){try{var r=await fetch('/api/restart_op',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er')}catch(e){toast('失败','er')}}
+function doReboot(){document.getElementById('rebootMo').classList.add('show')}
+function closeMo(){document.getElementById('rebootMo').classList.remove('show')}
+async function confirmReboot(){closeMo();try{await fetch('/api/reboot',{method:'POST'});toast('设备重启中...','ok')}catch(e){toast('失败','er')}}
+async function doBackup(){toast('备份中...','in');try{var r=await fetch('/api/backup',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er');if(d.success)loadBkList()}catch(e){toast('失败','er')}}
+function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';return}var h='';d.backups.forEach(function(b){var tag=b.type==='auto'?'<span style="background:rgba(26,171,138,.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+b.name+tag+'</span><span style="color:var(--dim)">'+b.time+' · '+(b.size/1024).toFixed(1)+'KB</span></div>'});el.innerHTML=h}).catch(function(){})}
+function doDisconnect(){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);color:var(--muted);font-size:16px">已断开连接，关闭此页面即可</div>'}
+async function doRestore(){var f=document.getElementById('rFile');if(!f.files.length){toast('请选择备份文件','er');return}
+  var reader=new FileReader();reader.onload=async function(e){try{var p=JSON.parse(e.target.result);if(!confirm('恢复 '+Object.keys(p).length+' 个参数?'))return;
+  var r=await fetch('/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({params:p})});var d=await r.json();
+  toast(d.message,d.success?'ok':'er');if(d.success)loadParams()}catch(err){toast('解析失败','er')}};reader.readAsText(f.files[0])}
+async function applyCustom(){var t=document.getElementById('cParams').value.trim();if(!t){toast('请输入JSON','er');return}
+  try{var p=JSON.parse(t);var r=await fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});var d=await r.json();
+  toast(d.message,d.success?'ok':'er');if(d.success){Object.assign(AP,p);CP={};fillSortedParams()}}catch(e){toast('JSON格式错误','er')}}
+
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// === 在线更新 ===
+function checkUpdate(){
+  fetch('/api/check_update').then(function(r){return r.json()}).then(function(d){
+    document.getElementById('curVer').textContent=d.local_version||'-';
+    document.getElementById('remoteVer').textContent=d.remote_version||'-';
+    var msg=document.getElementById('updateMsg');var btn=document.getElementById('btnUpdate');
+    if(d.error){msg.innerHTML='<span style="color:var(--accent2)">检查失败: '+esc(d.error)+'</span>';btn.style.display='none';return;}
+    if(d.update_available){msg.innerHTML='<span style="color:var(--accent)">发现新版本 '+esc(d.remote_version)+'！</span>'+(d.changelog?'<br><span style="color:var(--muted)">'+esc(d.changelog)+'</span>':'');btn.style.display='inline-flex';}
+    else{msg.innerHTML='<span style="color:var(--muted)">已是最新版本</span>';btn.style.display='none';}
+  }).catch(function(){document.getElementById('updateMsg').innerHTML='<span style="color:var(--accent2)">请求失败</span>'});
+}
+function doUpdate(){
+  if(!confirm('确定更新到最新版本？服务将自动重启。'))return;
+  toast('更新中...','in');
+  fetch('/api/update',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    if(d.success){toast('更新完成，正在重启...','ok');setTimeout(function(){location.reload()},4000);}
+    else toast(d.message,'er');
+  }).catch(function(){toast('更新失败','er')});
+}
+
+// === Init ===
+(function(){loadInfo();checkAutoBackup();loadParams()})();
+// Load backup list on init
+setTimeout(function(){loadBkList()},2000);
+</script>
+</body>
+</html>

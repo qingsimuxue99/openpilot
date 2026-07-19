@@ -1,0 +1,6 @@
+# 不发布到更新源 / 仓库的本地与临时文件
+device_params.json
+deploy_to_c3.sh
+*.log
+server.log
+__pycache__/
