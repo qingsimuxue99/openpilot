@@ -5,7 +5,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 直接运行在 C3 设备上，浏览器访问 http://设备IP:5588 即可
 """
 
-import json, os, sys, time, subprocess, urllib.request, tarfile, io
+import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback
 
 try:
     from flask import Flask, request, jsonify, send_file, send_from_directory
@@ -36,11 +36,11 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 # 工具箱版本与在线更新源
 # 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
 # 更新源用多镜像回退，国内优先 jsdelivr（raw.githubusercontent.com 在国内常不可达）
-VERSION = "1.0.2"
-UPDATE_BASE = "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.4/"
+VERSION = "1.0.4"
+UPDATE_BASE = "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.5/"
 UPDATE_MIRRORS = [
-    "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.4/",
-    "https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.4/",
+    "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.5/",
+    "https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.5/",
 ]
 
 # 启动时确保目录存在
@@ -265,6 +265,12 @@ def api_check_update():
         return jsonify({'local_version': VERSION, 'remote_version': '', 'update_available': False, 'changelog': '', 'error': str(e)})
 
 
+def _delayed_restart(delay=1.5):
+    """延迟重启，确保 /api/update 的成功响应已发回前端（避免 os._exit 截断响应）"""
+    time.sleep(delay)
+    schedule_restart()
+
+
 @app.route('/api/update', methods=['POST'])
 def api_update():
     try:
@@ -276,9 +282,11 @@ def api_update():
                 tf.extractall(BASE_DIR, filter='data')
             else:
                 tf.extractall(BASE_DIR)
-        schedule_restart()
+        # 先返回成功响应，再后台延迟重启，避免 os._exit 截断 HTTP 响应导致前端误报“更新失败”
+        threading.Thread(target=_delayed_restart, daemon=True).start()
         return jsonify({'success': True, 'message': '更新完成，正在重启服务...'})
     except Exception as e:
+        app.logger.error('在线更新失败: %s', traceback.format_exc())
         return jsonify({'success': False, 'message': '更新失败 [%s]: %s' % (type(e).__name__, e)})
 
 
