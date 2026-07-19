@@ -521,7 +521,7 @@ function formatUptime(s){
 }
 
 // === Device Info ===
-function loadInfo(){fetch('/api/device_info').then(function(r){return r.json()}).then(function(d){
+function loadInfo(){toast('正在刷新设备信息...','in');fetch('/api/device_info').then(function(r){return r.json()}).then(function(d){
   // 基本信息
   var g1=document.getElementById('infoBasic');
   var basic=[
