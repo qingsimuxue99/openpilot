@@ -41,31 +41,38 @@ sed -i '/c3_toolbox_autostart/d' /data/openpilot/launch_chffrplus.sh
 
 ## 五、更新
 
-在备份菜单内 拉到底在线更新。
+手动更新：把本机最新文件 scp 到设备 `/data/c3_toolbox/` 后，在设备里杀旧进程并重启（见下）。
 
-设备里杀旧进程并重启：
+> 若只是发新版本给使用者，无需手动 scp——使用者在网页右上角「在线更新」控件点「立即更新」即可（见第六章）。
 
 fuser -k 5588/tcp; sleep 1; PYP=/usr/local/venv/bin/python; [ -x "$PYP" ] || PYP=python3; cd /data/c3_toolbox; setsid "$PYP" /data/c3_toolbox/c3_toolbox_local.py > /data/c3_toolbox/server.log 2>&1 < /dev/null &
 
 
 ## 六、在线更新
 
-工具箱支持在界面一键在线更新（作者已把更新源配好，部署后自动可用）。
+工具箱支持在界面一键在线更新（**版本指针机制**：设备端不写死任何 tag，下载哪个包由 `version.json` 的 `tag`/`tarball` 字段动态指定，发版后设备自动发现，无需改设备代码）。
 
-**使用者**：浏览器打开工具箱 → 「备份」标签内「在线更新」卡片 → 点「检查更新」对比版本，有新版点「立即更新」即可自动下载、覆盖并重启。设备需能联网访问 jsdelivr（国内可达）。
+**使用者**：浏览器打开工具箱 → 右上角「在线更新」控件（与「刷新信息／刷新参数」同排）→ 进入即自动检查，发现新版本会显示「发现新版本 X.X.X！」+「查看更新内容 ▾」（展开本次更新说明）+「立即更新」按钮，点一下自动下载、覆盖、重启。
 
 **作者发布新版本**（在本机 Git Bash 执行）：
 
 ```bash
-# 1. 改完代码后，把 version.json 的 version 调高（如 1.0.0 -> 1.0.1）
-# 2. 重新打包发布包
+# 1. 改完代码后，把 version.json 的 version 调高（如 1.0.7 -> 1.0.8），
+#    并同步改其中的 tag / tarball 字段指向上一步要打的新 tag 名（务必是“全新”tag）
+# 2. 重新打包发布包（VERSION 常量也要升到同一新版本号）
 tar -czf release/c3_toolbox.tar.gz c3_toolbox_local.py c3_toolbox.html c3_toolbox_autostart.sh
 # 3. 提交并推送到 c3-toolbox 分支
-git add -A && git commit -m "release: v1.0.1" && git push
-# 4. 强制刷新 jsdelivr 缓存（否则设备端短时间可能拉到旧包）
-curl -s "https://purge.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/release/c3_toolbox.tar.gz"
-curl -s "https://purge.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/version.json"
+git add -A && git commit -m "release: v1.0.8" && git push
+# 4. 打“全新” tag 并推送（⚠️ 见下方警告，绝不复用旧 tag 名）
+git tag v1.0.8 && git push origin v1.0.8
+# 5. 验证：数据 API 会在约 1 分钟内索引到新 tag，设备随后自动发现
+curl -s "https://data.jsdelivr.com/v1/package/gh/qingsimuxue99/openpilot" | head -c 160
 ```
+
+> ⚠️ **关键铁律：每次发版必须用「全新」的 tag 名（如 v1.0.8），绝不复用旧 tag（如再次打 v1.0.7）**。
+> jsdelivr 对 tag 名做**不可变缓存**：同名 tag 即使内容已变，CDN 仍可能长期返回旧包，导致设备"更新了却还是旧版"。
+> 另：分支引用（`@c3-toolbox`）和 `@latest` 浮动引用也有强缓存且 purge 常失效，**不要依赖**；
+> 真正可靠的是"数据 API 实时发现最新 tag + 按具体 tag 下载"，本工具箱已实现该机制。
 
 
 ## 七、常见问题
