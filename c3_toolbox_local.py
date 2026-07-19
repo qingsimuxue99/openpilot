@@ -36,14 +36,17 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 # 工具箱版本与在线更新源
 # 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
 # ============= 在线更新配置（版本指针机制，彻底解耦）=============
-# 设备端只固定"读 version.json 的源"（CHECK_MIRRORS）；具体下载哪个发布包，由
-# 远程 version.json 里的 tag/tarball 字段动态指定。发新版本只需：更新 version.json
-# + 打 tag 推送，设备端代码永不需要修改，也不会再出现"锁死旧 tag 看不到新版"的问题。
-#   - version.json 通过 @latest 读取（jsdelivr 的 @latest 随最新 git tag 自动更新）
-#   - 下载包按 version.json 的 tag 拼具体 tag URL（tag 是不可变缓存，最新鲜可靠）
+# 三段式，全程 jsdelivr 域（国内可达）+ 具体 tag（不可变缓存），彻底绕开
+# 分支/@latest 等"浮动引用"的强缓存问题，设备端代码永不需要修改：
+#   1) 发现最新版本：jsdelivr 数据 API 实时返回 versions 列表，首个即最新 tag
+#   2) 读该版本 version.json：用具体 tag @vX.Y.Z（不可变，稳定拿到 changelog/tarball）
+#   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
+# 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
 VERSION = "1.0.6"
-# 读 version.json 的源：@latest 自动跟随最新 tag（jsdelivr），raw 分支兜底
+# 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
+JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
+# 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
 CHECK_MIRRORS = [
     "https://cdn.jsdelivr.net/gh/%s@latest/" % REPO,
     "https://raw.githubusercontent.com/%s/c3-toolbox/" % REPO,
@@ -277,6 +280,45 @@ def resolve_tarball_urls(remote):
     return urls
 
 
+def discover_latest_version():
+    """通过 jsdelivr 数据 API 实时发现最新版本号（tag）。
+    该 API 属 jsdelivr 域、国内可达，且实时反映最新 git tag，不受 CDN 文件缓存影响。
+    返回如 '1.0.7'；失败返回 None。"""
+    try:
+        data = json.loads(_fetch_bytes(JSDELIVR_DATA_API, 15).decode('utf-8'))
+        versions = data.get('versions') or []
+        # jsdelivr 按 semver 降序排列，首个即最新；兼容「字符串」与「对象」两种返回形态
+        if versions:
+            v0 = versions[0]
+            if isinstance(v0, dict):
+                return str(v0.get('version'))
+            return str(v0)
+    except Exception:
+        pass
+    return None
+
+
+def fetch_remote_meta():
+    """获取远程版本信息（version.json 内容）。策略：
+    1) 数据 API 实时发现最新版本 → 用具体 tag @vX.Y.Z 读该版本 version.json（不可变、稳定）
+    2) 回退：@latest / raw 分支（浮动引用，可能滞后但兜底可用）
+    返回解析后的 dict；全部失败抛异常。"""
+    candidates = []
+    ver = discover_latest_version()
+    if ver:
+        tag = ver if str(ver).startswith('v') else ('v' + str(ver))
+        candidates.append("https://cdn.jsdelivr.net/gh/%s@%s/version.json" % (REPO, tag))
+    for base in CHECK_MIRRORS:
+        candidates.append(base.rstrip('/') + '/version.json')
+    last_err = None
+    for url in candidates:
+        try:
+            return json.loads(_fetch_bytes(url, 15).decode('utf-8'))
+        except Exception as e:
+            last_err = e
+    raise last_err or RuntimeError('无法获取远程版本信息')
+
+
 def schedule_restart():
     """下载完成后，延迟杀掉旧端口并启动新实例，避免端口抢占"""
     script = os.path.abspath(__file__)
@@ -295,7 +337,7 @@ def api_version():
 @app.route('/api/check_update')
 def api_check_update():
     try:
-        remote = json.loads(fetch_text('version.json', 20))
+        remote = fetch_remote_meta()
         remote_ver = remote.get('version', '0')
         return jsonify({
             'local_version': VERSION,
@@ -317,8 +359,9 @@ def _delayed_restart(delay=1.5):
 @app.route('/api/update', methods=['POST'])
 def api_update():
     try:
-        # 版本指针：先读远程 version.json，由它指定要下载哪个发布包（tag/tarball）
-        remote = json.loads(fetch_text('version.json', 20))
+        # 版本指针：先读远程 version.json（数据 API 发现最新版 → 具体 tag 读取），
+        # 由它指定要下载哪个发布包（tag/tarball）
+        remote = fetch_remote_meta()
         urls = resolve_tarball_urls(remote)
         # 下载发布包并解压到 BASE_DIR（原子替换，避免 py/html 版本错配）
         data = fetch_bytes_from_urls(urls, 60)
