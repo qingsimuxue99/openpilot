@@ -400,13 +400,6 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       <div class="ph"><h2>系统设置</h2><p>系统开关、按钮模式、连接与录制</p></div>
       <div class="shc" id="sh-settings">已读取 0 项</div>
       <div id="sp-settings"></div>
-      <div class="cd" id="updateCard" style="margin-top:16px">
-        <div class="ct">在线更新</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">当前版本：<span id="curVer">-</span> ｜ 最新版本：<span id="remoteVer">-</span></p>
-        <div id="updateMsg" style="font-size:12px;margin-bottom:10px"></div>
-        <button class="btn bs" onclick="checkUpdate()">检查更新</button>
-        <button class="btn bp" id="btnUpdate" onclick="doUpdate()" style="display:none;margin-left:8px">立即更新</button>
-      </div>
     </div>
 
     <!-- 信息 -->
@@ -460,6 +453,13 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       <div class="cd"><div class="ct">自定义写入</div>
         <div class="fg"><textarea id="cParams" rows="5" placeholder='{"AutoCruiseControl": "1"}' style="font-family:monospace;font-size:11px"></textarea></div>
         <button class="btn bp" onclick="applyCustom()" style="margin-top:8px">应用</button>
+      </div>
+      <div class="cd" id="updateCard" style="margin-top:16px">
+        <div class="ct">在线更新</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">当前版本：<span id="curVer">-</span> ｜ 最新版本：<span id="remoteVer">-</span></p>
+        <div id="updateMsg" style="font-size:12px;margin-bottom:10px"></div>
+        <button class="btn bs" onclick="checkUpdate()">检查更新</button>
+        <button class="btn bp" id="btnUpdate" onclick="doUpdate()" style="display:none;margin-left:8px">立即更新</button>
       </div>
     </div>
 
@@ -723,8 +723,7 @@ function updBadge(){}
 
 function onTabSwitch(id){
   if(id==='dashboard'){loadInfo()}
-  else if(id==='backup'){checkAutoBackup();loadBkList();}
-  else if(id==='settings'){loadParams();checkUpdate();}
+  else if(id==='backup'){checkAutoBackup();loadBkList();checkUpdate();}
   else if(id!=='terminal'){loadParams()}
 }
 
@@ -766,15 +765,25 @@ async function applyCustom(){var t=document.getElementById('cParams').value.trim
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
 // === 在线更新 ===
+function loadVersion(){
+  fetch('/api/version').then(function(r){return r.json()}).then(function(d){
+    document.getElementById('curVer').textContent=d.version||'-';
+  }).catch(function(){});
+}
 function checkUpdate(){
-  fetch('/api/check_update').then(function(r){return r.json()}).then(function(d){
+  fetch('/api/check_update').then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(d){
     document.getElementById('curVer').textContent=d.local_version||'-';
     document.getElementById('remoteVer').textContent=d.remote_version||'-';
     var msg=document.getElementById('updateMsg');var btn=document.getElementById('btnUpdate');
-    if(d.error){msg.innerHTML='<span style="color:var(--accent2)">检查失败: '+esc(d.error)+'</span>';btn.style.display='none';return;}
+    if(d.error){msg.innerHTML='<span style="color:var(--accent2)">检查失败：'+esc(d.error)+'</span>';btn.style.display='none';return;}
     if(d.update_available){msg.innerHTML='<span style="color:var(--accent)">发现新版本 '+esc(d.remote_version)+'！</span>'+(d.changelog?'<br><span style="color:var(--muted)">'+esc(d.changelog)+'</span>':'');btn.style.display='inline-flex';}
     else{msg.innerHTML='<span style="color:var(--muted)">已是最新版本</span>';btn.style.display='none';}
-  }).catch(function(){document.getElementById('updateMsg').innerHTML='<span style="color:var(--accent2)">请求失败</span>'});
+  }).catch(function(){
+    document.getElementById('updateMsg').innerHTML='<span style="color:var(--accent2)">请求失败：更新服务无响应，请确认设备已部署最新版后端</span>';
+  });
 }
 function doUpdate(){
   if(!confirm('确定更新到最新版本？服务将自动重启。'))return;
@@ -786,7 +795,7 @@ function doUpdate(){
 }
 
 // === Init ===
-(function(){loadInfo();checkAutoBackup();loadParams()})();
+(function(){loadInfo();checkAutoBackup();loadParams();loadVersion()})();
 // Load backup list on init
 setTimeout(function(){loadBkList()},2000);
 </script>

@@ -8,7 +8,13 @@
 
 ## 二、传文件到设备
 
-在设备 `/data` 下创建 `/data/c3_toolbox/`，把文件放进去：
+本机（Windows 用 Git Bash）把文件传到设备：
+
+```bash
+scp c3_toolbox_local.py c3_toolbox.html c3_toolbox_autostart.sh comma@设备IP:/data/c3_toolbox/
+```
+
+> 连不上 ssh 时改 adb：`adb push c3_toolbox_local.py /data/c3_toolbox/`（其余文件同理）。
 
 
 ## 三、启动服务
@@ -56,27 +62,24 @@ fuser -k 5588/tcp; sleep 1; PYP=/usr/local/venv/bin/python; [ -x "$PYP" ] || PYP
 
 ## 六、在线更新
 
-工具箱支持在界面一键在线更新，无需再手动 scp。
+工具箱支持在界面一键在线更新（作者已把更新源配好，部署后自动可用）。
 
-**1. 配置更新源（只做一次）**
+**使用者**：浏览器打开工具箱 → 「设置」面板底部「在线更新」→ 点「检查更新」对比版本，有新版点「立即更新」即可自动下载、覆盖并重启。设备需能联网访问 jsdelivr（国内可达）。
 
-打开 `c3_toolbox_local.py`，把顶部 `UPDATE_BASE` 改成你自己的仓库地址（GitHub 存放更新文件的 raw 地址）：
+**作者发布新版本**（在本机 Git Bash 执行）：
 
-```python
-UPDATE_BASE = "https://raw.githubusercontent.com/你的用户名/你的仓库/你的分支/"
+```bash
+# 1. 改完代码后，把 version.json 的 version 调高（如 1.0.0 -> 1.0.1）
+# 2. 重新打包发布包
+tar -czf release/c3_toolbox.tar.gz c3_toolbox_local.py c3_toolbox.html c3_toolbox_autostart.sh
+# 3. 提交并推送到 c3-toolbox 分支
+git add -A && git commit -m "release: v1.0.1" && git push
+# 4. 强制刷新 jsdelivr 缓存（否则设备端短时间可能拉到旧包）
+curl -s "https://purge.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/release/c3_toolbox.tar.gz"
+curl -s "https://purge.jsdelivr.net/gh/qingsimuxue99/openpilot@c3-toolbox/version.json"
 ```
 
-仓库里放这 4 个文件（与本地一致）：`c3_toolbox_local.py`、`c3_toolbox.html`、`c3_toolbox_autostart.sh`、`version.json`（内容如 `{"version":"1.0.1","changelog":"修复xxx"}`）。
-
-**2. 发布新版本**
-
-改完代码推到上面的仓库，并把 `version.json` 里的 `version` 号调高（如 `1.0.0` → `1.0.1`）。
-
-**3. 使用更新**
-
-浏览器打开工具箱 → 「设置」面板底部「在线更新」：点「检查更新」对比版本，有新版点「立即更新」即可自动下载并重启。
-
-> 设备需能访问外网（GitHub）；在线更新会下载并执行代码，请只在信任的仓库下使用。
+> 注意：设备端必须先部署含更新接口的最新版（v1.0.0+）；若设备跑的是更早的版本，需先按「五、更新」手动 scp 一次，之后即可在线更新。
 
 ## 七、常见问题
 
