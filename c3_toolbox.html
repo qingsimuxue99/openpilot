@@ -617,6 +617,14 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         <div class="fg"><input type="file" id="rFile" accept=".json" style="color:var(--ink)"></div>
         <button class="btn bw" onclick="doRestore()" style="margin-top:8px">恢复到设备</button>
       </div>
+      <div class="cd"><div class="ct">参数差异对比</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">选择一份备份文件，与设备当前参数逐项对比，高亮 新增 / 删除 / 修改 的项</p>
+        <select id="diffSelect" style="width:100%;padding:6px;border-radius:6px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);font-size:12px">
+          <option value="">— 请选择备份文件 —</option>
+        </select>
+        <button class="btn bw" onclick="doParamDiff()" style="margin-top:8px">开始对比</button>
+        <div id="diffResult" style="margin-top:10px"></div>
+      </div>
       <div class="cd"><div class="ct">完整备份 (openpilot 整目录)</div>
         <p style="font-size:12px;color:var(--muted);margin-bottom:8px">将 <code style="background:var(--bg);padding:1px 6px;border-radius:4px;font-size:11px">/data/openpilot</code> 整体打包为 .tar.gz 备份包（含全部文件、模型与配置）。耗时可能数分钟。</p>
         <button class="btn bp" onclick="startOpBackup()">创建完整备份</button>
@@ -1267,12 +1275,12 @@ function doReboot(){document.getElementById('rebootMo').classList.add('show')}
 function closeMo(){document.getElementById('rebootMo').classList.remove('show')}
 async function confirmReboot(){closeMo();try{await fetch('/api/reboot',{method:'POST'});toast('设备重启中...','ok')}catch(e){toast('失败','er')}}
 async function doBackup(){toast('备份中...','in');try{var r=await fetch('/api/backup',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er');if(d.success)loadBkList()}catch(e){toast('失败','er')}}
-function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');var sel=document.getElementById('bkRestoreSelect');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';if(sel)sel.innerHTML='<option value="">— 暂无备份文件 —</option>';return}var h='';var opts='';d.backups.forEach(function(b){var kb=(b.size/1024).toFixed(1);var tag=b.type==='auto'?'<span style="background:rgba(var(--accent-rgb),.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+tag+'</span>'
+function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');var sel=document.getElementById('bkRestoreSelect');var sel2=document.getElementById('diffSelect');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';if(sel)sel.innerHTML='<option value="">— 暂无备份文件 —</option>';if(sel2)sel2.innerHTML='<option value="">— 请选择备份文件 —</option>';return}var h='';var opts='';d.backups.forEach(function(b){var kb=(b.size/1024).toFixed(1);var tag=b.type==='auto'?'<span style="background:rgba(var(--accent-rgb),.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+tag+'</span>'
         +'<span style="color:var(--dim)">'+b.time+' · '+kb+'KB '
         +'<a class="upd-link" onclick="dlBk(\''+esc(b.name)+'\')">下载</a> '
         +'<a class="upd-link" style="color:var(--accent2)" onclick="delBk(\''+esc(b.name)+'\')">删除</a></span></div>';
         opts+='<option value="'+esc(b.name)+'">'+esc(b.name)+' ('+kb+'KB)</option>';
-      });el.innerHTML=h;if(sel)sel.innerHTML='<option value="">— 请选择设备内备份文件 —</option>'+opts}).catch(function(){})}
+      });el.innerHTML=h;if(sel)sel.innerHTML='<option value="">— 请选择设备内备份文件 —</option>'+opts;if(sel2)sel2.innerHTML='<option value="">— 请选择备份文件 —</option>'+opts}).catch(function(){})}
 function dlBk(name){window.open('/api/backup/download/'+encodeURIComponent(name));}
 async function delBk(name){
   if(!confirm('确定删除参数备份 '+name+' ？此操作不可恢复'))return;
@@ -1291,6 +1299,36 @@ async function restoreBkDevice(){
     toast(d.message,d.success?'ok':'er');
     if(d.success)loadParams();
   }catch(e){toast('失败','er');}
+}
+async function doParamDiff(){
+  var sel=document.getElementById('diffSelect');var fn=sel?sel.value:'';
+  if(!fn){toast('请先选择备份文件','er');return;}
+  var box=document.getElementById('diffResult');
+  box.innerHTML='<p style="font-size:11px;color:var(--dim)">对比中...</p>';
+  try{
+    var r=await fetch('/api/param-diff',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:fn})});
+    var d=await r.json();
+    if(!d.success){toast(d.message||'对比失败','er');box.innerHTML='';return;}
+    var s=d.summary;
+    var h='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+      +'<span style="background:rgba(46,204,113,.12);color:#2ecc71;font-size:11px;padding:2px 9px;border-radius:10px">新增 '+s.added+'</span>'
+      +'<span style="background:rgba(231,76,60,.12);color:#e74c3c;font-size:11px;padding:2px 9px;border-radius:10px">删除 '+s.removed+'</span>'
+      +'<span style="background:rgba(241,196,15,.14);color:#f1c40f;font-size:11px;padding:2px 9px;border-radius:10px">修改 '+s.changed+'</span>'
+      +'<span style="background:rgba(var(--accent-rgb),.1);color:var(--accent);font-size:11px;padding:2px 9px;border-radius:10px">未变 '+s.same+'</span>'
+      +'</div>';
+    function rowBadge(txt,color){return '<span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;color:'+color+';background:rgba(255,255,255,.06);margin-right:6px">'+txt+'</span>'}
+    function item(k,v,oldv){
+      return '<div style="padding:4px 0;border-bottom:1px solid var(--rule);font-size:11px;font-family:monospace">'
+        +'<span style="color:var(--ink)">'+esc(k)+'</span> '
+        +'<span style="color:var(--dim)">'+(oldv!==undefined?(''+esc(oldv)+' → '):'')+'<b style="color:var(--ink)">'+esc(v)+'</b></span>'
+        +'</div>';
+    }
+    if(d.added.length){h+='<div style="font-size:11px;color:#2ecc71;margin:6px 0 2px">＋ 新增 ('+d.added.length+')</div>';d.added.forEach(function(x){h+=item(x.key,x.value)})}
+    if(d.removed.length){h+='<div style="font-size:11px;color:#e74c3c;margin:6px 0 2px">－ 删除 ('+d.removed.length+')</div>';d.removed.forEach(function(x){h+=item(x.key,x.value)})}
+    if(d.changed.length){h+='<div style="font-size:11px;color:#f1c40f;margin:6px 0 2px">~ 修改 ('+d.changed.length+')</div>';d.changed.forEach(function(x){h+=item(x.key,x.new,x.old)})}
+    if(!d.added.length&&!d.removed.length&&!d.changed.length){h+='<p style="font-size:11px;color:var(--muted);margin-top:6px">✓ 当前参数与该备份完全一致，无差异</p>'}
+    box.innerHTML=h;
+  }catch(e){toast('对比失败','er');box.innerHTML='';}
 }
 function doDisconnect(){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);color:var(--muted);font-size:16px">已断开连接，关闭此页面即可</div>'}
 async function doRestore(){var f=document.getElementById('rFile');if(!f.files.length){toast('请选择备份文件','er');return}

@@ -47,7 +47,7 @@ PERC_DATA = {"available": False, "source": "none", "reason": "init", "boxes": []
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.49"
+VERSION = "1.0.50"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1035,6 +1035,72 @@ def api_delete_backup(filename):
         except Exception as e:
             return jsonify({'success': False, 'message': f'删除失败: {e}'})
     return jsonify({'success': False, 'message': '备份文件不存在'})
+
+
+@app.route('/api/param-diff', methods=['POST'])
+def api_param_diff():
+    """对比当前参数与指定备份文件，返回 新增/删除/修改 的差异项"""
+    data = request.json or {}
+    filename = data.get('filename', '')
+    if not filename:
+        return jsonify({'success': False, 'message': '未指定备份文件'})
+    sk = safe_key(filename)
+    if not sk.endswith('.json'):
+        return jsonify({'success': False, 'message': '仅支持 .json 备份文件'})
+    fp = os.path.join(BACKUP_DIR, sk)
+    if not os.path.isfile(fp):
+        fp = os.path.join(AUTO_BACKUP_DIR, sk)
+    if not os.path.isfile(fp):
+        return jsonify({'success': False, 'message': '备份文件不存在'})
+    try:
+        with open(fp, 'r', encoding='utf-8') as f:
+            backup = json.load(f)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'读取备份文件失败: {e}'})
+    if not isinstance(backup, dict):
+        return jsonify({'success': False, 'message': '备份文件内容无效（应为参数键值对）'})
+    # 读取当前参数（与备份一致：仅非隐藏、值 <=16 字节）
+    cur = {}
+    try:
+        for fname in sorted(os.listdir(PARAMS_DIR)):
+            fpath = os.path.join(PARAMS_DIR, fname)
+            if os.path.isfile(fpath) and fname != '.LOCK':
+                if is_param_hidden(fname):
+                    continue
+                try:
+                    with open(fpath, 'r') as f:
+                        val = f.read()
+                    if len(val.encode('utf-8')) <= 16:
+                        cur[fname] = val
+                except Exception:
+                    pass
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'读取当前参数失败: {e}'})
+    added, removed, changed = [], [], []
+    for k in cur:
+        if k not in backup:
+            added.append({'key': k, 'value': cur[k]})
+        elif backup[k] != cur[k]:
+            changed.append({'key': k, 'old': backup[k], 'new': cur[k]})
+    for k in backup:
+        if k not in cur:
+            removed.append({'key': k, 'value': backup[k]})
+    summary = {
+        'added': len(added),
+        'removed': len(removed),
+        'changed': len(changed),
+        'same': len(cur) - len(added) - len(changed),
+        'total_cur': len(cur),
+        'total_backup': len(backup),
+    }
+    return jsonify({
+        'success': True,
+        'added': added,
+        'removed': removed,
+        'changed': changed,
+        'summary': summary,
+        'backup_name': sk,
+    })
 
 
 # ============= 完整备份/恢复（/data/openpilot 整目录）=============
