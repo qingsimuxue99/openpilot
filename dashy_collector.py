@@ -57,8 +57,19 @@ def downsample_pts(pts, n=17):
 
 def _vipc_diag(msg):
     try:
-        with open("/tmp/screen_vipc.log", "a") as f:
-            f.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
+        path = "/tmp/screen_vipc.log"
+        line = "[%s] %s\n" % (time.strftime("%H:%M:%S"), msg)
+        # 日志超过 50KB 时只保留末尾 200 行，避免无限增长
+        if os.path.exists(path) and os.path.getsize(path) > 50000:
+            try:
+                with open(path) as f:
+                    tail = f.read().splitlines()[-200:]
+                with open(path, "w") as f:
+                    f.write("\n".join(tail) + "\n")
+            except Exception:
+                pass
+        with open(path, "a") as f:
+            f.write(line)
     except Exception:
         pass
 
@@ -155,6 +166,7 @@ def screen_loop():
     而不是 cereal 的 uiDebug.frame（那是相机/metadata，之前误抓到摄像头画面就源于此）。
     本线程直接抓 VisionIpc 像素流。仅读取，不写参数。失败不影响 HUD 主循环。诊断写入 /tmp/screen_vipc.log。
     """
+    _vipc_diag("screen_loop 启动 (python=%s)" % (sys.version.split()[0]))
     try:
         try:
             from cereal.visionipc import VisionIpcClient, VisionStreamType
@@ -163,11 +175,14 @@ def screen_loop():
     except Exception as e:
         _vipc_diag("import VisionIpc 失败: %s" % e)
         return
+    _vipc_diag("VisionIpc 导入成功")
 
-    servers = ["uiDebug", "ui"]
-    # 候选 stream 类型（NV12 / RGB），不同分支/硬件名称不同
+    servers = ["uiDebug", "ui", "", "camerad", "roadCameraState"]
+    # 候选 stream 类型（优先 UI 类，再枚举设备实际存在的全部类型以免漏掉分支自定义名）
     rgb_flags = {"VISION_STREAM_RGB_UI_BACK": True, "VISION_STREAM_RGB_UI_FRONT": True,
                  "VISION_STREAM_UI_BACK": False, "VISION_STREAM_UI_FRONT": False}
+    for s in [x for x in dir(VisionStreamType) if not x.startswith('_')]:
+        rgb_flags.setdefault(s, False)
     cands = []
     for sn, is_rgb in rgb_flags.items():
         try:
@@ -175,11 +190,14 @@ def screen_loop():
         except Exception:
             pass
     if not cands:
-        _vipc_diag("无可用 UI stream 枚举（VisionStreamType 不含 UI_*）")
+        _vipc_diag("无可用 stream 枚举（VisionStreamType 为空）")
         return
+    _vipc_diag("候选 stream 数=%d: %s" % (len(cands), ",".join(s for s, _, _ in cands)))
 
     last = None
+    cycle = 0
     while True:
+        cycle += 1
         connected = False
         for srv in servers:
             for sn, st, is_rgb in cands:
@@ -196,14 +214,17 @@ def screen_loop():
                         except Exception:
                             pass
                         continue
+                    w = _battr(buf0, "width"); h = _battr(buf0, "height")
+                    fmt = getattr(buf0, "format", None)
                     rgb0 = _decode_rgb(buf0, is_rgb)
                     if rgb0 is None:
                         try:
                             client.stop()
                         except Exception:
                             pass
+                        _vipc_diag("解码失败 %s/%s %dx%d fmt=%s" % (srv, sn, w, h, fmt))
                         continue
-                    _vipc_diag("connected %s/%s %dx%d" % (srv, sn, _battr(buf0, "width"), _battr(buf0, "height")))
+                    _vipc_diag("已连接 %s/%s %dx%d fmt=%s -> 写 %s" % (srv, sn, w, h, fmt, SCREEN_JPG))
                     connected = True
                     last = None
                     while True:
@@ -225,11 +246,16 @@ def screen_loop():
                         client.stop()
                     except Exception:
                         pass
+                    _vipc_diag("%s/%s 断开，回到重连" % (srv, sn))
                     break
                 except Exception as e:
-                    _vipc_diag("exc %s/%s: %s" % (srv, sn, e))
+                    _vipc_diag("异常 %s/%s: %s" % (srv, sn, e))
             if connected:
                 break
+        if not connected:
+            # 每 ~10s（20 轮）汇总一次，避免刷屏
+            if cycle % 20 == 1:
+                _vipc_diag("扫描 %d 源均无可用 UI 屏幕流，重试中（请确保 openpilot UI 正在设备屏幕运行）" % (len(cands) * len(servers)))
         time.sleep(0.5)
 
 

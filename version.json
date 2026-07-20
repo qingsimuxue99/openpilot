@@ -1,6 +1,6 @@
 {
-  "version": "1.0.27",
-  "changelog": "投屏修正：改用 VisionIpc 订阅 UI 屏幕流(uiDebug)，抓真正的 UI 屏幕(含车速/车道线/报警 HUD)，不再误抓相机/帧缓冲；适配 comma c3 嵌入式设备（无 X11）",
-  "tag": "v1.0.27",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.27/release/c3_toolbox.tar.gz"
+  "version": "1.0.28",
+  "changelog": "投屏修正：collector 改为详细日志（不再静默空转），并附 VisionIpc 屏幕流穷举探测脚本 vipc_probe.py，拿到设备真实可用流后再精确锁定",
+  "tag": "v1.0.28",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.28/release/c3_toolbox.tar.gz"
 }
