@@ -1,6 +1,6 @@
 {
-  "version": "1.0.28",
-  "changelog": "投屏修正：collector 改为详细日志（不再静默空转），并附 VisionIpc 屏幕流穷举探测脚本 vipc_probe.py，拿到设备真实可用流后再精确锁定",
-  "tag": "v1.0.28",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.28/release/c3_toolbox.tar.gz"
+  "version": "1.0.29",
+  "changelog": "修复 vipc_probe.py：改用多进程(可真正终止阻塞的 C 层 connect)+屏蔽刷屏+非阻塞 connect+先打印分支与全部 stream 类型，不再卡死",
+  "tag": "v1.0.29",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.29/release/c3_toolbox.tar.gz"
 }
