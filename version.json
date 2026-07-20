@@ -1,6 +1,6 @@
 {
-  "version": "1.0.35",
-  "changelog": "HUD 车辆姿态简化为特斯拉彩虹之路：三车道透视道路固定笔直，中间车道彩虹渐变流动，自车改为居中白色通用轿车俯视图；移除远处方块车，仅通过彩虹流动+虚线滚动营造行驶感。",
-  "tag": "v1.0.35",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.35/release/c3_toolbox.tar.gz"
+  "version": "1.0.36",
+  "changelog": "HUD 车辆姿态升级为真正的 3D 通用轿车模型：用 CSS 3D 构建立体车身/车顶/挡风玻璃/车灯/四轮，居中行驶在 3D 透视彩虹道路上；车速控制彩虹流动与路面滚动速度，转向角控制前轮旋转。",
+  "tag": "v1.0.36",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.36/release/c3_toolbox.tar.gz"
 }

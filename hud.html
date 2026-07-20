@@ -49,6 +49,46 @@ canvas{display:block;max-width:100%;position:relative;z-index:2}
 /* Report */
 .rep-stage{background:#05080f;border:1px solid #16324f;border-radius:12px;padding:14px;display:flex;justify-content:center;position:relative;z-index:2}
 #repCanvas{box-shadow:0 0 36px rgba(0,180,255,.25);border-radius:8px}
+/* === 3D Car Scene === */
+.scene{position:relative;width:100%;height:380px;perspective:900px;overflow:hidden;border-radius:10px;background:linear-gradient(180deg,#05080f 0%,#0a1526 55%,#0c2035 100%);z-index:2}
+.scene::before{content:'';position:absolute;top:18%;left:0;right:0;height:1px;background:rgba(0,180,255,.22);z-index:0}
+.road{position:absolute;left:50%;bottom:0;width:280px;height:120%;transform:translateX(-50%) rotateX(62deg);transform-origin:center bottom;transform-style:preserve-3d;z-index:1}
+.road-surface{position:absolute;inset:-20% -8%;background:conic-gradient(from 0deg at 50% 0%,#ff4b4b,#ff9f1c,#ffef00,#2ec4b6,#3a86ff,#8338ec,#ff4b4b);background-size:100% 300%;animation:rainbowFlow 1.6s linear infinite;box-shadow:0 0 40px rgba(255,100,100,.35),inset 0 0 40px rgba(0,0,0,.5);border-left:3px solid #3a86ff;border-right:3px solid #3a86ff}
+.road-grid{position:absolute;inset:-20% -8%;background:repeating-linear-gradient(0deg,transparent 0 38px,rgba(255,255,255,.22) 38px 40px);animation:gridFlow .42s linear infinite;pointer-events:none}
+@keyframes rainbowFlow{to{background-position:0 100%}}
+@keyframes gridFlow{to{transform:translateY(40px)}}
+.car3d{position:absolute;left:50%;bottom:64px;width:0;height:0;transform-style:preserve-3d;transform:translateX(-50%) rotateX(-18deg) rotateY(0deg);z-index:5;transition:transform .12s ease-out}
+.car3d.bounce{animation:bump .32s ease-in-out infinite alternate}
+@keyframes bump{from{transform:translateX(-50%) rotateX(-18deg) translateY(0)}to{transform:translateX(-50%) rotateX(-18deg) translateY(2px)}}
+.car-body,.car-cabin{position:absolute;transform-style:preserve-3d}
+.car-body{width:60px;height:110px;transform:translate(-50%,-50%)}
+.car-body .face{position:absolute;background:#e8eef8;box-shadow:inset 0 0 14px rgba(0,0,0,.12)}
+.car-body .face.top{width:60px;height:110px;transform:rotateX(90deg) translateZ(13px);background:linear-gradient(180deg,#f5f8ff 0%,#dbe4f2 100%);border-radius:8px 8px 4px 4px}
+.car-body .face.bottom{width:60px;height:110px;transform:rotateX(-90deg) translateZ(13px);background:#0b1520;border-radius:8px}
+.car-body .face.front{width:60px;height:26px;transform:translateZ(55px);background:linear-gradient(180deg,#eef3fb,#c9d6e8);border-radius:6px 6px 2px 2px}
+.car-body .face.rear{width:60px;height:26px;transform:rotateY(180deg) translateZ(55px);background:linear-gradient(180deg,#c9d6e8,#a8b9cf);border-radius:4px}
+.car-body .face.left{width:110px;height:26px;transform:rotateY(-90deg) translateZ(30px);background:linear-gradient(180deg,#dce5f2,#b9c8db);border-radius:4px}
+.car-body .face.right{width:110px;height:26px;transform:rotateY(90deg) translateZ(30px);background:linear-gradient(180deg,#dce5f2,#b9c8db);border-radius:4px}
+.car-cabin{width:48px;height:62px;transform:translate(-50%,-50%) translateY(-6px) translateZ(-8px)}
+.car-cabin .face{position:absolute;background:#1a2638;box-shadow:inset 0 0 10px rgba(0,0,0,.5)}
+.car-cabin .face.top{width:48px;height:62px;transform:rotateX(90deg) translateZ(12px);background:linear-gradient(180deg,#2a3a52,#151f2e);border-radius:6px}
+.car-cabin .face.front{width:48px;height:24px;transform:translateZ(31px);background:linear-gradient(180deg,#3a4f70,#1a2638);border-radius:4px 4px 2px 2px}
+.car-cabin .face.rear{width:48px;height:24px;transform:rotateY(180deg) translateZ(31px);background:#111a26;border-radius:2px}
+.car-cabin .face.left{width:62px;height:24px;transform:rotateY(-90deg) translateZ(24px);background:linear-gradient(180deg,#253449,#111a26);border-radius:2px}
+.car-cabin .face.right{width:62px;height:24px;transform:rotateY(90deg) translateZ(24px);background:linear-gradient(180deg,#253449,#111a26);border-radius:2px}
+.car-light{position:absolute;width:10px;height:6px;background:#fff;border-radius:2px;box-shadow:0 0 10px #fff,0 0 22px rgba(200,230,255,.8);transform-style:preserve-3d}
+.car-light.front-left{transform:translate(-16px,-48px) translateZ(56px)}
+.car-light.front-right{transform:translate(6px,-48px) translateZ(56px)}
+.car-light.rear-left{transform:translate(-16px,48px) translateZ(-55px) rotateY(180deg);background:#ff4d4d;box-shadow:0 0 8px #ff4d4d,0 0 16px rgba(255,50,50,.7)}
+.car-light.rear-right{transform:translate(6px,48px) translateZ(-55px) rotateY(180deg);background:#ff4d4d;box-shadow:0 0 8px #ff4d4d,0 0 16px rgba(255,50,50,.7)}
+.wheel{position:absolute;width:14px;height:24px;transform-style:preserve-3d;background:#0b121a;border-radius:4px;box-shadow:inset 0 0 4px rgba(255,255,255,.1)}
+.wheel .rim{position:absolute;inset:3px 2px;border:1px solid #3a4f70;border-radius:50%}
+.wheel.fl{transform:translate(-34px,-30px) translateZ(18px)}
+.wheel.fr{transform:translate(20px,-30px) translateZ(18px)}
+.wheel.rl{transform:translate(-34px,28px) translateZ(-18px)}
+.wheel.rr{transform:translate(20px,28px) translateZ(-18px)}
+.wheel.fl .rim,.wheel.fr .rim{transition:transform .15s ease-out}
+.shadow{position:absolute;width:80px;height:130px;background:rgba(0,0,0,.45);filter:blur(8px);transform:translate(-50%,-50%) rotateX(90deg) translateZ(-22px);border-radius:12px}
 .hide{display:none!important}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:rgba(8,20,36,.95);border:1px solid #1f4d75;color:#8be9ff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .3s;z-index:99;pointer-events:none}
 #toast.show{opacity:1}
@@ -77,9 +117,40 @@ canvas{display:block;max-width:100%;position:relative;z-index:2}
         <canvas id='gauge' width='300' height='300'></canvas>
       </div>
       <div class='panel car-wrap'>
-        <h3>车辆姿态 · 特斯拉彩虹路径</h3>
-        <canvas id='car' width='600' height='460'></canvas>
-        <div style='font-size:10px;color:#5b87b0;margin-top:6px;letter-spacing:1px;position:relative;z-index:2'>特斯拉 FSD 风格 · 三车道透视 · 彩虹车道 · 实时转向弯曲</div>
+        <h3>车辆姿态 · 3D 彩虹之路</h3>
+        <div class='scene' id='carScene'>
+          <div class='road'>
+            <div class='road-surface'></div>
+            <div class='road-grid'></div>
+          </div>
+          <div class='car3d' id='car3d'>
+            <div class='car-body'>
+              <div class='face top'></div>
+              <div class='face bottom'></div>
+              <div class='face front'></div>
+              <div class='face rear'></div>
+              <div class='face left'></div>
+              <div class='face right'></div>
+            </div>
+            <div class='car-cabin'>
+              <div class='face top'></div>
+              <div class='face front'></div>
+              <div class='face rear'></div>
+              <div class='face left'></div>
+              <div class='face right'></div>
+            </div>
+            <div class='car-light front-left'></div>
+            <div class='car-light front-right'></div>
+            <div class='car-light rear-left'></div>
+            <div class='car-light rear-right'></div>
+            <div class='wheel fl'><div class='rim'></div></div>
+            <div class='wheel fr'><div class='rim'></div></div>
+            <div class='wheel rl'><div class='rim'></div></div>
+            <div class='wheel rr'><div class='rim'></div></div>
+            <div class='shadow'></div>
+          </div>
+        </div>
+        <div style='font-size:10px;color:#5b87b0;margin-top:6px;letter-spacing:1px;position:relative;z-index:2'>3D 通用轿车 · 居中彩虹道路 · 流动行驶</div>
       </div>
     </div>
     <div class='panel' style='margin-top:14px'>
@@ -123,7 +194,7 @@ canvas{display:block;max-width:100%;position:relative;z-index:2}
 <script>
 var hudTimer=null, hudData=null;
 var recOn=false, samples=[], recStart=0;
-var carRAF=null, synthT=0, roadCars=[], roadScroll=0, rainbowShift=0;
+var synthT=0;
 
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2600);}
 
@@ -160,7 +231,7 @@ function render(d){
   document.getElementById('vCpu').textContent=d.cpuTemp!=null?d.cpuTemp.toFixed(0):'--';
   var net=['','WiFi','蜂窝','WiFi?'][d.network]||('N'+d.network);
   document.getElementById('vNet').textContent=net+' · '+d.freeSpace+'%';
-  drawGauge(d.speed);
+  drawGauge(d.speed); updateCarScene(d);
 }
 function drawGauge(spd){
   var c=document.getElementById('gauge'),x=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H/2,R=120;
@@ -175,139 +246,35 @@ function drawGauge(spd){
   x.fillText(spd.toFixed(0),cx,cy+4);x.shadowBlur=0;
   x.fillStyle='#5b87b0';x.font='12px sans-serif';x.fillText('km/h',cx,cy+28);
 }
-/* ===== 特斯拉彩虹之路（固定道路，自车居中，彩虹流动）===== */
-function startCarAnim(){
-  if(carRAF) return;
-  function loop(){ drawCarCanvas(); carRAF=requestAnimationFrame(loop); }
-  loop();
-}
-function stopCarAnim(){ if(carRAF){cancelAnimationFrame(carRAF);carRAF=null;} }
-function drawCarCanvas(){
-  var cv=document.getElementById('car'); if(!cv) return;
-  var x=cv.getContext('2d'), W=cv.width, H=cv.height;
-  var d=hudData, demo=true, speed=0, steer=0;
+/* ===== 3D 彩虹之路场景控制 ===== */
+function updateCarScene(d){
+  var demo=true, speed=0, steer=0;
   if(d){ demo=!!d.demo; speed=+d.speed||0; steer=+d.steer||0; }
-  if(demo || !d){                       // 演示模式：保持动感
-    synthT+=0.015;
-    steer=Math.sin(synthT)*30;            // 演示时轻微左右修方向
-    speed=55 + Math.sin(synthT*0.5)*35 + 20;
+  if(demo || !d){
+    synthT+=0.02;
+    steer=Math.sin(synthT)*18;
+    speed=55 + Math.sin(synthT*0.48)*35 + 20;
   }
-  // 道路固定不动，只用彩虹流动 + 路面滚动制造行驶感
-  roadScroll += speed*0.18 + 1.5;
-  rainbowShift += 2.0;
-  drawFsdBackground(x,W,H);
-  drawTeslaRoad(x,W,H,speed);
-  drawSelfCar(x,W,H,steer);
-}
-function fsdRoadPoint(W,H,t,lane){
-  // lane: -1 左, 0 中, 1 右； t 0=远 1=近；道路笔直，无弯曲
-  var cx=W/2, farY=H*0.18, bottomY=H-28, laneW=74;
-  var s=0.13+0.87*t;                    // 透视缩放
-  var y=farY+t*(bottomY-farY);
-  var lw=laneW*s;
-  return { x:cx+lane*lw, y:y, s:s, w:lw, farY:farY, bottomY:bottomY };
-}
-function drawFsdBackground(x,W,H){
-  var g=x.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#05080f'); g.addColorStop(0.55,'#0a1526'); g.addColorStop(1,'#0c2035');
-  x.fillStyle=g; x.fillRect(0,0,W,H);
-  // 地平线
-  x.strokeStyle='rgba(0,180,255,.22)'; x.lineWidth=1;
-  x.beginPath(); x.moveTo(0,H*0.18); x.lineTo(W,H*0.18); x.stroke();
-  // 远景城市轮廓
-  x.fillStyle='rgba(0,80,130,.08)';
-  x.beginPath(); x.moveTo(0,H*0.18);
-  for(var i=0;i<=W;i+=20){ x.lineTo(i,H*0.18-Math.abs(Math.sin(i*0.04))*10); }
-  x.lineTo(W,H*0.18); x.closePath(); x.fill();
-}
-function drawTeslaRoad(x,W,H,speed){
-  var farY=H*0.18, bottomY=H-28;
-  // 中间彩虹车道渐变：颜色随 rainbowShift 沿道路流动
-  var g=x.createLinearGradient(W/2,farY,W/2,bottomY);
-  g.addColorStop(0,'hsl('+(rainbowShift+260)%360+',92%,60%)');  // 远：紫
-  g.addColorStop(0.35,'hsl('+(rainbowShift+140)%360+',92%,60%)'); // 绿
-  g.addColorStop(0.72,'hsl('+(rainbowShift+45)%360+',95%,62%)'); // 橙
-  g.addColorStop(1,'hsl('+(rainbowShift)%360+',95%,62%)');        // 近：红
-
-  // 三条车道路面
-  for(var lane=-1;lane<=1;lane++){
-    var pts=[];
-    for(var t=0;t<=1;t+=0.04){
-      var p=fsdRoadPoint(W,H,t,lane);
-      pts.push({x:p.x-p.w/2,y:p.y});
-    }
-    for(var t=1;t>=0;t-=0.04){
-      var p=fsdRoadPoint(W,H,t,lane);
-      pts.push({x:p.x+p.w/2,y:p.y});
-    }
-    x.beginPath();
-    pts.forEach(function(p,i){ if(i===0)x.moveTo(p.x,p.y); else x.lineTo(p.x,p.y); });
-    x.closePath();
-    if(lane===0){
-      x.fillStyle=g; x.shadowColor='rgba(255,100,130,.5)'; x.shadowBlur=22; x.fill(); x.shadowBlur=0;
-      x.strokeStyle='rgba(255,255,255,.45)'; x.lineWidth=1; x.stroke();
-    } else {
-      x.fillStyle='rgba(8,26,46,.82)'; x.fill();
-      x.strokeStyle='rgba(0,180,255,.12)'; x.lineWidth=1; x.stroke();
-    }
+  var road=document.querySelector('.road-surface');
+  var grid=document.querySelector('.road-grid');
+  var car=document.getElementById('car3d');
+  var fl=document.querySelector('.wheel.fl .rim');
+  var fr=document.querySelector('.wheel.fr .rim');
+  if(road) road.style.animationDuration=(Math.max(80,260-speed*1.2))+'ms';
+  if(grid) grid.style.animationDuration=(Math.max(120,480-speed*2.2))+'ms';
+  if(car){
+    if(speed>2){
+      car.classList.add('bounce');
+      var dur=Math.max(0.15,0.55-speed/320);
+      car.style.animationDuration=dur+'s';
+    } else { car.classList.remove('bounce'); car.style.animationDuration=''; }
   }
-
-  // 车道分隔虚线（随速度向后滚动）
-  x.strokeStyle='rgba(255,255,255,.55)'; x.lineWidth=2; x.lineCap='round';
-  x.setLineDash([10,16]); x.lineDashOffset=-roadScroll;
-  for(var lane=-1;lane<=0;lane++){
-    x.beginPath();
-    for(var t=0.02;t<=1;t+=0.02){
-      var p=fsdRoadPoint(W,H,t,lane+0.5);
-      if(t===0.02)x.moveTo(p.x,p.y); else x.lineTo(p.x,p.y);
-    }
-    x.stroke();
-  }
-  x.setLineDash([]);
-
-  // 最外侧亮线
-  x.strokeStyle='rgba(95,224,255,.55)'; x.lineWidth=2;
-  for(var side=-1;side<=1;side+=2){
-    x.beginPath();
-    for(var t=0;t<=1;t+=0.04){ var p=fsdRoadPoint(W,H,t,side*1.5); if(t===0)x.moveTo(p.x,p.y); else x.lineTo(p.x,p.y); }
-    x.stroke();
-  }
+  var sa=steer/180*35; // deg
+  if(fl) fl.style.transform='rotate('+sa+'deg)';
+  if(fr) fr.style.transform='rotate('+sa+'deg)';
 }
-function drawOtherCars(x,W,H,speed){ /* 用户要求不显示其他车辆 */ }
-function drawSelfCar(x,W,H,steer){
-  var cx=W/2, cy=H-62;
-  x.save(); x.translate(cx,cy);
-  var sa=steer/180*0.45;                  // 前轮转向角
-
-  // 柔和白色光晕
-  x.shadowColor='rgba(255,255,255,.35)'; x.shadowBlur=20;
-  // 车身：通用白色轿车俯视图
-  x.fillStyle='#f0f5ff'; x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=2;
-  x.beginPath();
-  x.moveTo(-20,26);                       // 车尾左
-  x.lineTo(20,26);                        // 车尾右
-  x.quadraticCurveTo(23,10,20,-18);        // 右前翼子板
-  x.quadraticCurveTo(0,-28,-20,-18);       // 引擎盖前缘
-  x.quadraticCurveTo(-23,10,-20,26);       // 左前翼子板
-  x.closePath();
-  x.fill(); x.stroke();
-  x.shadowBlur=0;
-
-  // 车顶/挡风玻璃
-  x.fillStyle='rgba(30,45,70,.95)'; x.strokeStyle='rgba(140,180,230,.45)'; x.lineWidth=2;
-  x.beginPath();
-  x.moveTo(-12,-4); x.lineTo(12,-4); x.lineTo(10,-18); x.lineTo(-10,-18); x.closePath();
-  x.fill(); x.stroke();
-
-  // 四个轮子（黑色小圆角矩形）
-  function wheel(wx,wy,sw){ x.save(); x.translate(wx,wy); x.rotate(sw); x.fillStyle='#0f1822'; x.strokeStyle='rgba(255,255,255,.5)'; x.lineWidth=1.5; x.beginPath(); x.roundRect(-4.5,-7,9,14,3); x.fill(); x.stroke(); x.restore(); }
-  wheel(-15,12,sa); wheel(15,12,sa); wheel(-15,-14,0); wheel(15,-14,0);
-
-  // 车头灯
-  x.fillStyle='#eaffff'; x.shadowColor='#eaffff'; x.shadowBlur=12;
-  x.beginPath(); x.arc(-9,-20,2.5,0,7); x.arc(9,-20,2.5,0,7); x.fill();
-  x.restore();
-}
+function startCarAnim(){}
+function stopCarAnim(){}
 function startRec(){samples=[];recOn=true;recStart=Date.now();toast('已开始统计本次行程');document.getElementById('repTip').textContent='统计中… 行驶一会儿后回到本页生成卡片。';}
 function stopRec(){recOn=false;toast('已停止统计');}
 function drawEmptyRep(){
