@@ -1,6 +1,6 @@
 {
-  "version": "1.0.62",
-  "changelog": "语音联动审核后移除不可靠事件：倒车(gearShifter 是 capnp 枚举非字符串，比较失效)与减速(controlsState.decelFor* 字段在 cpv9-dev 不一定存在)两类信号在该分支触发不可靠，予以移除。仅保留转向灯(左/右)与ACC(激活/退出)共4项稳定联动，对应语音槽位与灯位同步精简。",
-  "tag": "v1.0.62",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.62/release/c3_toolbox.tar.gz"
+  "version": "1.0.63",
+  "changelog": "导航顺序调整：把「语音互动 🔊」从末尾移到「终端 💻」上方，侧栏与移动底栏同步，方便更快触达语音互动面板。",
+  "tag": "v1.0.63",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.63/release/c3_toolbox.tar.gz"
 }
