@@ -1,6 +1,6 @@
 {
-  "version": "1.0.20",
-  "tag": "v1.0.20",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.20/release/c3_toolbox.tar.gz",
-  "changelog": "投屏改为低延迟 MJPEG 流式推送（ffmpeg 抓一帧即推，浏览器边到边显示，延迟降到 ~100ms 级，取代旧轮询取图）；新增「一键安装 ffmpeg」：网页内后台安装并显示进度，无需手动 ssh。投屏环境自检与安装按钮集成在「实时画面」标签。"
+  "version": "1.0.21",
+  "tag": "v1.0.21",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.21/release/c3_toolbox.tar.gz",
+  "changelog": "投屏新增「横屏/竖屏」一键切换（设备屏为竖屏 1080x2160，可旋转 90° 横持观看）；帧缓冲检测兼容 /dev/fb1；无 fb0 时提示发送 DRM 诊断以便后续加 kmsgrab 适配。"
 }

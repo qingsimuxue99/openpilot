@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.20"
+VERSION = "1.0.21"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1330,27 +1330,34 @@ def _ffmpeg_path():
     return shutil.which('ffmpeg') or '/usr/bin/ffmpeg'
 
 
+def _fb_input_args():
+    """返回 ffmpeg 帧缓冲输入参数；优先 /dev/fb0，其次 /dev/fb1。均无则返回 None。"""
+    for fb in ('/dev/fb0', '/dev/fb1'):
+        if os.path.exists(fb):
+            return ['-f', 'fbdev', '-framerate', '15', '-i', fb]
+    return None
+
+
 def detect_fb_source():
     if os.path.exists('/dev/fb0'):
         return 'fb0'
+    if os.path.exists('/dev/fb1'):
+        return 'fb1'
     return None
 
 
 def screen_supported():
-    """投屏可用 = 存在 /dev/fb0 帧缓冲 且 已安装 ffmpeg"""
-    return os.path.exists('/dev/fb0') and os.path.exists(_ffmpeg_path())
+    """投屏可用 = 存在帧缓冲(/dev/fb0 或 /dev/fb1) 且 已安装 ffmpeg"""
+    return _fb_input_args() is not None and os.path.exists(_ffmpeg_path())
 
 
-def _ffmpeg_fb_cmd(extra_out=None):
+def _ffmpeg_fb_cmd(extra_out=False):
     ff = _ffmpeg_path()
-    cmd = [ff, '-hide_banner', '-loglevel', 'error',
-           '-f', 'fbdev', '-framerate', '15', '-i', '/dev/fb0',
-           '-vf', 'scale=540:-1', '-f', 'image2pipe', '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
-    if extra_out:
-        cmd = [ff, '-hide_banner', '-loglevel', 'error',
-               '-f', 'fbdev', '-i', '/dev/fb0',
-               '-vf', 'scale=540:-1', '-frames:v', '1', '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
-    return cmd
+    in_args = _fb_input_args() or ['-f', 'fbdev', '-i', '/dev/fb0']
+    out_args = (['-frames:v', '1', '-f', 'image2'] if extra_out
+                else ['-f', 'image2pipe', '-r', '15'])
+    return [ff, '-hide_banner', '-loglevel', 'error'] + in_args + \
+           ['-vf', 'scale=540:-1', '-c:v', 'mjpeg', '-q:v', '4'] + out_args + ['-']
 
 
 def gen_screen_stream():

@@ -585,9 +585,14 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
           <span id="dashyStat" style="font-size:11px;color:var(--dim);margin-left:auto"></span>
         </div>
         <div id="dashyScreenWrap" style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
-          <img id="dashyScreen" alt="投屏" style="width:100%;border-radius:14px;background:#000;display:block;aspect-ratio:9/16">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+            <button class="upd-btn" id="scrRotBtn" onclick="toggleScreenRot()">↻ 横屏显示</button>
+          </div>
+          <div id="dashyScreenStage" style="position:relative;width:100%;aspect-ratio:9/16;background:#000;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+            <img id="dashyScreen" alt="投屏" style="max-width:100%;max-height:100%;display:block;transition:transform .2s">
+          </div>
           <div id="dashyEnv" style="display:none;margin-top:8px;font-size:12px;color:var(--muted)"></div>
-          <div class="bs-note">低延迟投屏：ffmpeg 抓一帧即推（MJPEG 流），屏幕上显示什么就镜像什么，无需摄像头。延迟通常 100ms 级。若提示「不可用」且缺 ffmpeg，点上方「一键安装」即可（网页内完成，不用 ssh）。</div>
+          <div class="bs-note">低延迟投屏：ffmpeg 抓一帧即推（MJPEG 流），屏幕上显示什么就镜像什么，无需摄像头。延迟通常 100ms 级。点右上「横屏显示」可旋转画面。若提示「不可用」且缺 ffmpeg，点上方「一键安装」即可（网页内完成，不用 ssh）。</div>
         </div>
         <div id="dashyHudWrap" style="display:none">
           <div style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
@@ -915,7 +920,7 @@ function onTabSwitch(id){
 }
 
 // === 实时画面：投屏（帧缓冲镜像，低延迟 MJPEG 流）+ 数据 HUD ===
-var dashyScreenTimer=null, dashyHudTimer=null, dashyState=null, dashyMirror=false, dashySrc='screen', dashyStreaming=false;
+var dashyScreenTimer=null, dashyHudTimer=null, dashyState=null, dashyMirror=false, dashySrc='screen', dashyStreaming=false, dashyScreenLand=false;
 function setDashySrc(s){dashySrc=s;applyDashySrc();}
 function applyDashySrc(){
   stopDashy();
@@ -955,7 +960,7 @@ function checkScreenEnv(){
         if(!s.ffmpeg){
           env.innerHTML='<span style="color:#ff6b6b">缺少 ffmpeg</span> · <button class="upd-btn" onclick="installFfmpeg()">一键安装 ffmpeg</button>';
         }else{
-          env.innerHTML='本设备无 <code>/dev/fb0</code> 帧缓冲，投屏暂不可用（UI 可能走 DRM，请联系作者适配）。';
+          env.innerHTML='本设备未检测到 <code>/dev/fb0</code> 帧缓冲（UI 可能走 DRM）。请把设备执行 <code style="font-size:10px">ls -l /dev/fb* /dev/dri 2&gt;/dev/null; which ffmpeg</code> 的结果发我，我加 DRM 抓取适配。';
         }
       }
     }
@@ -965,6 +970,25 @@ function checkScreenEnv(){
 function startScreenStream(){
   var img=document.getElementById('dashyScreen');
   if(img && !dashyStreaming){img.src='/api/screen/stream';dashyStreaming=true;}
+}
+// 横屏/竖屏切换：设备屏是竖屏(1080x2160)，旋转 90° 更便于横持手机观看
+function toggleScreenRot(){
+  dashyScreenLand=!dashyScreenLand;
+  var stage=document.getElementById('dashyScreenStage');
+  var img=document.getElementById('dashyScreen');
+  var btn=document.getElementById('scrRotBtn');
+  if(dashyScreenLand){
+    stage.style.aspectRatio='2/1';
+    img.style.maxWidth='none'; img.style.maxHeight='none';
+    img.style.height='200%'; img.style.width='auto';
+    img.style.transform='rotate(90deg)';
+    if(btn)btn.textContent='↻ 竖屏显示';
+  }else{
+    stage.style.aspectRatio='9/16';
+    img.style.maxWidth='100%'; img.style.maxHeight='100%';
+    img.style.height=''; img.style.width=''; img.style.transform='none';
+    if(btn)btn.textContent='↻ 横屏显示';
+  }
 }
 // 一键安装 ffmpeg（后台任务 + 进度）
 async function installFfmpeg(){
