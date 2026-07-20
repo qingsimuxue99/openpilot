@@ -33,6 +33,10 @@ AUTO_BACKUP_DIR = os.path.join(BASE_DIR, "auto_backup")
 AUTO_BACKUP_FILE = os.path.join(AUTO_BACKUP_DIR, "auto_full_params.json")
 LOG_FILE = os.path.join(BASE_DIR, "server.log")
 
+# 感知数据缓存（由后台采集线程填充，/api/perception 读取）
+PERC_LOCK = threading.Lock()
+PERC_DATA = {"available": False, "source": "none", "reason": "init", "boxes": [], "path": [], "lane_lines": []}
+
 # 工具箱版本与在线更新源
 # 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
 # ============= 在线更新配置（版本指针机制，彻底解耦）=============
@@ -43,7 +47,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.45"
+VERSION = "1.0.46"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1316,6 +1320,99 @@ def api_splash_set():
         return jsonify({'success': False, 'message': f'刷入失败: {e}'})
 
 
+# ============= 感知数据通道（modelV2 / liveTracks / radarState）=============
+# 后台线程订阅 cereal，尽力解析真实模型输出；设备离线或未行驶时为 available:false（绝不伪造数据）。
+def _parse_perception(sm):
+    path, lanes, boxes = [], [], []
+    try:
+        m = sm['modelV2']
+        if m is not None:
+            # 车道线：modelV2.laneLines 是 4 条折线，每条为 (x,y,z) 点序列
+            try:
+                for ll in m.laneLines:
+                    lanes.append([[float(p.x), float(p.y), float(p.z)] for p in ll])
+            except Exception:
+                pass
+            # 规划路径：优先 modelV2.path，回退 modelV2.position
+            try:
+                src = m.path if getattr(m, 'path', None) is not None and len(m.path) else getattr(m, 'position', None)
+                if src is not None and len(src):
+                    path = [[float(p.x), float(p.y), float(p.z)] for p in src]
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # 目标框：优先 liveTracks（车型/行人/自行车），回退 radarState 前车
+    try:
+        tr = sm['liveTracks']
+        if tr is not None:
+            tmap = {0: 'car', 1: 'pedestrian', 2: 'bicycle', 3: 'truck'}
+            for t in tr:
+                try:
+                    boxes.append({
+                        'type': tmap.get(int(t.t), 'car'),
+                        'x': float(t.yRel), 'y': float(t.dRel), 'z': 0.0,
+                        'w': 1.9, 'h': 1.5, 'd': 4.5,
+                        'rel_speed': float(t.vRel), 'conf': 1.0,
+                    })
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    if not boxes:
+        try:
+            rs = sm['radarState']
+            if rs is not None:
+                for lead in ('leadOne', 'leadTwo'):
+                    L = getattr(rs, lead, None)
+                    if L and getattr(L, 'status', False):
+                        boxes.append({
+                            'type': 'car', 'x': float(L.yRel), 'y': float(L.dRel), 'z': 0.0,
+                            'w': 1.9, 'h': 1.5, 'd': 4.5,
+                            'rel_speed': float(L.vRel), 'conf': 1.0,
+                        })
+        except Exception:
+            pass
+    available = bool(path or lanes or boxes)
+    src = 'modelV2' if (path or lanes) else ('liveTracks' if boxes else 'none')
+    return {"available": available, "source": src, "boxes": boxes, "path": path, "lane_lines": lanes}
+
+
+def _perception_collector():
+    """后台持续订阅 cereal，缓存最新一帧感知数据。"""
+    global PERC_DATA
+    try:
+        from cereal.messaging import SubMaster
+    except Exception as e:
+        with PERC_LOCK:
+            PERC_DATA = {"available": False, "source": "none", "reason": "no_cereal:%s" % e,
+                         "boxes": [], "path": [], "lane_lines": []}
+        print("[感知采集] 无法导入 cereal，感知接口返回 available:false（%s）" % e)
+        return
+    try:
+        sm = SubMaster(['modelV2', 'liveTracks', 'radarState'])
+    except Exception as e:
+        with PERC_LOCK:
+            PERC_DATA = {"available": False, "source": "none", "reason": "submaster:%s" % e,
+                         "boxes": [], "path": [], "lane_lines": []}
+        return
+    print("[感知采集] 已启动，订阅 modelV2 / liveTracks / radarState")
+    while True:
+        try:
+            sm.update(timeout=1.0)
+            frame = _parse_perception(sm)
+            with PERC_LOCK:
+                PERC_DATA = frame
+        except Exception:
+            time.sleep(0.5)
+
+
+@app.route('/api/perception')
+def api_perception():
+    with PERC_LOCK:
+        return jsonify(PERC_DATA)
+
+
 if __name__ == '__main__':
     PORT = 5588
     # 确保目录存在
@@ -1344,4 +1441,6 @@ if __name__ == '__main__':
     print(f"  自动备份文件: {AUTO_BACKUP_FILE}")
     print()
     ensure_tmux_log()
+    # 启动感知采集线程（仅在设备端 cereal 可用时真正工作；不可用时接口返回 available:false）
+    threading.Thread(target=_perception_collector, daemon=True).start()
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

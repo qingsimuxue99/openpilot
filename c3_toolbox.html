@@ -10,11 +10,34 @@
   --bg:#f5f2ec;--bg2:#ffffff;--bg3:#f9f7f3;--bg4:#eeebe4;
   --ink:#2d2d2d;--muted:#8a8690;--dim:#c5c0ba;
   --accent:#1aab8a;--accent2:#e85d50;--accent3:#4a90d9;
-  --rule:#e8e4dd;--glow:rgba(26,171,138,.08);--radius:12px;
+  --accent-rgb:26,171,138;
+  --rule:#e8e4dd;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+}
+/* === 赛博皮肤主题（data-theme 切换，默认 = 晚风亮色） === */
+:root[data-theme="neon"]{
+  --bg:#0e0b1a;--bg2:#16122b;--bg3:#1d1838;--bg4:#241d44;
+  --ink:#ece9ff;--muted:#9a92c4;--dim:#4a4170;
+  --accent:#b15cff;--accent2:#ff5ca8;--accent3:#5ce1ff;
+  --accent-rgb:177,92,255;
+  --rule:#2e2750;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+}
+:root[data-theme="acid"]{
+  --bg:#06120c;--bg2:#0c1f15;--bg3:#102a1c;--bg4:#163a27;
+  --ink:#e8ffe8;--muted:#7fcf9a;--dim:#335c44;
+  --accent:#39ff14;--accent2:#c6ff00;--accent3:#00e5ff;
+  --accent-rgb:57,255,20;
+  --rule:#1f3d2a;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+}
+:root[data-theme="vapor"]{
+  --bg:#1a1030;--bg2:#241544;--bg3:#2e1a55;--bg4:#3a2068;
+  --ink:#ffe9fb;--muted:#c79bdd;--dim:#5e3f86;
+  --accent:#ff6ad5;--accent2:#26c6ff;--accent3:#ffd86b;
+  --accent-rgb:255,106,213;
+  --rule:#3a2a66;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
 }
 html,body{height:100%}
 body{font-family:'PingFang SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden}
-body::before{content:'';position:fixed;top:-30%;right:-15%;width:500px;height:500px;background:radial-gradient(circle,rgba(26,171,138,.07) 0%,transparent 65%);pointer-events:none;z-index:0}
+body::before{content:'';position:fixed;top:-30%;right:-15%;width:500px;height:500px;background:radial-gradient(circle,rgba(var(--accent-rgb),.07) 0%,transparent 65%);pointer-events:none;z-index:0}
 body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:400px;background:radial-gradient(circle,rgba(74,144,217,.05) 0%,transparent 65%);pointer-events:none;z-index:0}
 
 /* === Header === */
@@ -51,7 +74,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .ng-t{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;padding:10px 12px 4px;font-weight:700}
 .ni{padding:9px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);transition:all .15s;margin:1px 0;font-weight:500}
 .ni:hover{background:var(--bg3);color:var(--ink)}
-.ni.on{background:linear-gradient(135deg,rgba(34,211,167,.15),rgba(34,211,167,.05));color:var(--accent);font-weight:600;border:1px solid rgba(34,211,167,.2)}
+.ni.on{background:linear-gradient(135deg,rgba(var(--accent-rgb),.15),rgba(var(--accent-rgb),.05));color:var(--accent);font-weight:600;border:1px solid rgba(var(--accent-rgb),.2)}
 .ni .ic{font-size:15px;width:20px;text-align:center;flex-shrink:0}
 
 /* === Panel === */
@@ -64,7 +87,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 
 /* === Cards === */
 .cd{background:var(--bg2);border:1px solid var(--rule);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;transition:border-color .2s}
-.cd:hover{border-color:rgba(34,211,167,.15)}
+.cd:hover{border-color:rgba(var(--accent-rgb),.15)}
 .ct{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px}
 .ct::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:2px}
 
@@ -101,8 +124,8 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .rr:last-child{border-bottom:none}
 .rr label{min-width:180px;font-size:12.5px;font-weight:500;color:var(--ink);flex-shrink:0}
 .rr input[type=range]{flex:1;-webkit-appearance:none;background:var(--dim);height:4px;border-radius:2px;outline:none;border:none;padding:0;cursor:pointer}
-.rr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 6px rgba(34,211,167,.4);transition:.15s}
-.rr input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2);box-shadow:0 0 12px rgba(34,211,167,.6)}
+.rr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 6px rgba(var(--accent-rgb),.4);transition:.15s}
+.rr input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2);box-shadow:0 0 12px rgba(var(--accent-rgb),.6)}
 .rr .rv{min-width:54px;text-align:center;font-size:12px;font-weight:700;color:var(--accent);background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--rule);font-family:'Cascadia Code','Fira Code',monospace}
 
 /* === Buttons === */
@@ -126,7 +149,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 /* === Quick Cmds === */
 .qcmds{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .qcmd{padding:5px 12px;background:var(--bg3);border:1px solid var(--rule);border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'Cascadia Code',monospace;transition:all .15s;white-space:nowrap}
-.qcmd:hover{border-color:var(--accent);color:var(--accent);background:rgba(34,211,167,.05)}
+.qcmd:hover{border-color:var(--accent);color:var(--accent);background:rgba(var(--accent-rgb),.05)}
 
 /* === Table === */
 .pt{width:100%;border-collapse:collapse}
@@ -147,7 +170,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 /* === Toast === */
 .tc{position:fixed;top:60px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .tst{padding:10px 18px;border-radius:8px;font-size:12px;animation:slideIn .3s ease;min-width:220px;backdrop-filter:blur(12px)}
-.tst.ok{background:rgba(34,211,167,.12);border:1px solid var(--accent);color:var(--accent)}
+.tst.ok{background:rgba(var(--accent-rgb),.12);border:1px solid var(--accent);color:var(--accent)}
 .tst.er{background:rgba(249,112,102,.12);border:1px solid var(--accent2);color:var(--accent2)}
 .tst.in{background:rgba(96,165,250,.12);border:1px solid var(--accent3);color:var(--accent3)}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -171,7 +194,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .mnav::-webkit-scrollbar{display:none}
 .mnav-in{display:flex;gap:4px;padding:0 8px;min-width:max-content;margin:0 auto}
 .mn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px;border-radius:8px;cursor:pointer;transition:all .15s;font-size:10px;color:var(--muted);min-width:40px}
-.mn.on{color:var(--accent);background:rgba(34,211,167,.1)}
+.mn.on{color:var(--accent);background:rgba(var(--accent-rgb),.1)}
 .mn .mi{font-size:18px;line-height:1}
 .mn .mt{font-weight:500;letter-spacing:.3px}
 
@@ -261,7 +284,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 /* === Carrotx-style Parameter Cards === */
 .cat-card{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:8px 6px;border-radius:14px;background:var(--bg2);border:1px solid var(--rule);cursor:pointer;transition:all .15s}
 .cat-card:hover{border-color:var(--accent)}
-.cat-card.on{background:rgba(26,171,138,.1);border-color:var(--accent)}
+.cat-card.on{background:rgba(var(--accent-rgb),.1);border-color:var(--accent)}
 .cat-card .cname{font-size:14px;font-weight:500;color:var(--ink);font-family:'PingFang SC','Microsoft YaHei','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji','Android Emoji',system-ui,sans-serif}
 .cat-card.on .cname{color:var(--accent);font-weight:600}
 .mn .mi{font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji','Android Emoji',system-ui,sans-serif}
@@ -315,6 +338,18 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .bs-info b{color:var(--ink)}
 .bs-note{font-size:11px;color:var(--dim);margin-top:10px;line-height:1.7;background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:8px 10px}
 .bs-note code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:10px}
+
+/* === 主题切换 UI === */
+.theme-row{display:flex;gap:14px;padding:6px 2px;flex-wrap:wrap}
+.theme-dot{width:34px;height:34px;border-radius:50%;border:2px solid var(--rule);background:var(--d);cursor:pointer;transition:transform .15s,border-color .15s;position:relative;padding:0;outline:none}
+.theme-dot:hover{transform:scale(1.12)}
+.theme-dot.on{border-color:var(--ink);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.25)}
+.theme-dot.on::after{content:'';position:absolute;inset:-7px;border:1.5px solid var(--accent);border-radius:50%;opacity:.6}
+
+/* === 感知线框面板 === */
+#percCanvas{width:100%;display:block;background:#04060a;border-radius:var(--radius) 0 0 var(--radius);aspect-ratio:16/9}
+.perc-wrap{border:1px solid var(--rule);border-radius:var(--radius);overflow:hidden;background:#04060a}
+@media(max-width:640px){ #percCanvas{aspect-ratio:4/3} }
 </style>
 </head>
 <body>
@@ -360,6 +395,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端 💻</span><span class="cbadge" id="bc-terminal">—</span></div>
     <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份 💾</span><span class="cbadge" id="bc-backup">—</span></div>
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
+    <div class="cat-card" data-p="perception" onclick="go('perception')"><span class="cname">感知 🧊</span><span class="cbadge" id="bc-perception">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -438,6 +474,18 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       <div class="ph"><h2>系统设置</h2><p>系统开关、按钮模式、连接与录制</p></div>
       <div class="shc" id="sh-settings">已读取 0 项</div>
       <div id="sp-settings"></div>
+
+      <!-- 外观主题 -->
+      <div class="cd">
+        <div class="ct">外观主题 🎨</div>
+        <div class="theme-row" id="themeRow">
+          <button class="theme-dot on" data-theme="default" style="--d:#1aab8a" onclick="setTheme('default')" title="晚风（默认亮色）"></button>
+          <button class="theme-dot" data-theme="neon" style="--d:#b15cff" onclick="setTheme('neon')" title="霓虹紫"></button>
+          <button class="theme-dot" data-theme="acid" style="--d:#39ff14" onclick="setTheme('acid')" title="酸性绿"></button>
+          <button class="theme-dot" data-theme="vapor" style="--d:#ff6ad5" onclick="setTheme('vapor')" title="蒸汽波"></button>
+        </div>
+        <div class="bs-info" id="themeName">当前：晚风（默认）</div>
+      </div>
     </div>
 
     <!-- 信息 -->
@@ -576,6 +624,25 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       </div>
     </div>
 
+    <!-- 感知线框 3D 场景 -->
+    <div class="pnl" id="p-perception">
+      <div class="ph"><h2>感知线框 🧊</h2><p>把模型实时检测到的车辆 / 行人画成赛博线框 3D 场景</p></div>
+
+      <div class="perc-wrap">
+        <canvas id="percCanvas"></canvas>
+      </div>
+
+      <div class="cd">
+        <div class="ct">控制</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <button class="btn bp" id="percDemoBtn" onclick="togglePercDemo()">▶ 演示模式</button>
+          <label class="rr" style="flex:1;min-width:200px;margin:0"><span>视角俯仰</span><input type="range" id="percPitch" min="-15" max="40" value="6" oninput="if(window.__perc)window.__perc.pitch=this.value/57.3"></label>
+          <span class="bs-info" id="percStatus" style="margin:0">等待感知数据…</span>
+        </div>
+        <div class="bs-note">数据为设备 <b>openpilot 运行时</b> 的真实模型输出（modelV2 / liveTracks / radarState）。车辆静止或未行驶时前方无目标属正常现象。「演示模式」仅用于预览视觉效果，<b>非真实数据</b>。</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -594,6 +661,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
     <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
+    <div class="mn" data-p="perception" onclick="go('perception')"><span class="mi">🧊</span><span class="mt">感知</span></div>
   </div>
 </nav>
 
@@ -894,13 +962,167 @@ async function saveParam(k){
 function updBadge(){}
 
 function onTabSwitch(id){
+  if(id!=='perception')stopPerception();
   if(id==='dashboard'){loadInfo()}
+  else if(id==='perception'){startPerception()}
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
 }
 
 
+
+// === 外观主题（赛博皮肤切换） ===
+var THEME_NAMES={'default':'晚风（默认）','neon':'霓虹紫','acid':'酸性绿','vapor':'蒸汽波'};
+function setTheme(t){
+  if(t==='default'){document.documentElement.removeAttribute('data-theme');}
+  else{document.documentElement.setAttribute('data-theme',t);}
+  try{localStorage.setItem('c3_theme',t);}catch(e){}
+  document.querySelectorAll('.theme-dot').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-theme')===t)});
+  var el=document.getElementById('themeName');if(el)el.textContent='当前：'+(THEME_NAMES[t]||t);
+  if(window.__perc)window.__perc.themeDirty=true; // 通知感知画布刷新主题色
+}
+function initTheme(){
+  var t='default';
+  try{t=localStorage.getItem('c3_theme')||'default';}catch(e){}
+  setTheme(t);
+}
+
+// === 感知线框 3D 场景 ===
+var PERC={
+  canvas:null,ctx:null,raf:null,running:false,demo:false,
+  data:null,themeDirty:true,pitch:6/57.3,tLast:0,fps:0,
+  colors:{car:'#5ce1ff',pedestrian:'#ff5c5c',bicycle:'#ffd86b',truck:'#c66bff'}
+};
+window.__perc=PERC;
+function colorFor(t){return PERC.colors[t]||'#5ce1ff';}
+function project(p,W,H){
+  var camH=1.2;
+  var rx=p.x, ry=p.y, rz=(p.z||0)-camH;
+  var cp=Math.cos(PERC.pitch), sp=Math.sin(PERC.pitch);
+  var ry2=ry*cp-rz*sp, rz2=ry*sp+rz*cp;
+  if(ry2<0.3)ry2=0.3;
+  var f=W*0.9, cx=W/2, cy=H*0.52;
+  return {x:cx+(rx/ry2)*f, y:cy-(rz2/ry2)*f, depth:ry2};
+}
+function drawGrid(ctx,W,H){
+  ctx.lineWidth=1;
+  for(var x=-10;x<=10;x+=2){var a=project({x:x,y:0.4,z:0},W,H),b=project({x:x,y:60,z:0},W,H);ctx.strokeStyle='rgba(120,160,200,'+(0.06+Math.abs(x)/120)+')';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+  for(var y=2;y<=60;y+=4){var a2=project({x:-10,y:y,z:0},W,H),b2=project({x:10,y:y,z:0},W,H);ctx.strokeStyle='rgba(120,160,200,0.05)';ctx.beginPath();ctx.moveTo(a2.x,a2.y);ctx.lineTo(b2.x,b2.y);ctx.stroke();}
+}
+function drawPoly(ctx,W,H,pts,col,lw,glow){
+  if(!pts||pts.length<2)return;
+  ctx.strokeStyle=col;ctx.lineWidth=lw;if(glow){ctx.shadowColor=col;ctx.shadowBlur=10;}
+  ctx.beginPath();var s=false;
+  for(var i=0;i<pts.length;i++){var pr=project({x:pts[i][0],y:pts[i][1],z:pts[i][2]||0},W,H);if(!s){ctx.moveTo(pr.x,pr.y);s=true;}else ctx.lineTo(pr.x,pr.y);}
+  ctx.stroke();ctx.shadowBlur=0;
+}
+function drawBox(ctx,W,H,b,col){
+  var x=b.x,y=b.y,z=b.z||0,w=b.w||1.8,h=b.h||1.5,d=b.d||4.5;
+  var hx=w/2,hd=d/2;
+  var c=[
+    {x:x-hx,y:y-hd,z:z},{x:x+hx,y:y-hd,z:z},{x:x+hx,y:y+hd,z:z},{x:x-hx,y:y+hd,z:z},
+    {x:x-hx,y:y-hd,z:z+h},{x:x+hx,y:y-hd,z:z+h},{x:x+hx,y:y+hd,z:z+h},{x:x-hx,y:y+hd,z:z+h}
+  ].map(function(p){return project(p,W,H);});
+  if(c[0].depth<0.3)return;
+  var e=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.shadowColor=col;ctx.shadowBlur=8;
+  for(var i=0;i<e.length;i++){ctx.beginPath();ctx.moveTo(c[e[i][0]].x,c[e[i][0]].y);ctx.lineTo(c[e[i][1]].x,c[e[i][1]].y);ctx.stroke();}
+  ctx.shadowBlur=0;
+  ctx.fillStyle=col;ctx.font='10px monospace';ctx.textAlign='center';
+  ctx.fillText((b.type||'obj')+' '+Math.round(y)+'m',c[4].x,c[4].y-4);
+}
+function drawHUD(ctx,W,H,d,accent,ink){
+  ctx.textAlign='left';ctx.font='11px monospace';
+  ctx.fillStyle=accent;ctx.fillText((d.demo?'● DEMO':'● LIVE')+'  '+d.source,W-118,H-30);
+  ctx.fillStyle=ink;ctx.fillText('目标 '+(d.boxes?d.boxes.length:0)+'  |  FPS '+PERC.fps,W-118,H-14);
+}
+function renderPerception(){
+  var ctx=PERC.ctx;if(!ctx)return;
+  var c=PERC.canvas,W=c.clientWidth,H=c.clientHeight;
+  var cs=getComputedStyle(document.documentElement);
+  var accent=cs.getPropertyValue('--accent').trim()||'#5ce1ff';
+  var accent2=cs.getPropertyValue('--accent2').trim()||'#ff5c5c';
+  var ink=cs.getPropertyValue('--ink').trim()||'#fff';
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#04060a';ctx.fillRect(0,0,W,H);
+  drawGrid(ctx,W,H);
+  var d=PERC.data;
+  if(d&&d.available){
+    if(d.path&&d.path.length>1)drawPoly(ctx,W,H,d.path,accent,2.5,true);
+    if(d.lane_lines)for(var i=0;i<d.lane_lines.length;i++){if(d.lane_lines[i]&&d.lane_lines[i].length>1)drawPoly(ctx,W,H,d.lane_lines[i],accent2,1.5,false);}
+    if(d.boxes)for(var j=0;j<d.boxes.length;j++)drawBox(ctx,W,H,d.boxes[j],colorFor(d.boxes[j].type));
+    drawHUD(ctx,W,H,d,accent,ink);
+  }else{
+    ctx.fillStyle=accent;ctx.font='13px monospace';ctx.textAlign='center';
+    ctx.fillText(PERC.demo?'演示模式：合成目标（非真实数据）':'等待感知数据…（行驶中且 openpilot 运行时才有）',W/2,H/2);
+  }
+}
+function loopPerception(){
+  if(!PERC.running)return;
+  var now=Date.now();
+  if(PERC.tLast){var dt=(now-PERC.tLast)/1000;if(dt>0)PERC.fps=Math.round(1/dt*0.7+PERC.fps*0.3);}
+  PERC.tLast=now;
+  renderPerception();
+  PERC.raf=requestAnimationFrame(loopPerception);
+}
+function resizePercCanvas(){
+  var c=PERC.canvas;if(!c)return;
+  var r=c.getBoundingClientRect();var dpr=window.devicePixelRatio||1;
+  c.width=Math.max(300,Math.round(r.width*dpr));
+  c.height=Math.max(180,Math.round(r.height*dpr));
+  PERC.ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function startPerception(){
+  if(PERC.running)return;
+  PERC.running=true;PERC.tLast=0;PERC.fps=0;
+  PERC.canvas=document.getElementById('percCanvas');
+  PERC.ctx=PERC.canvas.getContext('2d');
+  resizePercCanvas();
+  loopPerception();
+  pollPerception();
+}
+function stopPerception(){
+  PERC.running=false;
+  if(PERC.raf)cancelAnimationFrame(PERC.raf);
+  PERC.raf=null;
+}
+function pollPerception(){
+  if(!PERC.running)return;
+  if(PERC.demo){PERC.data=genDemoFrame();setTimeout(pollPerception,200);return;}
+  fetch('/api/perception').then(function(r){return r.json()}).then(function(d){
+    PERC.data=d;
+    var st=document.getElementById('percStatus');
+    if(st){if(d.available)st.textContent='实时感知 ✓ 目标 '+((d.boxes||[]).length)+' 个';else st.textContent='等待感知数据…';}
+  }).catch(function(){var st=document.getElementById('percStatus');if(st)st.textContent='感知接口不可用';})
+  .finally(function(){setTimeout(pollPerception,200);});
+}
+function genDemoFrame(){
+  var t=Date.now()/1000;
+  var types=['car','pedestrian','truck'];
+  var boxes=[];
+  for(var i=0;i<3;i++){
+    var y=14+((t*4+i*11)%46);
+    var lat=(i-1)*2.6+Math.sin(t*0.8+i)*0.6;
+    boxes.push({type:types[i%3],x:lat,y:y,z:0.0,w:[1.9,0.7,2.4][i%3],h:[1.5,1.7,3.0][i%3],d:[4.5,0.7,8][i%3],rel_speed:-1});
+  }
+  return {available:true,demo:true,source:'demo',boxes:boxes,path:demoPath(),lane_lines:demoLanes()};
+}
+function demoPath(){
+  var a=[];for(var y=0;y<=60;y+=2)a.push([Math.sin(y/9)*1.6,y,0]);return a;
+}
+function demoLanes(){
+  var L=[],R=[];for(var y=0;y<=60;y+=2){var cx=Math.sin(y/9)*1.6;L.push([cx-1.85,y,0]);R.push([cx+1.85,y,0]);}
+  return [L,R];
+}
+function togglePercDemo(){
+  PERC.demo=!PERC.demo;
+  var b=document.getElementById('percDemoBtn');
+  if(b){b.textContent=PERC.demo?'⏹ 停止演示':'▶ 演示模式';b.classList.toggle('bp',!PERC.demo);b.classList.toggle('bd',PERC.demo);}
+  if(PERC.demo){var st=document.getElementById('percStatus');if(st)st.textContent='演示模式（非真实数据）';}
+  else pollPerception();
+}
+window.addEventListener('resize',function(){if(PERC.running)resizePercCanvas();});
 
 // === All Params Table ===
 var PN={'AdjustCurveOffset':'弯道偏移调整','AdjustLaneOffset':'车道偏移调整','AutoCruiseControl':'自动巡航','AutoCurveSpeedAggressiveness':'弯道激进程度','AutoCurveSpeedAggressivenessH':'高速弯道激进程度','AutoCurveSpeedFactor':'弯道速度因子','AutoCurveSpeedFactorH':'高速弯道速度因子','AutoCurveSpeedLowerLimit':'弯道最低速度','AutoDoForkBlinkerDist':'岔道打灯距离','AutoDoForkBlinkerDistH':'高速岔道打灯距离','AutoDoForkCheckDist':'岔道确认距离','AutoDoForkCheckDistH':'高速岔道确认距离','AutoDoForkDecalDist':'岔道减速距离','AutoDoForkDecalDistH':'高速岔道减速距离','AutoDoForkNavDist':'岔道导航距离','AutoDoForkNavDistH':'高速岔道导航距离','AutoEnTurnNewLaneTime':'转向入弯新车道时间','AutoEnTurnNewLaneTimeH':'高速转向入弯新车道时间','AutoEngage':'自动启用','AutoForkDecalRate':'岔道减速率','AutoForkDecalRateH':'高速岔道减速率','AutoForkDistOffset':'岔道距离偏移','AutoForkDistOffsetH':'高速岔道距离偏移','AutoForkSpeedMin':'岔道最低速度','AutoForkSpeedMinH':'高速岔道最低速度','AutoGasSyncSpeed':'油门同步速度','AutoGasTokSpeed':'油门响应速度','AutoKeepForkSpeed':'岔道保持速度','AutoKeepForkSpeedH':'高速岔道保持速度','AutoLaneChangeMinSpeed':'自动变道最低速度','AutoNaviCountDownMode':'导航倒计时','AutoNaviSpeedBumpSpeed':'减速带速度','AutoNaviSpeedBumpTime':'减速带提前时间','AutoNaviSpeedCtrlEnd':'导航速度控制结束距离','AutoNaviSpeedCtrlMode':'导航速度模式','AutoNaviSpeedDecelRate':'导航减速率','AutoNaviSpeedSafetyFactor':'导航安全系数','AutoRoadSpeedAdjust':'道路限速调整','AutoRoadSpeedLimitOffset':'限速偏移','AutoSpeedUptoRoadSpeedLimit':'加速到限速','AutoTurnControl':'自动转向','AutoTurnControlSpeedTurn':'转向控制转弯速度','AutoTurnControlTurnEnd':'转向控制转弯结束','AutoTurnDistOffset':'转向距离偏移','AutoTurnInNotRoadEdge':'非道路边缘转向','AutoTurnLeft':'自动左转','AutoTurnMapChange':'地图转向切换','AutoUpHighwayRoadLimit':'高速道路限速','AutoUpHighwayRoadLimit40KMH':'高速40限速上限','AutoUpRoadLimit':'普通道路限速','AutoUpRoadLimit40KMH':'普通道路40限速上限','BlinkerMode':'转向灯模式','BsdDelayTime':'盲区检测延迟','CancelButtonMode':'取消按钮模式','CanfdDebug':'CAN FD调试','CanfdHDA2':'CAN FD HDA2','CarrotCruiseAtcDecel':'巡航ATC减速度','CarrotCruiseDecel':'巡航减速度','ComfortBrake':'舒适刹车','CommaLongAcc':'纵向加速度偏移','ContinuousLaneChange':'连续变道','ContinuousLaneChangeCnt':'连续变道次数','ContinuousLaneChangeInterval':'连续变道间隔','CruiseButtonMode':'巡航按钮模式','CruiseEcoControl':'经济巡航','CruiseMaxVals0':'加速度0-30','CruiseMaxVals1':'加速度30-60','CruiseMaxVals2':'加速度60-90','CruiseMaxVals3':'加速度90-120','CruiseMaxVals4':'加速度120-150','CruiseMaxVals5':'加速度150-180','CruiseMaxVals6':'加速度180+','CruiseOnDist':'巡航启动距离','CruiseSpeed1':'预设速度1','CruiseSpeed2':'预设速度2','CruiseSpeed3':'预设速度3','CruiseSpeed4':'预设速度4','CruiseSpeed5':'预设速度5','CruiseSpeedUnit':'速度单位','CruiseSpeedUnitBasic':'基本速度单位','CustomSR':'自定义转向比','CustomSteerDeltaDown':'转向下降速率','CustomSteerDeltaDownLC':'变道转向下降','CustomSteerDeltaUp':'转向上升速率','CustomSteerDeltaUpLC':'变道转向上升','CustomSteerMax':'最大转向角','CustomSteerOffset':'转向偏移量','DecelLimitAEgoMax':'减速度限制Ego最大','DecelLimitAEgoMin':'减速度限制Ego最小','DecelLimitVEgoMax':'减速度限速最大','DecelLimitVEgoMin':'减速度限速最小','DisableDM':'禁用驾驶员监控','DisableMinSteerSpeed':'禁用最小转向速度','DisengageOnAccelerator':'油门退出','DynamicTFollow':'动态跟车时距','DynamicTFollowLC':'变道动态跟车','EVTable':'电动车参数表','EnableConnect':'CommaConnect','EnableCornerRadar':'角雷达','EnableEscc':'电子巡航控制','EnableRadarTracks':'雷达追踪','GMapKey':'谷歌地图密钥','GasSmoothTime':'油门平滑时间','GsmMetered':'GSM计费网络','HDPuse':'HDA使用','HapticFeedbackWhenSpeedCamera':'测速震动反馈','HotspotOnBoot':'开机热点','HyundaiCameraSCC':'现代摄像头SCC','IsLdwsCar':'LDWS车辆','IsMetric':'公制单位','JLeadFactor3':'跟车距离因子','LaneChangeBsd':'变道盲区检测','LaneChangeDelay':'变道延迟','LaneChangeNeedTorque':'变道所需扭矩','LaneStabTime':'车道稳定时间','LanguageSetting':'语言设置','LatMpcAccelCost':'加速度代价','LatMpcInputOffset':'输入偏移量','LatMpcJerkCost':'急动度代价','LatMpcMotionCost':'运动代价','LatMpcPathCost':'路径代价','LatMpcSteeringRateCost':'转向速率代价','LateralTorqueAccelFactor':'横向扭矩加速度因子','LateralTorqueCustom':'自定义横向扭矩','LateralTorqueFriction':'横向扭矩摩擦系数','LateralTorqueKd':'横向扭矩Kd','LateralTorqueKf':'横向扭矩Kf','LateralTorqueKiV':'横向扭矩Ki','LateralTorqueKpV':'横向扭矩Kp','LfaButtonMode':'LFA按钮模式','LongActuatorDelay':'纵向执行器延迟','LongPitch':'纵向俯仰补偿','LongTuningKf':'纵向前馈Kf','LongTuningKiV':'纵向Ki','LongTuningKpV':'纵向Kp','LongitudinalPersonality':'纵向个性','LongitudinalPersonalityMax':'纵向个性上限','MapTurnSpeedFactor':'地图转弯速度因子','MapboxStyle':'Mapbox样式','MaxAngleFrames':'最大角度帧数','MaxTimeOffroadMin':'下路最大时间','MuteDoor':'静音车门提示','MuteSeatbelt':'静音安全带提示','MyDrivingMode':'驾驶模式','MyDrivingModeAuto':'驾驶模式自动切换','NNFF':'神经网络前馈','NNFFLite':'轻量神经网络前馈','NewLaneWidthDiff':'新车道宽度差','OpenpilotEnabledToggle':'系统总开关','PaddleMode':'拨片模式','PathOffset':'路径偏移','RadarLatFactor':'雷达横向因子','RadarReactionFactor':'雷达反应因子','RecordAudio':'录制音频','RecordRoadCam':'录制道路摄像头','RedLightDistOffset':'红灯停车偏移','RoadType':'道路类型','SameSpiCamFilter':'SPI摄像滤波','ShowCustomBrightness':'自定义亮度','ShowDateTime':'时间日期显示','ShowDebugLog':'调试日志显示','ShowDebugUI':'调试界面','ShowDeviceState':'设备状态显示','ShowLaneInfo':'车道信息显示','ShowPathColor':'路径颜色','ShowPathColorCruiseOff':'巡航关闭路径颜色','ShowPathColorLane':'车道路径颜色','ShowPathEnd':'路径终点显示','ShowPathMode':'路径显示模式','ShowPathModeLane':'车道路径模式','ShowPlotMode':'图表显示','ShowRadarInfo':'雷达信息显示','ShowRouteInfo':'路线信息显示','ShowTpms':'胎压显示','SideBsdDelayTime':'侧盲区检测延迟','SideRadarMinDist':'侧雷达最小距离','SideRelDistTime':'侧雷达相对距离时间','SidevRelDistTime':'侧雷达相对距离时间(v)','SmoothStopMode':'平滑停车模式','SoftHoldMode':'软保持模式','SoftwareMenu':'软件菜单','SoundVolumeAdjust':'音量调节','SoundVolumeAdjustEngage':'介入音量','SpeedFromPCM':'PCM速度源','StartAccel':'起步加速度','SteerActuatorDelay':'转向执行器延迟','SteerAngleOffset':'转向角度偏移','SteerRatioRate':'转向比变化率','StockBlinkerCtrl':'原厂转向灯控制','StopDistanceCarrot':'停车距离','StoppingAccel':'停车加速度','StoppingDecelRate':'停车减速率','TFollowGap1':'跟车时距1','TFollowGap2':'跟车时距2','TFollowGap3':'跟车时距3','TFollowGap4':'跟车时距4','TrafficLightDetectMode':'红绿灯检测模式','TurnSpeedControlMode':'转弯速度模式','UseLaneLineCurveSpeed':'车道线弯道限速','UseLaneLineSpeed':'车道线限速','VEgoStopping':'停车车速'};
@@ -937,7 +1159,7 @@ function doReboot(){document.getElementById('rebootMo').classList.add('show')}
 function closeMo(){document.getElementById('rebootMo').classList.remove('show')}
 async function confirmReboot(){closeMo();try{await fetch('/api/reboot',{method:'POST'});toast('设备重启中...','ok')}catch(e){toast('失败','er')}}
 async function doBackup(){toast('备份中...','in');try{var r=await fetch('/api/backup',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er');if(d.success)loadBkList()}catch(e){toast('失败','er')}}
-function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';return}var h='';d.backups.forEach(function(b){var tag=b.type==='auto'?'<span style="background:rgba(26,171,138,.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+b.name+tag+'</span><span style="color:var(--dim)">'+b.time+' · '+(b.size/1024).toFixed(1)+'KB</span></div>'});el.innerHTML=h}).catch(function(){})}
+function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';return}var h='';d.backups.forEach(function(b){var tag=b.type==='auto'?'<span style="background:rgba(var(--accent-rgb),.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+b.name+tag+'</span><span style="color:var(--dim)">'+b.time+' · '+(b.size/1024).toFixed(1)+'KB</span></div>'});el.innerHTML=h}).catch(function(){})}
 function doDisconnect(){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);color:var(--muted);font-size:16px">已断开连接，关闭此页面即可</div>'}
 async function doRestore(){var f=document.getElementById('rFile');if(!f.files.length){toast('请选择备份文件','er');return}
   var reader=new FileReader();reader.onload=async function(e){try{var p=JSON.parse(e.target.result);if(!confirm('恢复 '+Object.keys(p).length+' 个参数?'))return;
@@ -1193,6 +1415,8 @@ document.addEventListener('click',function(e){
 (function(){loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate()})();
 // Load backup list on init
 setTimeout(function(){loadBkList()},2000);
+// 应用保存的皮肤主题
+initTheme();
 </script>
 </body>
 </html>
