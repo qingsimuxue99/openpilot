@@ -57,7 +57,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.60"
+VERSION = "1.0.61"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1669,8 +1669,17 @@ def api_voice_file(t):
     p = os.path.join(VOICE_DIR, t + '.mp3')
     if not os.path.isfile(p):
         return ('', 404)
-    resp = send_file(p, mimetype='audio/mpeg', cache_timeout=0)
-    resp.headers['Accept-Ranges'] = 'bytes'  # 对齐 HTTP Range 规范，兼容直接 <audio> 直连播放的浏览器
+    # 不用 send_file：其 cache_timeout 参数在 Flask 2.0+ 已移除会抛 TypeError 导致 500。
+    # 手动读文件 + Response 返回，跨 Flask 版本最稳，前端用 fetch+Blob 播放不需要 Range。
+    try:
+        with open(p, 'rb') as f:
+            data = f.read()
+    except Exception:
+        return ('read error', 500)
+    resp = Response(data, mimetype='audio/mpeg')
+    resp.headers['Accept-Ranges'] = 'bytes'
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Content-Length'] = str(len(data))
     return resp
 
 
