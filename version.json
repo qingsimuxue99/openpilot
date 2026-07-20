@@ -1,6 +1,6 @@
 {
-  "version": "1.0.29",
-  "changelog": "修复 vipc_probe.py：改用多进程(可真正终止阻塞的 C 层 connect)+屏蔽刷屏+非阻塞 connect+先打印分支与全部 stream 类型，不再卡死",
-  "tag": "v1.0.29",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.29/release/c3_toolbox.tar.gz"
+  "version": "1.0.30",
+  "changelog": "移除「实时画面/投屏」功能：comma c3 为 Weston/Wayland 嵌入式设备，系统 ffmpeg 无 kmsgrab、无 X11/fb0，多条投屏路线均不可行，故回退到稳定版功能集，工具箱回归干净可靠。",
+  "tag": "v1.0.30",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.30/release/c3_toolbox.tar.gz"
 }
