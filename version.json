@@ -1,6 +1,6 @@
 {
-  "version": "1.0.31",
-  "changelog": "移除「实时画面/投屏」功能（comma c3 为 Weston/Wayland 嵌入式设备，无 kmsgrab/X11/fb0，投屏所有路线均不可行），回退到稳定版功能集；改用全新 tag v1.0.31 规避 jsdelivr 旧包缓存，所有用户（含朋友）网页点更新即可正常升级到干净版。",
-  "tag": "v1.0.31",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.31/release/c3_toolbox.tar.gz"
+  "version": "1.0.32",
+  "changelog": "新增「赛博 HUD 仪表盘」与「炫酷驾驶报告」两项科技感功能：HUD 实时显示车速/转向角/油门刹车/3D 车模（数据来自 openpilot 实时通道，取不到时优雅降级演示模式）；报告页基于行程统计一键生成赛博风分享卡片。纯前端+已有实时数据接口，零硬件依赖、不卡死。",
+  "tag": "v1.0.32",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.32/release/c3_toolbox.tar.gz"
 }
