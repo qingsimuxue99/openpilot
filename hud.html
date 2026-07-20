@@ -123,7 +123,7 @@ canvas{display:block;max-width:100%;position:relative;z-index:2}
 <script>
 var hudTimer=null, hudData=null;
 var recOn=false, samples=[], recStart=0;
-var carRAF=null, synthT=0, roadCars=[], curvature=0, targetCurvature=0, roadScroll=0, rainbowShift=0;
+var carRAF=null, synthT=0, roadCars=[], roadScroll=0, rainbowShift=0;
 
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2600);}
 
@@ -175,7 +175,7 @@ function drawGauge(spd){
   x.fillText(spd.toFixed(0),cx,cy+4);x.shadowBlur=0;
   x.fillStyle='#5b87b0';x.font='12px sans-serif';x.fillText('km/h',cx,cy+28);
 }
-/* ===== 特斯拉 FSD 彩虹道路（独立 rAF 循环，不卡顿）===== */
+/* ===== 特斯拉彩虹之路（固定道路，自车居中，彩虹流动）===== */
 function startCarAnim(){
   if(carRAF) return;
   function loop(){ drawCarCanvas(); carRAF=requestAnimationFrame(loop); }
@@ -187,38 +187,34 @@ function drawCarCanvas(){
   var x=cv.getContext('2d'), W=cv.width, H=cv.height;
   var d=hudData, demo=true, speed=0, steer=0;
   if(d){ demo=!!d.demo; speed=+d.speed||0; steer=+d.steer||0; }
-  if(demo || !d){                       // 演示模式：自动游走，保持视觉动感
-    synthT+=0.018;
-    steer=Math.sin(synthT)*90 + Math.sin(synthT*0.35+1.0)*50;
+  if(demo || !d){                       // 演示模式：保持动感
+    synthT+=0.015;
+    steer=Math.sin(synthT)*30;            // 演示时轻微左右修方向
     speed=55 + Math.sin(synthT*0.5)*35 + 20;
   }
-  targetCurvature=(steer/180)*0.85;      // 转向 -> 道路目标曲率
-  curvature+=(targetCurvature-curvature)*0.08; // 曲率平滑过渡
-  roadScroll += speed*0.16 + 1.8;      // 车道虚线滚动（速度感）
-  rainbowShift += 1.6;                  // 彩虹流动
-
+  // 道路固定不动，只用彩虹流动 + 路面滚动制造行驶感
+  roadScroll += speed*0.18 + 1.5;
+  rainbowShift += 2.0;
   drawFsdBackground(x,W,H);
   drawTeslaRoad(x,W,H,speed);
-  drawOtherCars(x,W,H,speed);
   drawSelfCar(x,W,H,steer);
 }
 function fsdRoadPoint(W,H,t,lane){
-  // lane: -1 左, 0 中, 1 右； t 0=远(消失点) 1=近(脚下)
+  // lane: -1 左, 0 中, 1 右； t 0=远 1=近；道路笔直，无弯曲
   var cx=W/2, farY=H*0.18, bottomY=H-28, laneW=74;
   var s=0.13+0.87*t;                    // 透视缩放
   var y=farY+t*(bottomY-farY);
-  var off=curvature*(t*t)*W*0.55;       // 道路随转向弯曲
   var lw=laneW*s;
-  return { x:cx+off+lane*lw, y:y, s:s, w:lw, farY:farY, bottomY:bottomY };
+  return { x:cx+lane*lw, y:y, s:s, w:lw, farY:farY, bottomY:bottomY };
 }
 function drawFsdBackground(x,W,H){
   var g=x.createLinearGradient(0,0,0,H);
   g.addColorStop(0,'#05080f'); g.addColorStop(0.55,'#0a1526'); g.addColorStop(1,'#0c2035');
   x.fillStyle=g; x.fillRect(0,0,W,H);
-  // 远处地平线
+  // 地平线
   x.strokeStyle='rgba(0,180,255,.22)'; x.lineWidth=1;
   x.beginPath(); x.moveTo(0,H*0.18); x.lineTo(W,H*0.18); x.stroke();
-  // 远景装饰：极淡的城市轮廓
+  // 远景城市轮廓
   x.fillStyle='rgba(0,80,130,.08)';
   x.beginPath(); x.moveTo(0,H*0.18);
   for(var i=0;i<=W;i+=20){ x.lineTo(i,H*0.18-Math.abs(Math.sin(i*0.04))*10); }
@@ -226,14 +222,14 @@ function drawFsdBackground(x,W,H){
 }
 function drawTeslaRoad(x,W,H,speed){
   var farY=H*0.18, bottomY=H-28;
-  // 彩虹车道渐变（中间车道）
+  // 中间彩虹车道渐变：颜色随 rainbowShift 沿道路流动
   var g=x.createLinearGradient(W/2,farY,W/2,bottomY);
-  g.addColorStop(0,'hsl('+(rainbowShift+260)%360+',90%,55%)');  // 远：紫
-  g.addColorStop(0.35,'hsl('+(rainbowShift+140)%360+',92%,58%)'); // 绿
+  g.addColorStop(0,'hsl('+(rainbowShift+260)%360+',92%,60%)');  // 远：紫
+  g.addColorStop(0.35,'hsl('+(rainbowShift+140)%360+',92%,60%)'); // 绿
   g.addColorStop(0.72,'hsl('+(rainbowShift+45)%360+',95%,62%)'); // 橙
   g.addColorStop(1,'hsl('+(rainbowShift)%360+',95%,62%)');        // 近：红
 
-  // 画三条车道路面
+  // 三条车道路面
   for(var lane=-1;lane<=1;lane++){
     var pts=[];
     for(var t=0;t<=1;t+=0.04){
@@ -248,15 +244,15 @@ function drawTeslaRoad(x,W,H,speed){
     pts.forEach(function(p,i){ if(i===0)x.moveTo(p.x,p.y); else x.lineTo(p.x,p.y); });
     x.closePath();
     if(lane===0){
-      x.fillStyle=g; x.shadowColor='rgba(255,90,110,.6)'; x.shadowBlur=22; x.fill(); x.shadowBlur=0;
+      x.fillStyle=g; x.shadowColor='rgba(255,100,130,.5)'; x.shadowBlur=22; x.fill(); x.shadowBlur=0;
       x.strokeStyle='rgba(255,255,255,.45)'; x.lineWidth=1; x.stroke();
     } else {
       x.fillStyle='rgba(8,26,46,.82)'; x.fill();
-      x.strokeStyle='rgba(0,180,255,.15)'; x.lineWidth=1; x.stroke();
+      x.strokeStyle='rgba(0,180,255,.12)'; x.lineWidth=1; x.stroke();
     }
   }
 
-  // 车道分隔线（白色虚线），随 roadScroll 滚动
+  // 车道分隔虚线（随速度向后滚动）
   x.strokeStyle='rgba(255,255,255,.55)'; x.lineWidth=2; x.lineCap='round';
   x.setLineDash([10,16]); x.lineDashOffset=-roadScroll;
   for(var lane=-1;lane<=0;lane++){
@@ -269,7 +265,7 @@ function drawTeslaRoad(x,W,H,speed){
   }
   x.setLineDash([]);
 
-  // 最外侧路边线（持续亮线）
+  // 最外侧亮线
   x.strokeStyle='rgba(95,224,255,.55)'; x.lineWidth=2;
   for(var side=-1;side<=1;side+=2){
     x.beginPath();
@@ -277,53 +273,39 @@ function drawTeslaRoad(x,W,H,speed){
     x.stroke();
   }
 }
-function drawOtherCars(x,W,H,speed){
-  // 随机生成/移除前方车辆
-  if(Math.random()<0.025 && roadCars.length<9){
-    var lanes=[-1,0,1], lane=lanes[Math.floor(Math.random()*3)];
-    roadCars.push({lane:lane, t:0, relSpeed:0.004+Math.random()*0.007});
-  }
-  for(var i=roadCars.length-1;i>=0;i--){
-    var c=roadCars[i];
-    c.t += c.relSpeed + (speed/160)*0.014;
-    if(c.t>1.25) roadCars.splice(i,1);
-  }
-  roadCars.forEach(function(c){
-    var p=fsdRoadPoint(W,H,Math.min(1,c.t),c.lane);
-    var w=18*p.s, h=26*p.s, cx=p.x, cy=p.y;
-    x.save(); x.translate(cx,cy);
-    // 车身发光
-    x.shadowColor='rgba(200,230,255,.5)'; x.shadowBlur=10;
-    x.fillStyle='rgba(235,245,255,.95)';
-    x.beginPath();
-    x.moveTo(-w*0.55,h*0.5); x.lineTo(w*0.55,h*0.5); x.lineTo(w*0.4,-h*0.5); x.lineTo(-w*0.4,-h*0.5); x.closePath();
-    x.fill(); x.shadowBlur=0;
-    // 挡风玻璃/车顶
-    x.fillStyle='rgba(10,30,50,.9)';
-    x.beginPath(); x.moveTo(-w*0.25,h*0.1); x.lineTo(w*0.25,h*0.1); x.lineTo(w*0.18,-h*0.25); x.lineTo(-w*0.18,-h*0.25); x.closePath(); x.fill();
-    x.restore();
-  });
-}
+function drawOtherCars(x,W,H,speed){ /* 用户要求不显示其他车辆 */ }
 function drawSelfCar(x,W,H,steer){
   var cx=W/2, cy=H-62;
   x.save(); x.translate(cx,cy);
-  // 车身阴影/光晕
-  x.shadowColor='#00e0ff'; x.shadowBlur=24;
-  x.fillStyle='#0c3a5e'; x.strokeStyle='#7CFFB2'; x.lineWidth=2.5;
+  var sa=steer/180*0.45;                  // 前轮转向角
+
+  // 柔和白色光晕
+  x.shadowColor='rgba(255,255,255,.35)'; x.shadowBlur=20;
+  // 车身：通用白色轿车俯视图
+  x.fillStyle='#f0f5ff'; x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=2;
   x.beginPath();
-  x.moveTo(-20,28); x.lineTo(20,28); x.lineTo(15,-24); x.lineTo(-15,-24); x.closePath();
+  x.moveTo(-20,26);                       // 车尾左
+  x.lineTo(20,26);                        // 车尾右
+  x.quadraticCurveTo(23,10,20,-18);        // 右前翼子板
+  x.quadraticCurveTo(0,-28,-20,-18);       // 引擎盖前缘
+  x.quadraticCurveTo(-23,10,-20,26);       // 左前翼子板
+  x.closePath();
   x.fill(); x.stroke();
   x.shadowBlur=0;
+
   // 车顶/挡风玻璃
-  x.fillStyle='#0a2c47'; x.strokeStyle='#5fe0ff'; x.lineWidth=2;
-  x.beginPath(); x.moveTo(-11,-6); x.lineTo(11,-6); x.lineTo(8,-22); x.lineTo(-8,-22); x.closePath(); x.fill(); x.stroke();
-  // 转向轮（前轮）
-  var sa=steer/180*0.55;
-  function wheel(wx,wy,sw){ x.save(); x.translate(wx,wy); x.rotate(sw); x.fillStyle='#0a1622'; x.strokeStyle='#8be9ff'; x.lineWidth=2; x.beginPath(); x.ellipse(0,0,5,8,0,0,7); x.fill(); x.stroke(); x.restore(); }
-  wheel(-14,10,sa); wheel(14,10,sa); wheel(-14,-12,0); wheel(14,-12,0);
+  x.fillStyle='rgba(30,45,70,.95)'; x.strokeStyle='rgba(140,180,230,.45)'; x.lineWidth=2;
+  x.beginPath();
+  x.moveTo(-12,-4); x.lineTo(12,-4); x.lineTo(10,-18); x.lineTo(-10,-18); x.closePath();
+  x.fill(); x.stroke();
+
+  // 四个轮子（黑色小圆角矩形）
+  function wheel(wx,wy,sw){ x.save(); x.translate(wx,wy); x.rotate(sw); x.fillStyle='#0f1822'; x.strokeStyle='rgba(255,255,255,.5)'; x.lineWidth=1.5; x.beginPath(); x.roundRect(-4.5,-7,9,14,3); x.fill(); x.stroke(); x.restore(); }
+  wheel(-15,12,sa); wheel(15,12,sa); wheel(-15,-14,0); wheel(15,-14,0);
+
   // 车头灯
-  x.fillStyle='#eaffff'; x.shadowColor='#eaffff'; x.shadowBlur=14;
-  x.beginPath(); x.arc(-8,-22,2.5,0,7); x.arc(8,-22,2.5,0,7); x.fill();
+  x.fillStyle='#eaffff'; x.shadowColor='#eaffff'; x.shadowBlur=12;
+  x.beginPath(); x.arc(-9,-20,2.5,0,7); x.arc(9,-20,2.5,0,7); x.fill();
   x.restore();
 }
 function startRec(){samples=[];recOn=true;recStart=Date.now();toast('已开始统计本次行程');document.getElementById('repTip').textContent='统计中… 行驶一会儿后回到本页生成卡片。';}
