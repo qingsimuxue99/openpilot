@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.22"
+VERSION = "1.0.23"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1333,7 +1333,7 @@ def _ffmpeg_path():
 
 
 def _list_capture_sources():
-    """枚举候选投屏源：fbdev -> kmsgrab(DRM)，仅实际存在者加入。"""
+    """枚举候选投屏源：fbdev -> kmsgrab(DRM，多格式回退)，仅实际存在者加入。"""
     ff = _ffmpeg_path()
     sources = []
     for fb in ('/dev/fb0', '/dev/fb1'):
@@ -1345,14 +1345,15 @@ def _list_capture_sources():
             sources.append(('fbdev:' + fb, test, stream))
     for card in ('/dev/dri/card0', '/dev/dri/card1'):
         if os.path.exists(card):
-            # kmsgrab: 先尝试硬件下载为 bgr0（QCOM 常见显示格式），失败由 probe 自动排除
-            test = [ff, '-hide_banner', '-loglevel', 'error', '-device', card, '-f', 'kmsgrab', '-i', '-',
-                    '-vf', 'hwdownload,format=bgr0,scale=540:-1', '-frames:v', '1',
-                    '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
-            stream = [ff, '-hide_banner', '-loglevel', 'error', '-device', card, '-f', 'kmsgrab', '-i', '-',
-                      '-vf', 'hwdownload,format=bgr0,scale=540:-1', '-f', 'image2pipe',
-                      '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
-            sources.append(('kmsgrab:' + card, test, stream))
+            # kmsgrab: 依次尝试多种硬件下载格式，probe 时第一个能出帧者入选（兼容不同 GPU/驱动）
+            for fmt in ('bgr0', 'rgb0', 'nv12', 'yuv420p'):
+                test = [ff, '-hide_banner', '-loglevel', 'error', '-device', card, '-f', 'kmsgrab', '-i', '-',
+                        '-vf', 'hwdownload,format=%s,scale=540:-1' % fmt, '-frames:v', '1',
+                        '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
+                stream = [ff, '-hide_banner', '-loglevel', 'error', '-device', card, '-f', 'kmsgrab', '-i', '-',
+                          '-vf', 'hwdownload,format=%s,scale=540:-1' % fmt, '-f', 'image2pipe',
+                          '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
+                sources.append(('kmsgrab:%s:%s' % (card, fmt), test, stream))
     return sources
 
 
@@ -1366,7 +1367,7 @@ def _probe_capture_source(force=False):
         return None
     for name, test, stream in _list_capture_sources():
         try:
-            out = subprocess.run(test, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8)
+            out = subprocess.run(test, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=4)
             if out.returncode == 0 and out.stdout and len(out.stdout) > 1000:
                 _capture_source_cache = (name, test, stream)
                 return _capture_source_cache
