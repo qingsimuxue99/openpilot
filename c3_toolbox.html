@@ -457,6 +457,8 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         <div class="ti"><span class="tp">$</span><input type="text" id="tIn" placeholder="输入命令..." onkeydown="if(event.key==='Enter')execCmd()"></div>
       </div>
       <div class="qcmds">
+        <span class="qcmd" onclick="openLogStream()" style="border-color:var(--accent);color:var(--accent)">📜 tmux a 实时日志</span>
+        <span class="qcmd" onclick="closeLogStream()">⏹ 停止日志</span>
         <span class="qcmd" onclick="qc('echo -en &quot;1&quot; > /data/params/d/DisableUpdates && echo 已禁用重启更新')">禁用重启更新</span>
         <span class="qcmd" onclick="qc('sudo reboot')" style="border-color:var(--accent2);color:var(--accent2)">重启设备</span>
         <span class="qcmd" onclick="qc('echo &quot;版本: $(cat /data/params/d/Version 2>/dev/null)&quot; && echo &quot;分支: $(cat /data/params/d/GitBranch 2>/dev/null)&quot;')">版本/分支</span>
@@ -465,8 +467,6 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         <span class="qcmd" onclick="qc('hostname -I')">IP地址</span>
         <span class="qcmd" onclick="qc('tr -d &quot;\\0&quot; < /sys/firmware/devicetree/base/model')">设备型号</span>
         <span class="qcmd" onclick="qc('tail -20 /data/c3_toolbox/server.log 2>/dev/null')">工具箱日志</span>
-        <span class="qcmd" onclick="openLogStream()" style="border-color:var(--accent);color:var(--accent)">📜 tmux a 实时日志</span>
-        <span class="qcmd" onclick="closeLogStream()">⏹ 停止日志</span>
       </div>
     </div>
 
@@ -1003,13 +1003,20 @@ function loadOpBackups(){
     var h='';var opts='';
     d.backups.forEach(function(b){
       var mb=(b.size/1024/1024).toFixed(0);
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+'</span><span style="color:var(--dim)">'+b.time+' · '+mb+'MB <a class="upd-link" onclick="dlOpBk(\''+esc(b.name)+'\')">下载</a></span></div>';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+'</span><span style="color:var(--dim)">'+b.time+' · '+mb+'MB <a class="upd-link" onclick="dlOpBk(\''+esc(b.name)+'\')">下载</a> <a class="upd-link" style="color:var(--accent2)" onclick="delOpBk(\''+esc(b.name)+'\')">删除</a></span></div>';
       opts+='<option value="'+esc(b.name)+'">'+esc(b.name)+' ('+mb+'MB)</option>';
     });
     list.innerHTML=h;sel.innerHTML='<option value="">— 请选择备份包 —</option>'+opts;
   }).catch(function(){});
 }
 function dlOpBk(name){window.open('/api/op_backup/download/'+encodeURIComponent(name));}
+function delOpBk(name){
+  if(!confirm('确定删除备份包 '+name+' ？释放 /data 空间，此操作不可恢复'))return;
+  fetch('/api/op_backup/delete/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    toast(d.message||(d.success?'已删除':'删除失败'), d.success?'ok':'er');
+    if(d.success) loadOpBackups();
+  }).catch(function(){toast('删除失败','er');});
+}
 async function restoreOpDevice(){
   var sel=document.getElementById('opBkSelect');var fn=sel.value;
   if(!fn){toast('请先选择备份包','er');return;}

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.41",
-  "changelog": "优化终端 tmux a 实时日志：SSE 生成器改为二进制模式读取 server.log（readline 循环在部分环境下对外部追加内容不敏感，二进制 f.read() 跨平台稳定），确保实时推送新行可靠，并兼容非 UTF-8 日志（decode errors=replace）；设备端启动仍自动创建 tmux 会话 c3logs 持续 tail 日志，设备 shell 可 `tmux a -t c3logs` 看实时日志。",
-  "tag": "v1.0.41",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.41/release/c3_toolbox.tar.gz"
+  "version": "1.0.42",
+  "changelog": "备份菜单新增「删除」功能：完整备份包列表每行加「下载 / 删除」按钮，可单独删除某个备份包释放 /data 空间（后端 /api/op_backup/delete 带前缀/后缀校验防路径穿越）；终端常用命令把「📜 tmux a 实时日志」「⏹ 停止日志」移到最前面。",
+  "tag": "v1.0.42",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.42/release/c3_toolbox.tar.gz"
 }

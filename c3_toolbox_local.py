@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.41"
+VERSION = "1.0.42"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1179,6 +1179,22 @@ def api_op_backup_download(filename):
     if os.path.isfile(fp):
         return send_from_directory(OP_BK_DIR, filename, as_attachment=True)
     return jsonify({'success': False, 'message': '文件不存在'}), 404
+
+
+@app.route('/api/op_backup/delete/<path:filename>', methods=['POST'])
+def api_op_backup_delete(filename):
+    """删除设备内某个完整备份包（带前缀/后缀校验，防路径穿越；释放 /data 空间）"""
+    if not (filename.startswith(OP_BK_PREFIX) and filename.endswith('.tar.gz')):
+        return jsonify({'success': False, 'message': '非法文件名'}), 400
+    fp = os.path.join(OP_BK_DIR, filename)
+    if not os.path.isfile(fp):
+        return jsonify({'success': False, 'message': '备份包不存在'}), 404
+    try:
+        sz = os.path.getsize(fp)
+        os.remove(fp)
+        return jsonify({'success': True, 'message': '已删除: %s (释放 %d MB)' % (filename, sz // 1024 // 1024)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': '删除失败: %s' % str(e)}), 500
 
 
 def _restore_package(pkg_path, reboot_after, task_id):
