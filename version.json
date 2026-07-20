@@ -1,6 +1,6 @@
 {
-  "version": "1.0.55",
-  "changelog": "新增三项实用功能：①参数极速搜索（跨全部分类按中文名/英文key/说明实时过滤+高亮）；②常改参数收藏夹（每个参数卡片左侧 ★ 收藏，独立「收藏」标签页集中管理，localStorage 持久化）；③设备信息一键截图分享卡（canvas 合成赛博风 PNG 直接下载）。",
-  "tag": "v1.0.55",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.55/release/c3_toolbox.tar.gz"
+  "version": "1.0.57",
+  "changelog": "新增「语音互动 🔊」（取消昼夜自动主题）：连接 C3 原车动作，实时语音播报——左/右转向、激活/退出 ACC、倒车、智能减速；默认由浏览器台湾腔女声合成，支持上传自定义语音逐个替换。",
+  "tag": "v1.0.57",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.57/release/c3_toolbox.tar.gz"
 }

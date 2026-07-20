@@ -32,10 +32,20 @@ BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 AUTO_BACKUP_DIR = os.path.join(BASE_DIR, "auto_backup")
 AUTO_BACKUP_FILE = os.path.join(AUTO_BACKUP_DIR, "auto_full_params.json")
 LOG_FILE = os.path.join(BASE_DIR, "server.log")
+VOICE_DIR = os.path.join(BASE_DIR, "voice")  # 用户上传的自定义语音存放目录
 
 # 感知数据缓存（由后台采集线程填充，/api/perception 读取）
 PERC_LOCK = threading.Lock()
 PERC_DATA = {"available": False, "source": "none", "reason": "init", "boxes": [], "path": [], "lane_lines": []}
+
+# 原车动作事件缓存（由后台采集线程填充，/api/car_events 读取）
+EVENT_LOCK = threading.Lock()
+EVENT_DATA = {
+    "available": False, "reason": "init",
+    "left_blinker": False, "right_blinker": False, "acc_enabled": False,
+    "reversing": False, "decelerating": False,
+    "last_event": {"type": None, "seq": 0, "ts": 0.0},
+}
 
 # 工具箱版本与在线更新源
 # 发布新版本：把新文件推到 GitHub 仓库的 c3-toolbox 分支，并更新 version.json 的 version
@@ -47,7 +57,7 @@ PERC_DATA = {"available": False, "source": "none", "reason": "init", "boxes": []
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.55"
+VERSION = "1.0.57"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1533,10 +1543,168 @@ def _perception_collector():
             time.sleep(0.5)
 
 
+def _parse_events(sm):
+    """从 carState / controlsState 解析原车动作，返回状态字典。"""
+    st = {"left_blinker": False, "right_blinker": False, "acc_enabled": False,
+          "reversing": False, "decelerating": False}
+    try:
+        cs = sm['carState']
+        if cs is not None:
+            st['left_blinker'] = bool(getattr(cs, 'leftBlinker', False))
+            st['right_blinker'] = bool(getattr(cs, 'rightBlinker', False))
+            st['reversing'] = bool(getattr(cs, 'gearShifter', None) == 'reverse')
+            try:
+                st['acc_enabled'] = bool(getattr(cs, 'cruiseState', None) and getattr(cs.cruiseState, 'enabled', False))
+            except Exception:
+                st['acc_enabled'] = False
+    except Exception:
+        pass
+    # 减速意图：取 controlsState 的各减速原因分值（跨 openpilot 版本字段名稳定）
+    try:
+        ctl = sm['controlsState']
+        if ctl is not None and getattr(ctl, 'enabled', False):
+            for f in ('decelForModel', 'decelForTurn', 'decelForCurve', 'decelForLead'):
+                try:
+                    if float(getattr(ctl, f, 0) or 0) > 0:
+                        st['decelerating'] = True
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return st
+
+
+def _event_collector():
+    """后台持续订阅 cereal 原车信号，检测状态边沿（上升/下降沿）并缓存最新事件。"""
+    global EVENT_DATA
+    try:
+        from cereal.messaging import SubMaster
+    except Exception as e:
+        with EVENT_LOCK:
+            EVENT_DATA = {"available": False, "reason": "no_cereal:%s" % e,
+                          "left_blinker": False, "right_blinker": False, "acc_enabled": False,
+                          "reversing": False, "decelerating": False,
+                          "last_event": {"type": None, "seq": 0, "ts": 0.0}}
+        print("[事件采集] 无法导入 cereal，事件接口返回 available:false（%s）" % e)
+        return
+    try:
+        sm = SubMaster(['carState', 'controlsState'])
+    except Exception as e:
+        with EVENT_LOCK:
+            EVENT_DATA = {"available": False, "reason": "submaster:%s" % e,
+                          "left_blinker": False, "right_blinker": False, "acc_enabled": False,
+                          "reversing": False, "decelerating": False,
+                          "last_event": {"type": None, "seq": 0, "ts": 0.0}}
+        return
+    print("[事件采集] 已启动，订阅 carState / controlsState")
+    seq = 0
+    prev = {}
+    while True:
+        try:
+            sm.update(timeout=1.0)
+            st = _parse_events(sm)
+            edges = []
+            if st.get('left_blinker') and not prev.get('left_blinker'):
+                edges.append('turn_left')
+            if st.get('right_blinker') and not prev.get('right_blinker'):
+                edges.append('turn_right')
+            if st.get('acc_enabled') and not prev.get('acc_enabled'):
+                edges.append('acc_on')
+            if prev.get('acc_enabled') and not st.get('acc_enabled'):
+                edges.append('acc_off')
+            if st.get('reversing') and not prev.get('reversing'):
+                edges.append('reverse')
+            if st.get('decelerating') and not prev.get('decelerating'):
+                edges.append('decel')
+            prev = st
+            with EVENT_LOCK:
+                d = dict(EVENT_DATA)
+                d.update(st)
+                d['available'] = True
+                d['reason'] = 'ok'
+                if edges:
+                    seq += 1
+                    d['last_event'] = {"type": edges[-1], "seq": seq, "ts": time.time()}
+                EVENT_DATA = d
+        except Exception:
+            time.sleep(0.5)
+
+
 @app.route('/api/perception')
 def api_perception():
     with PERC_LOCK:
         return jsonify(PERC_DATA)
+
+
+# ===== 原车动作事件 + 语音互动 =====
+VALID_VOICE = {'turn_left', 'turn_right', 'acc_on', 'acc_off', 'reverse', 'decel'}
+VOICE_TEXT = {
+    'turn_left': '正在左转向',
+    'turn_right': '正在右转向',
+    'acc_on': 'OP智能驾驶已激活',
+    'acc_off': '退出智能驾驶',
+    'reverse': '倒车中请注意观察四周',
+    'decel': '智能减速中，请注意安全',
+}
+
+
+@app.route('/api/car_events')
+def api_car_events():
+    with EVENT_LOCK:
+        return jsonify(EVENT_DATA)
+
+
+@app.route('/api/voice/list')
+def api_voice_list():
+    out = {}
+    for t in VALID_VOICE:
+        out[t] = os.path.isfile(os.path.join(VOICE_DIR, t + '.mp3'))
+    return jsonify(out)
+
+
+@app.route('/api/voice/<t>')
+def api_voice_file(t):
+    if t not in VALID_VOICE:
+        return ('invalid type', 404)
+    p = os.path.join(VOICE_DIR, t + '.mp3')
+    if not os.path.isfile(p):
+        return ('', 404)
+    return send_file(p, mimetype='audio/mpeg', cache_timeout=0)
+
+
+@app.route('/api/voice/upload', methods=['POST'])
+def api_voice_upload():
+    t = request.form.get('type') or request.args.get('type')
+    if t not in VALID_VOICE:
+        return jsonify({'success': False, 'message': '未知的语音类型'})
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'success': False, 'message': '未收到文件'})
+    fn = (f.filename or '').lower()
+    ext = os.path.splitext(fn)[1]
+    if ext not in ('.mp3', '.wav', '.ogg', '.m4a'):
+        return jsonify({'success': False, 'message': '仅支持 mp3 / wav / ogg / m4a'})
+    try:
+        os.makedirs(VOICE_DIR, exist_ok=True)
+        dest = os.path.join(VOICE_DIR, t + '.mp3')
+        f.save(dest)
+    except Exception as e:
+        return jsonify({'success': False, 'message': '保存失败：%s' % e})
+    return jsonify({'success': True, 'type': t, 'message': '语音已替换'})
+
+
+@app.route('/api/voice/reset', methods=['POST'])
+def api_voice_reset():
+    t = request.form.get('type') or request.args.get('type')
+    if t not in VALID_VOICE:
+        return jsonify({'success': False, 'message': '未知的语音类型'})
+    p = os.path.join(VOICE_DIR, t + '.mp3')
+    if os.path.isfile(p):
+        try:
+            os.remove(p)
+        except Exception as e:
+            return jsonify({'success': False, 'message': '删除失败：%s' % e})
+    return jsonify({'success': True, 'type': t, 'message': '已恢复默认语音'})
 
 
 if __name__ == '__main__':
@@ -1569,4 +1737,6 @@ if __name__ == '__main__':
     ensure_tmux_log()
     # 启动感知采集线程（仅在设备端 cereal 可用时真正工作；不可用时接口返回 available:false）
     threading.Thread(target=_perception_collector, daemon=True).start()
+    # 启动原车事件采集线程（转向 / ACC / 倒车 / 减速；无 cereal 时 available:false，不播报）
+    threading.Thread(target=_event_collector, daemon=True).start()
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

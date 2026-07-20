@@ -445,7 +445,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .theme-dot:hover{transform:scale(1.12)}
 .theme-dot.on{border-color:var(--ink);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.25)}
 .theme-dot.on::after{content:'';position:absolute;inset:-7px;border:1.5px solid var(--accent);border-radius:50%;opacity:.6}
-
+.theme-dot.auto-on::after{content:'';position:absolute;inset:-7px;border:1.5px dashed var(--accent);border-radius:50%;opacity:.9}
 /* === 感知线框面板 === */
 #percCanvas{width:100%;display:block;background:#04060a;border-radius:var(--radius) 0 0 var(--radius);aspect-ratio:16/9}
 .perc-wrap{border:1px solid var(--rule);border-radius:var(--radius);overflow:hidden;background:#04060a}
@@ -463,6 +463,29 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .pc-star{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:7px;border-radius:6px;border:1px solid var(--rule);background:var(--bg2);color:var(--dim);cursor:pointer;font-size:13px;line-height:1;vertical-align:middle;transition:all .15s}
 .pc-star:hover{border-color:var(--accent);color:var(--accent)}
 .pc-star.on{background:rgba(var(--accent-rgb),.12);border-color:var(--accent);color:var(--accent)}
+
+/* === 语音互动 === */
+.vrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:4px 0 10px}
+.vinfo{display:flex;align-items:center;gap:8px}
+.pill{width:10px;height:10px;border-radius:50%;background:var(--dim);display:inline-block}
+.pill.ok{background:#28c76f;box-shadow:0 0 8px #28c76f}
+.pill.bad{background:#ff5c5c;box-shadow:0 0 8px #ff5c5c}
+.sw{position:relative;display:inline-block;width:46px;height:24px;cursor:pointer}
+.sw input{opacity:0;width:0;height:0}
+.sw .slider{position:absolute;inset:0;border-radius:24px;background:var(--bg4);border:1px solid var(--rule);transition:.2s}
+.sw .slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:2px;border-radius:50%;background:#fff;transition:.2s}
+.sw input:checked+.slider{background:var(--accent)}
+.sw input:checked+.slider::before{transform:translateX(22px)}
+.vnow{margin:6px 0 2px;padding:10px 14px;border-radius:12px;background:rgba(var(--accent-rgb),.08);border:1px solid var(--rule);font-size:15px;font-weight:600;color:var(--accent);transition:opacity .3s}
+.vlights{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.vlight{padding:8px 14px;border-radius:20px;background:var(--bg2);border:1px solid var(--rule);color:var(--dim);font-size:13px;font-weight:600;transition:all .15s;opacity:.5}
+.vlight.on{opacity:1;background:rgba(var(--accent-rgb),.15);border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px rgba(var(--accent-rgb),.3)}
+.vslot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin:8px 0;border-radius:14px;background:var(--bg2);border:1px solid var(--rule)}
+.vslot-t{font-size:14px;font-weight:600;color:var(--ink)}
+.vslot-d{font-size:12px;color:var(--dim);margin-top:2px}
+.vslot-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vup{position:relative}
+.vtag{font-size:11px;padding:3px 9px;border-radius:14px;background:var(--bg4);color:var(--muted);font-weight:600;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -512,6 +535,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
     <div class="cat-card" data-p="perception" onclick="go('perception')"><span class="cname">感知 🧊</span><span class="cbadge" id="bc-perception">—</span></div>
     <div class="cat-card" data-p="theme" onclick="go('theme')"><span class="cname">主题 🎨</span><span class="cbadge" id="bc-theme">—</span></div>
+    <div class="cat-card" data-p="voice" onclick="go('voice')"><span class="cname">语音互动 🔊</span><span class="cbadge" id="bc-voice">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -793,7 +817,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="pnl" id="p-theme">
       <div class="ph"><h2>主题皮肤 🎨</h2><p>一键切换整体配色风格，选择会被记住</p></div>
       <div class="cd">
-        <div class="ct">浅色扁平风（当前默认风格）</div>
+        <div class="ct" style="margin-top:8px">浅色扁平风（当前默认风格）</div>
         <div class="theme-row" id="themeRow">
           <button class="theme-dot on" data-theme="default" style="--d:linear-gradient(135deg,#f5f2ec,#1aab8a)" onclick="setTheme('default')" title="当前默认背景"></button>
           <button class="theme-dot" data-theme="cleanwhite" style="--d:linear-gradient(135deg,#f7f8fa,#3b82f6)" onclick="setTheme('cleanwhite')" title="极简白"></button>
@@ -813,6 +837,35 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
         </div>
         <div class="bs-info" id="themeName">当前：当前默认背景</div>
         <div class="bs-note">说明：渐变皮肤只改变工具箱界面配色，不会影响设备本身的显示。选择会保存到本地浏览器。</div>
+      </div>
+    </div>
+
+    <!-- 语音互动 -->
+    <div class="pnl" id="p-voice">
+      <div class="ph"><h2>语音互动 🔊</h2><p>连接 C3 原车动作，实时语音播报（默认台湾腔女声合成）</p></div>
+      <div class="cd">
+        <div class="vrow">
+          <div class="vinfo">
+            <span class="pill" id="voiceConn"></span>
+            <span id="voiceConnTxt">检测中…</span>
+          </div>
+          <label class="sw"><input type="checkbox" id="voiceSw" onchange="setVoiceEnabled(this.checked)"><span class="slider"></span></label>
+          <span id="voiceStat" class="bs-info">—</span>
+        </div>
+        <div class="bs-note">开关控制是否实时播报。连接状态显示是否接入 openpilot 原车信号；未启动 openpilot 时不播报。语音默认由浏览器台湾腔女声合成，可上传自定义音频逐个替换。</div>
+        <div class="vnow" id="voiceNow" style="opacity:.35">待命中…</div>
+
+        <div class="ct" style="margin-top:16px">实时状态</div>
+        <div class="vlights">
+          <div class="vlight" id="l-turn-l">◀ 左转向</div>
+          <div class="vlight" id="l-turn-r">右转向 ▶</div>
+          <div class="vlight" id="l-acc">ACC 激活</div>
+          <div class="vlight" id="l-rev">倒车</div>
+          <div class="vlight" id="l-decel">智能减速</div>
+        </div>
+
+        <div class="ct" style="margin-top:16px">语音提示与替换</div>
+        <div id="voiceSlots"></div>
       </div>
     </div>
 
@@ -838,6 +891,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
     <div class="mn" data-p="perception" onclick="go('perception')"><span class="mi">🧊</span><span class="mt">感知</span></div>
     <div class="mn" data-p="theme" onclick="go('theme')"><span class="mi">🎨</span><span class="mt">主题</span></div>
+    <div class="mn" data-p="voice" onclick="go('voice')"><span class="mi">🔊</span><span class="mt">语音</span></div>
   </div>
 </nav>
 
@@ -1269,6 +1323,7 @@ function onTabSwitch(id){
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id==='theme'){}
+  else if(id==='voice'){initVoice();}
   else if(id==='fav'){renderFav();}
   else if(id==='search'){focusSearch();}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
@@ -1771,12 +1826,140 @@ document.addEventListener('click',function(e){
   if(p&&p.style.display==='block'&&!p.contains(e.target)&&!(e.target.classList&&e.target.classList.contains('upd-link'))){p.style.display='none';}
 });
 
+// === 语音互动（连接原车动作，实时语音提示）===
+var VOICE_TYPES=[
+  {k:'turn_left',  label:'左转向',   text:'正在左转向'},
+  {k:'turn_right', label:'右转向',   text:'正在右转向'},
+  {k:'acc_on',     label:'激活ACC',  text:'OP智能驾驶已激活'},
+  {k:'acc_off',    label:'退出ACC',  text:'退出智能驾驶'},
+  {k:'reverse',    label:'倒车',     text:'倒车中请注意观察四周'},
+  {k:'decel',      label:'智能减速', text:'智能减速中，请注意安全'}
+];
+var _voiceOn=false, _voiceSeq=0, _voiceTimer=null, _voiceRepl={};
+var VOICE_ON_KEY='c3_voice_on';
+
+function voiceEnabled(){try{return localStorage.getItem(VOICE_ON_KEY)!=='0';}catch(e){return true;}}
+function setVoiceEnabled(v){
+  _voiceOn=v;
+  try{localStorage.setItem(VOICE_ON_KEY, v?'1':'0');}catch(e){}
+  var s=document.getElementById('voiceSw'); if(s)s.checked=v;
+  var st=document.getElementById('voiceStat'); if(st)st.textContent=v?'已开启':'已暂停';
+}
+function loadVoicesTW(){
+  if(!('speechSynthesis' in window))return;
+  window.__twVoices=speechSynthesis.getVoices()||[];
+  speechSynthesis.onvoiceschanged=function(){window.__twVoices=speechSynthesis.getVoices()||[];};
+}
+function pickTWVoice(){
+  var vs=window.__twVoices||[];
+  var tw=vs.filter(function(v){return /zh[-_]?TW/i.test(v.lang);});
+  var fem=tw.filter(function(v){return /female|女|mei|ting|hsiao|angela|sin|yue|taiwan|Google 台/i.test(v.name);});
+  return fem[0]||tw[0]||null;
+}
+function speakTW(text){
+  if(!('speechSynthesis' in window))return;
+  try{
+    speechSynthesis.cancel();
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang='zh-TW';
+    var v=pickTWVoice(); if(v)u.voice=v;
+    u.pitch=1.15; u.rate=1.0;   // 略偏高亮，贴近少妇声线
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function playEventAudio(k, text){
+  if(_voiceRepl[k]){
+    var a=new Audio('/api/voice/'+k+'?t='+Date.now());
+    a.play().catch(function(){speakTW(text);});
+  }else{
+    speakTW(text);
+  }
+}
+function setVoiceLight(id,on){var e=document.getElementById(id); if(e)e.className='vlight'+(on?' on':'');}
+function flashVoice(label){
+  var el=document.getElementById('voiceNow'); if(!el)return;
+  el.textContent='🔊 '+label; el.style.opacity='1';
+  clearTimeout(el._t); el._t=setTimeout(function(){el.style.opacity='.35';},2500);
+}
+function pollCarEvents(){
+  fetch('/api/car_events').then(function(r){return r.json();}).then(function(d){
+    var conn=!!d.available;
+    var badge=document.getElementById('voiceConn'); if(badge)badge.className='pill '+(conn?'ok':'bad');
+    var ct=document.getElementById('voiceConnTxt'); if(ct)ct.textContent=conn?'已连接原车':'未连接（请启动 openpilot）';
+    setVoiceLight('l-turn-l', d.left_blinker);
+    setVoiceLight('l-turn-r', d.right_blinker);
+    setVoiceLight('l-acc', d.acc_enabled);
+    setVoiceLight('l-rev', d.reversing);
+    setVoiceLight('l-decel', d.decelerating);
+    if(_voiceOn && conn && d.last_event && d.last_event.seq>_voiceSeq){
+      _voiceSeq=d.last_event.seq;
+      var item=VOICE_TYPES.filter(function(x){return x.k===d.last_event.type;})[0];
+      if(item){ playEventAudio(item.k, item.text); flashVoice(item.label); }
+    }else if(d.last_event){ _voiceSeq=d.last_event.seq; }
+  }).catch(function(){});
+}
+function startVoice(){
+  loadVoicesTW();
+  if(!_voiceTimer){ _voiceTimer=setInterval(pollCarEvents, 800); }
+  pollCarEvents();
+}
+function initVoice(){
+  loadVoicesTW();
+  setVoiceEnabled(voiceEnabled());
+  renderVoiceSlots();
+  refreshVoiceRepl();
+  startVoice();   // 全局监听，不依赖打开面板即可实时互动
+}
+function refreshVoiceRepl(){
+  fetch('/api/voice/list').then(function(r){return r.json();}).then(function(d){
+    _voiceRepl=d||{};
+    VOICE_TYPES.forEach(function(x){
+      var tag=document.getElementById('vr-'+x.k);
+      if(tag)tag.textContent=_voiceRepl[x.k]?'已替换':'默认合成';
+    });
+  }).catch(function(){});
+}
+function renderVoiceSlots(){
+  var box=document.getElementById('voiceSlots'); if(!box)return;
+  box.innerHTML=VOICE_TYPES.map(function(x){
+    return ''+
+    '<div class="vslot">'+
+      '<div class="vslot-l"><div class="vslot-t">'+x.label+'</div><div class="vslot-d">'+x.text+'</div></div>'+
+      '<div class="vslot-r">'+
+        '<button class="btn bs" onclick="testVoice(\''+x.k+'\')">试听</button>'+
+        '<label class="btn bs vup">上传替换<input type="file" id="vf-'+x.k+'" accept="audio/*" onchange="uploadVoice(\''+x.k+'\')" hidden></label>'+
+        '<button class="btn bs" onclick="resetVoice(\''+x.k+'\')">恢复</button>'+
+        '<span class="vtag" id="vr-'+x.k+'">默认合成</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+function uploadVoice(k){
+  var inp=document.getElementById('vf-'+k);
+  if(!inp||!inp.files||!inp.files[0]){toast('请先选择音频文件','er');return;}
+  var fd=new FormData(); fd.append('type',k); fd.append('file',inp.files[0]);
+  fetch('/api/voice/upload',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
+    if(d.success){toast('已替换语音','ok'); refreshVoiceRepl();} else toast(d.message||'替换失败','er');
+  }).catch(function(){toast('上传失败','er');});
+}
+function resetVoice(k){
+  fetch('/api/voice/reset',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'type='+k}).then(function(r){return r.json();}).then(function(d){
+    if(d.success){toast('已恢复默认语音','ok'); refreshVoiceRepl();} else toast(d.message||'恢复失败','er');
+  }).catch(function(){toast('恢复失败','er');});
+}
+function testVoice(k){
+  var item=VOICE_TYPES.filter(function(x){return x.k===k;})[0];
+  if(item)playEventAudio(k,item.text);
+}
+
 // === Init ===
 (function(){loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate()})();
 // Load backup list on init
 setTimeout(function(){loadBkList()},2000);
 // 应用保存的皮肤主题
 initTheme();
+// 初始化语音互动（加载浏览器台湾腔语音引擎 + 启动原车事件轮询）
+initVoice();
 // 自动检查更新：打开页面即查（上方 init 已调用），切标签即查（onTabSwitch 内已调用），
 // 并每 5 分钟后台静默复检一次，全程无需手动点击「检查更新」按钮。
 setInterval(function(){try{checkUpdate()}catch(e){}},5*60*1000);
