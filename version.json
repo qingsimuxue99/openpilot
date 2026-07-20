@@ -1,6 +1,6 @@
 {
-  "version": "1.0.52",
-  "changelog": "设备信息优化：移除普通人看不懂的版本/分支/Commit/电量字段；运行时间标注「自开机」、内存转为「已用/共 (百分比)」、分区改为「已用/共」、系统负载标注「1/5/15分钟 + 繁忙程度」、充电状态转中文，复制文本同步更易读。",
-  "tag": "v1.0.52",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.52/release/c3_toolbox.tar.gz"
+  "version": "1.0.53",
+  "changelog": "设备信息按反馈微调：仅移除 Commit 与「充电状态」两项；内存值转「已用/共 (百分比)」、系统负载标注「1/5/15分钟 + 繁忙程度」；版本/分支/电量/运行时间/数据分区/系统分区及副标题全部恢复为原样。",
+  "tag": "v1.0.53",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.53/release/c3_toolbox.tar.gz"
 }
