@@ -1,6 +1,6 @@
 {
-  "version": "1.0.25",
-  "changelog": "投屏修复：跨源自动选最新帧(uiDebug固定则回退/dev/shm活源)、画面实时刷新、显示2160×1080横屏宽显(去旋转切换)、加最后更新时间诊断",
-  "tag": "v1.0.25",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.25/release/c3_toolbox.tar.gz"
+  "version": "1.0.26",
+  "changelog": "投屏修正：抓 X11/Wayland 显示(x11grab)得到真实 UI 屏幕(含车速/车道线/报警HUD)，不再误投道路相机(uiDebug.frame 实为相机帧)。修掉相机帧靠 mtime 覆盖 UI 帧的优先级 bug；ffmpeg 一键安装改为确保带 x11grab。",
+  "tag": "v1.0.26",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.26/release/c3_toolbox.tar.gz"
 }

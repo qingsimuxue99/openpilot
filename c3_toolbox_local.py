@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.25"
+VERSION = "1.0.26"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1330,7 +1330,62 @@ _capture_source_cache = None
 
 
 def _ffmpeg_path():
-    return shutil.which('ffmpeg') or '/usr/bin/ffmpeg'
+    """返回可用的 ffmpeg 路径，优先选支持 x11grab（投屏抓屏用）的版本。"""
+    cands = []
+    w = shutil.which('ffmpeg')
+    if w:
+        cands.append(w)
+    for p in ('/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', '/opt/bin/ffmpeg'):
+        if os.path.exists(p):
+            cands.append(p)
+    for c in cands:
+        if _ffmpeg_device_supported(c, 'x11grab'):
+            return c
+    return cands[0] if cands else (w or '/usr/bin/ffmpeg')
+
+
+_FFMPEG_DEV_CACHE = {}
+
+
+def _ffmpeg_device_supported(ff, dev):
+    """ffmpeg 是否支持某设备(如 x11grab/kmsgrab/waylandgrab)，结果缓存。"""
+    key = (ff, dev)
+    if key in _FFMPEG_DEV_CACHE:
+        return _FFMPEG_DEV_CACHE[key]
+    try:
+        out = subprocess.run([ff, '-hide_banner', '-devices'],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=5)
+        r = dev.lower() in out.stdout.decode('utf-8', 'ignore').lower()
+    except Exception:
+        r = False
+    _FFMPEG_DEV_CACHE[key] = r
+    return r
+
+
+def _display_resolution():
+    """通过 xdpyinfo 取 X 显示分辨率 (W,H)，失败返回 None。"""
+    try:
+        out = subprocess.run(['xdpyinfo'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+        for line in out.stdout.decode('utf-8', 'ignore').splitlines():
+            if 'dimensions:' in line:
+                m = re.search(r'(\d+)\s*x\s*(\d+)', line)
+                if m:
+                    return int(m.group(1)), int(m.group(2))
+    except Exception:
+        pass
+    return None
+
+
+def _display_env():
+    """返回 (display_str, xauth) 用于 ffmpeg x11grab；以 root 运行但 X 属普通用户时尝试常见 XAUTHORITY。"""
+    disp = os.environ.get('DISPLAY') or ':0.0'
+    xauth = os.environ.get('XAUTHORITY')
+    if not xauth and getattr(os, 'geteuid', lambda: -1)() == 0:
+        for cand in ('/home/comma/.Xauthority', '/root/.Xauthority'):
+            if os.path.exists(cand):
+                xauth = cand
+                break
+    return disp, xauth
 
 
 def _list_capture_sources():
@@ -1378,10 +1433,12 @@ def _probe_capture_source(force=False):
     return None
 
 
-# ===== 三源投屏：cereal uiDebug.frame -> /dev/shm 共享内存 -> ffmpeg(fbdev/kmsgrab) =====
+# ===== 投屏：真实屏幕镜像（X11/Wayland 显示抓取优先；嵌入式 fbdev/kmsgrab 回退；uiDebug 相机最后兜底）=====
+# 注意：carrotpilot(cpv) 跑在 PC 上，uiDebug.frame 装的是「道路相机帧」(FrameData.frameType 仅
+#       neo/front 等相机类型)，并非合成后的 UI 屏幕。真正的「屏幕画面」= 显示器上 openpilot UI 窗口，
+#       必须用 ffmpeg -f x11grab 抓 X 显示才能得到（含车速/车道线/报警等 HUD 叠加层）。
 def _dashy_screen_jpeg():
-    """读取 dashy_collector 维护的屏幕帧 /tmp/screen.jpg（来自 cereal uiDebug.frame）。
-    要求文件存在且是有效 JPEG，且近期(4s 内)有更新，避免显示陈旧帧。"""
+    """uiDebug.frame 兜底（道路相机画面，非 UI 屏幕），仅作最后兜底。要求近期有更新。"""
     try:
         if not os.path.exists(SCREEN_JPG):
             return None
@@ -1396,124 +1453,193 @@ def _dashy_screen_jpeg():
     return None
 
 
-def _discover_ui_shm():
-    """扫描 /dev/shm，找包含有效 JPEG 帧的共享内存文件（openpilot UI 把屏幕帧写到这，comma connect 看屏同款机制）。
-    不依赖确切文件名/header 格式，靠 JPEG 标记(FFD8..FFD9)识别。返回路径或 None。"""
-    shm_dir = '/dev/shm'
-    if not os.path.isdir(shm_dir):
-        return None
+def _mjpeg_part(jpg):
+    return (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
+            b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
+
+
+def _kill(proc):
     try:
-        for fn in os.listdir(shm_dir):
-            p = os.path.join(shm_dir, fn)
-            if not os.path.isfile(p):
-                continue
-            try:
-                sz = min(os.path.getsize(p), 4 * 1024 * 1024)
-                with open(p, 'rb') as f:
-                    data = f.read(sz)
-            except Exception:
-                continue
-            soi = data.find(b'\xff\xd8')
-            if soi < 0:
-                continue
-            eoi = data.rfind(b'\xff\xd9', soi)
-            if eoi > soi + 1000:
-                return p
+        proc.terminate()
+        proc.wait(timeout=2)
     except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def _iter_mjpeg(stream, idle_timeout=8):
+    """从 ffmpeg image2pipe(mjpeg) 原始字节流中切分出一个个完整 JPEG 帧。"""
+    buf = b''
+    while True:
+        try:
+            chunk = stream.read(4096)
+        except Exception:
+            break
+        if not chunk:
+            break
+        buf += chunk
+        while True:
+            soi = buf.find(b'\xff\xd8')
+            if soi < 0:
+                buf = buf[-2:] if len(buf) > 2 else buf
+                break
+            if soi > 0:
+                buf = buf[soi:]
+            eoi = buf.find(b'\xff\xd9', 2)
+            if eoi < 0:
+                break
+            yield buf[:eoi + 2]
+            buf = buf[eoi + 2:]
+
+
+def _display_capture(stream=True):
+    """返回 (name, cmd, env) 用于抓取 X/Wayland 显示（真实 UI 屏幕）。无显示/无 ffmpeg 返回 None。"""
+    ff = _ffmpeg_path()
+    if not os.path.exists(ff):
         return None
+    disp, xauth = _display_env()
+    res = _display_resolution()
+    sz = ('%dx%d' % res) if res else None
+    env = dict(os.environ)
+    if xauth:
+        env['XAUTHORITY'] = xauth
+    env['DISPLAY'] = disp
+    if _ffmpeg_device_supported(ff, 'x11grab'):
+        base = [ff, '-hide_banner', '-loglevel', 'error', '-f', 'x11grab', '-r', '15']
+        if sz:
+            base += ['-s', sz]
+        base += ['-i', disp]
+        if stream:
+            cmd = base + ['-f', 'image2pipe', '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
+        else:
+            cmd = base + ['-frames:v', '1', '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
+        return ('x11grab:' + disp, cmd, env)
+    if os.environ.get('XDG_SESSION_TYPE', '').lower() == 'wayland' and _ffmpeg_device_supported(ff, 'waylandgrab'):
+        base = [ff, '-hide_banner', '-loglevel', 'error', '-f', 'waylandgrab', '-r', '15']
+        if sz:
+            base += ['-s', sz]
+        base += ['-i', disp]
+        if stream:
+            cmd = base + ['-f', 'image2pipe', '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
+        else:
+            cmd = base + ['-frames:v', '1', '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
+        return ('waylandgrab:' + disp, cmd, env)
     return None
 
 
-def _read_ui_shm_jpeg_file(p):
-    """从指定 shm 文件抽取 JPEG 帧（按 FFD8..FFD9 标记）。"""
-    try:
-        with open(p, 'rb') as f:
-            data = f.read()
-        soi = data.find(b'\xff\xd8')
-        if soi < 0:
-            return None
-        eoi = data.rfind(b'\xff\xd9', soi)
-        if eoi <= soi + 1000:
-            return None
-        return data[soi:eoi + 2]
-    except Exception:
-        return None
+_DISPLAY_OK_CACHE = (None, 0)  # (bool, ts)
 
 
-def _read_ui_shm_jpeg():
-    p = _discover_ui_shm()
-    if not p:
-        return None
-    return _read_ui_shm_jpeg_file(p)
+def _display_works():
+    """实测一次 x11grab 能否出帧（避免「命令可构造但运行时打不开 DISPLAY」被误判可用），结果缓存 10s。"""
+    global _DISPLAY_OK_CACHE
+    if _DISPLAY_OK_CACHE[0] is not None and time.time() - _DISPLAY_OK_CACHE[1] < 10:
+        return _DISPLAY_OK_CACHE[0]
+    ok = False
+    dc = _display_capture(stream=False)
+    if dc:
+        name, cmd, env = dc
+        try:
+            out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8, env=env)
+            ok = out.returncode == 0 and out.stdout[:2] == b'\xff\xd8' and len(out.stdout) > 1000
+        except Exception:
+            ok = False
+    _DISPLAY_OK_CACHE = (ok, time.time())
+    return ok
 
 
 def _current_screen_source():
-    """返回当前可用的投屏源名（优先级：cereal uiDebug -> /dev/shm -> ffmpeg）。"""
-    if _dashy_screen_jpeg():
-        return 'uiDebug:/tmp/screen.jpg'
-    if _read_ui_shm_jpeg():
-        return 'shm:' + _ui_shm_path()
+    """返回 (源名, is_camera)。优先级：X/Wayland 显示 -> 嵌入式 fbdev/kmsgrab -> uiDebug 相机兜底。"""
+    if _display_works():
+        disp, _ = _display_env()
+        return 'x11grab:' + disp, False
     src = _probe_capture_source()
-    return src[0] if src else None
+    if src:
+        return src[0], False
+    if _dashy_screen_jpeg():
+        return 'uiDebug:/tmp/screen.jpg', True  # True=相机画面（非 UI）
+    return None, False
 
 
 def detect_fb_source():
-    return _current_screen_source()
+    return _current_screen_source()[0]
 
 
 def screen_supported():
-    """投屏可用 = 任一源可达：cereal uiDebug.frame / /dev/shm 共享内存 / ffmpeg(fbdev|kmsgrab)。"""
-    return _current_screen_source() is not None
+    """投屏可用 = 真实显示(x11grab/kmsgrab/fbdev) 可达，或 uiDebug 相机兜底可达。"""
+    name, is_cam = _current_screen_source()
+    return name is not None
 
 
 def _capture_stream_cmd():
+    dc = _display_capture(stream=True)
+    if dc:
+        return dc[1]
     src = _probe_capture_source()
     return src[2] if src else None
 
 
 def _capture_single_cmd():
+    dc = _display_capture(stream=False)
+    if dc:
+        return dc[1]
     src = _probe_capture_source()
     return src[1] if src else None
 
 
 def gen_screen_stream():
-    """MJPEG 生成器：跨源选最新帧（cereal uiDebug / /dev/shm），mtime 变化才推送，低延迟。"""
-    last_sig = None
-    last_scan = 0.0
-    cached_shm = None
-    while True:
-        now = time.time()
-        best = None
-        # 源1：cereal uiDebug.frame（dashy_collector 维护的 /tmp/screen.jpg）
-        try:
-            if os.path.exists(SCREEN_JPG):
-                mt = os.path.getmtime(SCREEN_JPG)
-                with open(SCREEN_JPG, 'rb') as f:
-                    data = f.read()
-                if data[:2] == b'\xff\xd8' and len(data) > 1000:
-                    best = ('uiDebug:/tmp/screen.jpg', data, mt)
-        except Exception:
-            pass
-        # 源2：/dev/shm（每 0.5s 重新扫描避免缓存旧 inode；跨源选 mtime 最新者）
-        if now - last_scan > 0.5:
-            last_scan = now
-            cached_shm = _discover_ui_shm()
-        if cached_shm and os.path.exists(cached_shm):
+    """MJPEG 生成器：优先抓 X/Wayland 真实显示（含完整 UI），失败再回退嵌入式/相机。"""
+    # 主源：X/Wayland 显示（真正的 UI 屏幕），ffmpeg 退出自动重连
+    if _display_works():
+        for _ in range(5):
+            dc = _display_capture(stream=True)
+            if not dc:
+                break
+            name, cmd, env = dc
             try:
-                mt = os.path.getmtime(cached_shm)
-                d = _read_ui_shm_jpeg_file(cached_shm)
-                if d and (best is None or mt > best[2]):
-                    best = ('shm:' + os.path.basename(cached_shm), d, mt)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, bufsize=0)
+            except Exception:
+                proc = None
+            if not proc:
+                break
+            try:
+                for jpg in _iter_mjpeg(proc.stdout):
+                    yield _mjpeg_part(jpg)
             except Exception:
                 pass
-        if best:
-            name, data, mt = best
-            sig = (name, round(mt, 3))
+            finally:
+                _kill(proc)
+            time.sleep(0.5)
+        return
+    # 回退1：嵌入式 fbdev/kmsgrab（无 X 显示时抓 DRM/帧缓冲真实屏幕）
+    src = _probe_capture_source()
+    if src:
+        name, test, streamcmd = src
+        try:
+            proc = subprocess.Popen(streamcmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+        except Exception:
+            proc = None
+        if proc:
+            try:
+                for jpg in _iter_mjpeg(proc.stdout):
+                    yield _mjpeg_part(jpg)
+            except Exception:
+                pass
+            finally:
+                _kill(proc)
+            return
+    # 回退2：uiDebug 文件（道路相机画面，最后兜底，明确标注）
+    last_sig = None
+    while True:
+        jpg = _dashy_screen_jpeg()
+        if jpg:
+            sig = ('uiDebug', round(os.path.getmtime(SCREEN_JPG), 3))
             if sig != last_sig:
                 last_sig = sig
-                yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
-        time.sleep(0.04)
+                yield _mjpeg_part(jpg)
+        time.sleep(0.1)
 
 @app.route('/api/screen/stream')
 def api_screen_stream():
@@ -1525,63 +1651,46 @@ def api_screen_stream():
 
 @app.route('/api/screen/status', methods=['GET'])
 def api_screen_status():
-    src = _current_screen_source()
+    if _display_works():
+        disp, _ = _display_env()
+        return jsonify({'available': True, 'source': 'x11grab:' + disp, 'is_camera': False,
+                        'message': '正在镜像 X/Wayland 显示（真实 UI 屏幕：含车速/车道线/报警等 HUD 叠加层）'})
+    src = _probe_capture_source()
+    if src:
+        return jsonify({'available': True, 'source': src[0], 'is_camera': False,
+                        'message': '正在镜像帧缓冲/DRM 显示（真实 UI 屏幕）'})
+    if _dashy_screen_jpeg():
+        return jsonify({'available': True, 'source': 'uiDebug:/tmp/screen.jpg', 'is_camera': True,
+                        'message': '仅能取到道路相机画面（uiDebug.frame），并非 UI 屏幕。请确认 openpilot UI 正在显示器上运行，并在图形界面终端启动工具箱'})
     ffmpeg_ok = os.path.exists(_ffmpeg_path())
-    diag = {}
-    try:
-        if os.path.exists(SCREEN_JPG):
-            diag['uiDebug_mtime'] = round(os.path.getmtime(SCREEN_JPG), 1)
-            diag['uiDebug_size'] = os.path.getsize(SCREEN_JPG)
-    except Exception:
-        pass
-    sp = _discover_ui_shm()
-    if sp:
-        try:
-            diag['shm_file'] = sp
-            diag['shm_mtime'] = round(os.path.getmtime(sp), 1)
-            diag['shm_size'] = os.path.getsize(sp)
-        except Exception:
-            pass
-    frame_age = None
-    try:
-        cand = []
-        if os.path.exists(SCREEN_JPG):
-            cand.append(os.path.getmtime(SCREEN_JPG))
-        if sp and os.path.exists(sp):
-            cand.append(os.path.getmtime(sp))
-        if cand:
-            frame_age = round(time.time() - max(cand), 1)
-    except Exception:
-        pass
-    return jsonify({'available': screen_supported(),
-                    'source': src,
-                    'ffmpeg': ffmpeg_ok,
-                    'frame_age_s': frame_age,
-                    'diag': diag,
-                    'message': src if src else ('缺少 ffmpeg' if not ffmpeg_ok else '无可用投屏源（cereal/uiDebug、/dev/shm、ffmpeg 均不可访问）')})
+    hint = '' if os.environ.get('DISPLAY') else ' 当前无 DISPLAY 环境变量，无法抓屏——请在图形界面(X11)终端中启动工具箱。'
+    return jsonify({'available': False, 'source': None, 'is_camera': False, 'ffmpeg': ffmpeg_ok,
+                    'message': ('缺少 ffmpeg，请点「一键安装」' if not ffmpeg_ok else '无可用投屏源（需要 X11 显示或 ffmpeg）') + hint})
+
 
 @app.route('/api/screen/frame', methods=['GET'])
 def api_screen_frame():
-    """单帧快照（用于环境自检/静态预览），非流式。三源优先级同 gen_screen_stream。"""
-    if not screen_supported():
-        return jsonify({'error': 'unavailable'}), 404
-    # 源1：cereal uiDebug.frame（dashy_collector 维护）
+    """单帧快照（用于环境自检/静态预览），优先级同 gen_screen_stream。"""
+    if _display_works():
+        dc = _display_capture(stream=False)
+        name, cmd, env = dc
+        try:
+            out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, env=env)
+            if out.returncode == 0 and out.stdout[:2] == b'\xff\xd8':
+                return Response(out.stdout, mimetype='image/jpeg')
+        except Exception:
+            pass
+    src = _probe_capture_source()
+    if src:
+        try:
+            out = subprocess.run(src[1], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            if out.returncode == 0 and out.stdout:
+                return Response(out.stdout, mimetype='image/jpeg')
+        except Exception:
+            pass
     jpg = _dashy_screen_jpeg()
     if jpg:
         return Response(jpg, mimetype='image/jpeg')
-    # 源2：/dev/shm 共享内存
-    jpg = _read_ui_shm_jpeg()
-    if jpg:
-        return Response(jpg, mimetype='image/jpeg')
-    # 源3：ffmpeg
-    try:
-        cmd = _capture_single_cmd()
-        if cmd:
-            out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
-            if out.returncode == 0 and out.stdout:
-                return Response(out.stdout, mimetype='image/jpeg')
-    except Exception:
-        pass
     return jsonify({'error': 'grab failed'}), 500
 
 @app.route('/api/env/install', methods=['POST'])
@@ -1604,8 +1713,9 @@ def api_env_install_status():
 def _env_install_worker(task_id):
     OP_TASKS[task_id] = {'progress': 0, 'done': False, 'success': False, 'message': '准备安装…', 'log': ''}
     ff = _ffmpeg_path()
-    if os.path.exists(ff):
-        OP_TASKS[task_id].update({'progress': 100, 'done': True, 'success': True, 'message': 'ffmpeg 已安装'})
+    # 投屏抓屏需要支持 x11grab 的 ffmpeg；仅存在但不支持时继续安装带 x11grab 的版本
+    if os.path.exists(ff) and _ffmpeg_device_supported(ff, 'x11grab'):
+        OP_TASKS[task_id].update({'progress': 100, 'done': True, 'success': True, 'message': 'ffmpeg 已安装（支持 x11grab 抓屏）'})
         return
     steps = [
         (['apt-get', 'update'], 25, '更新软件源 (apt-get update)'),
@@ -1627,9 +1737,10 @@ def _env_install_worker(task_id):
             OP_TASKS[task_id]['log'] += r.stdout.decode('utf-8', 'ignore')[-2000:]
         except Exception:
             pass
-    ok = os.path.exists(_ffmpeg_path())
+    ff = _ffmpeg_path()
+    ok = os.path.exists(ff) and _ffmpeg_device_supported(ff, 'x11grab')
     OP_TASKS[task_id].update({'progress': 100, 'done': True, 'success': ok,
-                              'message': ('ffmpeg 安装成功 ✓' if ok else '安装失败，请手动执行 apt-get install -y ffmpeg')})
+                              'message': ('ffmpeg 安装成功 ✓（支持 x11grab 抓屏）' if ok else '安装失败，请手动执行 apt-get install -y ffmpeg')})
     if ok:
         # 重新探测投屏源，让前端立即能检测到新环境
         try:
@@ -1673,12 +1784,19 @@ if __name__ == '__main__':
             print("  [!] 未找到可用 python 加载 cereal，实时画面功能将不可用")
     except Exception as e:
         print(f"  [!] 启动实时数据收集器失败: {e}")
-    # 屏幕镜像（投屏）：按需 MJPEG 流式，无需常驻进程；仅做环境探测打印
+    # 屏幕镜像（投屏）：抓 X/Wayland 显示（真实 UI 屏幕），print 探测结果
     try:
-        if screen_supported():
-            print("  [✓] 屏幕镜像（投屏）可用（MJPEG 低延迟流式）")
+        if _display_works():
+            disp, _ = _display_env()
+            print("  [✓] 屏幕镜像（投屏）可用：x11grab 抓 X 显示 %s（真实 UI 屏幕，含 HUD）" % disp)
+        elif _probe_capture_source():
+            print("  [✓] 屏幕镜像（投屏）可用：嵌入式帧缓冲/DRM")
+        elif not os.path.exists(_ffmpeg_path()):
+            print("  [!] 屏幕镜像不可用：缺少 ffmpeg（可网页一键安装）")
+        elif not os.environ.get('DISPLAY'):
+            print("  [!] 屏幕镜像不可用：无 DISPLAY（请在图形界面 X11 终端启动工具箱）")
         else:
-            print("  [!] 屏幕镜像不可用：%s" % ("缺少 ffmpeg（可网页一键安装）" if os.path.exists('/dev/fb0') else "无 /dev/fb0 帧缓冲"))
+            print("  [!] 屏幕镜像不可用：ffmpeg 不支持 x11grab（可网页一键重装 ffmpeg）")
     except Exception as e:
         print(f"  [!] 屏幕镜像探测失败: {e}")
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
