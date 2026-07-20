@@ -1,6 +1,6 @@
 {
-  "version": "1.0.30",
-  "changelog": "移除「实时画面/投屏」功能：comma c3 为 Weston/Wayland 嵌入式设备，系统 ffmpeg 无 kmsgrab、无 X11/fb0，多条投屏路线均不可行，故回退到稳定版功能集，工具箱回归干净可靠。",
-  "tag": "v1.0.30",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.30/release/c3_toolbox.tar.gz"
+  "version": "1.0.31",
+  "changelog": "移除「实时画面/投屏」功能（comma c3 为 Weston/Wayland 嵌入式设备，无 kmsgrab/X11/fb0，投屏所有路线均不可行），回退到稳定版功能集；改用全新 tag v1.0.31 规避 jsdelivr 旧包缓存，所有用户（含朋友）网页点更新即可正常升级到干净版。",
+  "tag": "v1.0.31",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.31/release/c3_toolbox.tar.gz"
 }
