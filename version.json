@@ -1,6 +1,6 @@
 {
-  "version": "1.0.43",
-  "changelog": "备份菜单新增「删除」功能：完整备份包列表每行加「下载 / 删除」按钮，可单独删除某个备份包释放 /data 空间（后端 /api/op_backup/delete 带前缀/后缀校验防路径穿越）；终端常用命令把「📜 tmux a 实时日志」「⏹ 停止日志」移到最前面。（注：v1.0.42 的发布 tar 未重新打包导致源码为旧版，本版为修正重发）",
-  "tag": "v1.0.43",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.43/release/c3_toolbox.tar.gz"
+  "version": "1.0.44",
+  "changelog": "移除驾驶报告功能：删除主工具箱左侧/底部菜单的「驾驶报告」入口、/hud 报告页与 iframe；后端移除 /hud、/vendor 路由及整段 HUD 实时数据逻辑（含 html2canvas 依赖）；hud.html 与 vendor 目录一并移除。工具箱回归为参数控制/终端/备份/开机动画等核心功能。",
+  "tag": "v1.0.44",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.44/release/c3_toolbox.tar.gz"
 }

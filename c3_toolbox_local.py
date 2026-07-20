@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.43"
+VERSION = "1.0.44"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -421,24 +421,6 @@ def index():
     return "<h1>c3_toolbox.html 不存在</h1>"
 
 
-@app.route('/hud')
-def hud_page():
-    p = os.path.join(SCRIPT_DIR, 'hud.html')
-    if os.path.isfile(p):
-        return send_file(p)
-    return "<h1>hud.html 不存在</h1>", 404
-
-
-@app.route('/vendor/<path:filename>')
-def vendor_files(filename):
-    """提供本地打包的前端依赖（如 html2canvas），避免设备离线时依赖外网 CDN。"""
-    vp = os.path.join(SCRIPT_DIR, 'vendor')
-    fp = os.path.join(vp, filename)
-    if os.path.isfile(fp):
-        return send_file(fp)
-    return "<h1>vendor 文件不存在</h1>", 404
-
-
 @app.route('/api/status')
 def api_status():
     return jsonify({'connected': True, 'type': 'local', 'host': '本机', 'device_info': get_device_info()})
@@ -447,105 +429,6 @@ def api_status():
 @app.route('/api/device_info')
 def api_device_info():
     return jsonify(get_device_info())
-
-
-# ============= HUD 实时数据（openpilot 实时通道订阅）=============
-# 通过 openpilot 的 cereal 实时通道(ipc:///tmp/cereal)订阅 carState/controlsState/deviceState。
-# 取不到真实数据时优雅降级为演示模式(demo=True)，绝不卡死或崩溃。
-import math  # 仅用于演示数据
-
-HUD_SUB = None
-HUD_IMPORT_ERR = None
-OPENPILOT_DIR = '/data/openpilot'
-
-
-def _init_hud_sub():
-    """懒加载 SubMaster 订阅器，只初始化一次；失败则永久降级 demo。"""
-    global HUD_SUB, HUD_IMPORT_ERR
-    if HUD_SUB is not None or HUD_IMPORT_ERR is not None:
-        return HUD_SUB
-    try:
-        if OPENPILOT_DIR not in sys.path:
-            sys.path.insert(0, OPENPILOT_DIR)
-        SubMaster = None
-        # 兼容不同 openpilot 版本的 import 路径
-        try:
-            from openpilot.common.realtime import messaging
-            SubMaster = messaging.SubMaster
-        except Exception:
-            try:
-                from cereal.messaging import SubMaster
-            except Exception as e:
-                HUD_IMPORT_ERR = 'import failed: %s' % e
-                return None
-        HUD_SUB = SubMaster(['carState', 'controlsState', 'deviceState'])
-        return HUD_SUB
-    except Exception as e:
-        HUD_IMPORT_ERR = str(e)
-        return None
-
-
-def _demo_hud():
-    """演示模式：生成平滑波动的数据，让仪表盘始终有动效（非真实车况）。"""
-    t = time.time()
-    speed = max(0.0, (math.sin(t / 5.0) * 0.5 + 0.5) * 80 + 8 * math.sin(t / 1.3))
-    steer = math.sin(t / 3.0) * 120
-    accel = math.cos(t / 2.0) * 1.6
-    g = max(0.0, math.sin(t / 4.0))
-    return {
-        'demo': True,
-        'speed': round(speed, 1),
-        'steer': round(steer, 1),
-        'accel': round(accel, 2),
-        'gas': round(g, 2),
-        'brake': round(max(0.0, -math.sin(t / 4.0)), 2),
-        'enabled': True, 'active': True, 'gear': 'D',
-        'cpuTemp': round(45 + 4 * math.sin(t / 7.0), 1),
-        'network': 1, 'netStrength': 3, 'freeSpace': 62,
-    }
-
-
-def get_hud_data():
-    sm = _init_hud_sub()
-    if sm is None:
-        return _demo_hud()
-    try:
-        sm.update(0)  # 非阻塞，立即取当前最新帧
-        cs = sm['carState']
-        ctl = sm['controlsState']
-        ds = sm['deviceState']
-        v = cs.vEgo * 3.6
-        steer = cs.steeringAngleDeg
-        a = cs.aEgo
-        gas = getattr(cs, 'gas', 0.0)
-        brake = getattr(cs, 'brake', 0.0)
-        enabled = bool(getattr(ctl, 'enabled', False))
-        active = bool(getattr(ctl, 'active', False))
-        gear = str(getattr(cs, 'gear', '') or 'N')
-        cpu = getattr(ds, 'cpuTempC', [0]) or [0]
-        cpu = max(cpu) if isinstance(cpu, (list, tuple)) else cpu
-        net = getattr(ds, 'networkType', 0)
-        net_s = getattr(ds, 'networkStrength', 0)
-        free = getattr(ds, 'freeSpacePercent', 0)
-        return {
-            'demo': False,
-            'speed': round(v, 1),
-            'steer': round(steer, 1),
-            'accel': round(a, 2),
-            'gas': round(gas, 2),
-            'brake': round(brake, 2),
-            'enabled': enabled, 'active': active, 'gear': gear,
-            'cpuTemp': round(cpu, 1),
-            'network': int(net), 'netStrength': int(net_s),
-            'freeSpace': round(free, 1),
-        }
-    except Exception as e:
-        return {'demo': True, 'error': str(e), **_demo_hud()}
-
-
-@app.route('/api/hud')
-def api_hud():
-    return jsonify(get_hud_data())
 
 
 HIDDEN_PARAMS = [
