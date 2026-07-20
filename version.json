@@ -1,6 +1,6 @@
 {
-  "version": "1.0.32",
-  "changelog": "新增「赛博 HUD 仪表盘」与「炫酷驾驶报告」两项科技感功能：HUD 实时显示车速/转向角/油门刹车/3D 车模（数据来自 openpilot 实时通道，取不到时优雅降级演示模式）；报告页基于行程统计一键生成赛博风分享卡片。纯前端+已有实时数据接口，零硬件依赖、不卡死。",
-  "tag": "v1.0.32",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.32/release/c3_toolbox.tar.gz"
+  "version": "1.0.33",
+  "changelog": "HUD 车辆姿态升级为「特斯拉彩虹路径」动画：车居中行驶，身后拖一条随转向弯折、随车速变长的彩虹道路，配滚动网格地面与霓虹车模；基于独立 requestAnimationFrame 循环，平滑不卡顿。LIVE 用真实转向角驱动，DEMO 自动平滑游走演示。",
+  "tag": "v1.0.33",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.33/release/c3_toolbox.tar.gz"
 }

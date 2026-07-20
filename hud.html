@@ -77,9 +77,9 @@ canvas{display:block;max-width:100%;position:relative;z-index:2}
         <canvas id='gauge' width='300' height='300'></canvas>
       </div>
       <div class='panel car-wrap'>
-        <h3>车辆姿态 VEHICLE</h3>
-        <canvas id='car' width='300' height='240'></canvas>
-        <div style='font-size:10px;color:#5b87b0;margin-top:6px;letter-spacing:1px;position:relative;z-index:2'>实时 3D 车模 · 随转向/加减速联动</div>
+        <h3>车辆姿态 · 特斯拉彩虹路径</h3>
+        <canvas id='car' width='600' height='460'></canvas>
+        <div style='font-size:10px;color:#5b87b0;margin-top:6px;letter-spacing:1px;position:relative;z-index:2'>车在彩虹路径上行驶 · 转向越大弯道越急 · 车速越快轨迹越长</div>
       </div>
     </div>
     <div class='panel' style='margin-top:14px'>
@@ -123,6 +123,7 @@ canvas{display:block;max-width:100%;position:relative;z-index:2}
 <script>
 var hudTimer=null, hudData=null;
 var recOn=false, samples=[], recStart=0;
+var carRAF=null, synthT=0, carTrail=[], carHue=0, floorScroll=0;
 
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2600);}
 
@@ -159,7 +160,7 @@ function render(d){
   document.getElementById('vCpu').textContent=d.cpuTemp!=null?d.cpuTemp.toFixed(0):'--';
   var net=['','WiFi','蜂窝','WiFi?'][d.network]||('N'+d.network);
   document.getElementById('vNet').textContent=net+' · '+d.freeSpace+'%';
-  drawGauge(d.speed); drawCar(d.steer,d.accel,d.speed);
+  drawGauge(d.speed);
 }
 function drawGauge(spd){
   var c=document.getElementById('gauge'),x=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H/2,R=120;
@@ -174,20 +175,78 @@ function drawGauge(spd){
   x.fillText(spd.toFixed(0),cx,cy+4);x.shadowBlur=0;
   x.fillStyle='#5b87b0';x.font='12px sans-serif';x.fillText('km/h',cx,cy+28);
 }
-function drawCar(steer,acc,spd){
-  var c=document.getElementById('car'),x=c.getContext('2d'),W=c.width,H=c.height;
+/* ===== 特斯拉彩虹路径动画（独立 rAF 循环，不卡顿）===== */
+function startCarAnim(){
+  if(carRAF) return;
+  function loop(){ drawCarCanvas(); carRAF=requestAnimationFrame(loop); }
+  loop();
+}
+function stopCarAnim(){ if(carRAF){cancelAnimationFrame(carRAF);carRAF=null;} }
+function drawCarCanvas(){
+  var cv=document.getElementById('car'); if(!cv) return;
+  var x=cv.getContext('2d'), W=cv.width, H=cv.height;
+  var d=hudData, demo=true, speed=0, steer=0;
+  if(d){ demo=!!d.demo; speed=+d.speed||0; steer=+d.steer||0; }
+  if(demo || !d){                       // 演示模式：平滑游走 + 合理车速
+    synthT+=0.015;
+    steer=Math.sin(synthT)*130 + Math.sin(synthT*0.41+1.0)*70;
+    speed=55 + Math.sin(synthT*0.5)*35 + 20;
+  }
+  var turn=(steer/180)*0.05;            // 轨迹每秒旋转（弯道）
+  var step=(speed/160)*3.4 + 0.5;       // 路径回退速度（车速）
+  var ct=Math.cos(turn), st=Math.sin(turn);
+  for(var i=0;i<carTrail.length;i++){
+    var p=carTrail[i];
+    var nx=p.x*ct - p.y*st, ny=p.x*st + p.y*ct;
+    p.x=nx; p.y=ny+step;                // 车前进 => 世界相对后退
+  }
+  carHue=(carHue+2.2)%360;
+  carTrail.push({x:0,y:0,h:carHue});
+  if(carTrail.length>150) carTrail.shift();
+
   x.clearRect(0,0,W,H);
-  x.save();x.translate(W/2,H/2+24);
-  x.translate(0,Math.max(-6,Math.min(6,-acc*2)));
-  x.strokeStyle='rgba(0,180,255,.15)';x.lineWidth=1;
-  for(var gx=-130;gx<=130;gx+=22){x.beginPath();x.moveTo(gx,-60);x.lineTo(gx*0.4,46);x.stroke();}
-  x.fillStyle='#0c3a5e';x.strokeStyle='#5fe0ff';x.lineWidth=2;
-  x.beginPath();x.moveTo(-52,-8);x.lineTo(52,-8);x.lineTo(44,22);x.lineTo(-44,22);x.closePath();x.fill();x.stroke();
-  x.fillStyle='#0a2c47';x.beginPath();x.moveTo(-28,-8);x.lineTo(28,-8);x.lineTo(20,-34);x.lineTo(-20,-34);x.closePath();x.fill();x.stroke();
-  var sa=steer/180*0.8;
-  function wheel(wx,wy){x.save();x.translate(wx,wy);x.rotate(sa);x.fillStyle='#10283d';x.strokeStyle='#8be9ff';x.lineWidth=2;x.beginPath();x.ellipse(0,0,8,13,0,0,Math.PI*2);x.fill();x.stroke();x.restore();}
-  wheel(-34,-12);wheel(34,-12);wheel(-34,24);wheel(34,24);
-  if(spd>5){x.strokeStyle='rgba(124,255,178,'+Math.min(0.6,spd/160)+')';x.lineWidth=3;x.beginPath();x.moveTo(-30,30);x.lineTo(-30-spd*0.32,30);x.moveTo(30,30);x.lineTo(30+spd*0.32,30);x.stroke();}
+  drawFloor(x,W,H,speed);
+  x.save();
+  x.translate(W/2, H/2+24);
+  x.lineCap='round'; x.lineJoin='round';
+  // 暗色路基（宽）
+  if(carTrail.length>1){
+    x.beginPath();
+    for(var i=0;i<carTrail.length;i++){var p=carTrail[i]; if(i===0)x.moveTo(p.x,p.y); else x.lineTo(p.x,p.y);}
+    x.strokeStyle='rgba(0,170,255,.10)'; x.lineWidth=30; x.stroke();
+    x.strokeStyle='rgba(8,26,46,.92)';  x.lineWidth=24; x.stroke();
+    // 彩虹中心带
+    for(var i=1;i<carTrail.length;i++){
+      var a=carTrail[i-1], b=carTrail[i], f=i/carTrail.length;
+      x.strokeStyle='hsl('+b.h+',95%,58%)';
+      x.lineWidth=1.5+f*7;
+      x.beginPath(); x.moveTo(a.x,a.y); x.lineTo(b.x,b.y); x.stroke();
+    }
+  }
+  drawCarBody(x, turn, speed);
+  x.restore();
+}
+function drawFloor(x,W,H,speed){
+  x.save();
+  x.strokeStyle='rgba(0,150,230,.09)'; x.lineWidth=1;
+  floorScroll=(floorScroll+speed*0.07)%40;
+  for(var gy=-40; gy<H+40; gy+=40){ var y=gy+floorScroll; x.beginPath(); x.moveTo(0,y); x.lineTo(W,y); x.stroke(); }
+  for(var gx=0; gx<=W; gx+=40){ x.beginPath(); x.moveTo(gx,0); x.lineTo(gx,H); x.stroke(); }
+  x.restore();
+}
+function drawCarBody(x, turn, speed){
+  x.save();
+  x.rotate(turn*0.7);
+  x.shadowColor='#00e0ff'; x.shadowBlur=18;
+  x.fillStyle='#0c3a5e'; x.strokeStyle='#7CFFB2'; x.lineWidth=2.5;
+  x.beginPath(); x.moveTo(0,-22); x.lineTo(13,-12); x.lineTo(13,16); x.lineTo(-13,16); x.lineTo(-13,-12); x.closePath(); x.fill(); x.stroke();
+  x.shadowBlur=0;
+  x.fillStyle='#0a2c47'; x.strokeStyle='#5fe0ff'; x.lineWidth=2;
+  x.beginPath(); x.moveTo(0,-10); x.lineTo(9,-2); x.lineTo(9,8); x.lineTo(-9,8); x.lineTo(-9,-2); x.closePath(); x.fill(); x.stroke();
+  function wheel(wx,wy,sw){ x.save(); x.translate(wx,wy); x.rotate(sw); x.fillStyle='#0a1622'; x.strokeStyle='#8be9ff'; x.lineWidth=2; x.beginPath(); x.ellipse(0,0,4.5,7,0,0,7); x.fill(); x.stroke(); x.restore(); }
+  wheel(-16,-8, turn); wheel(16,-8, turn); wheel(-16,12,0); wheel(16,12,0);
+  x.fillStyle='#eaffff'; x.shadowColor='#eaffff'; x.shadowBlur=10;
+  x.beginPath(); x.arc(-7,-20,2,0,7); x.arc(7,-20,2,0,7); x.fill();
   x.restore();
 }
 function startRec(){samples=[];recOn=true;recStart=Date.now();toast('已开始统计本次行程');document.getElementById('repTip').textContent='统计中… 行驶一会儿后回到本页生成卡片。';}
@@ -220,8 +279,8 @@ function genReport(){
 function fmtDur(s){var m=Math.floor(s/60),sec=Math.floor(s%60);return m+'分'+sec+'秒';}
 function dlReport(){var c=document.getElementById('repCanvas');if(!c){toast('请先生成');return;}var a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='drive_report.png';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},500);}
 
-document.addEventListener('visibilitychange',function(){ if(document.hidden) stopHud(); else startHud(); });
-startHud();
+document.addEventListener('visibilitychange',function(){ if(document.hidden){ stopHud(); stopCarAnim(); } else { startHud(); startCarAnim(); } });
+startHud(); startCarAnim();
 </script>
 </body>
 </html>
