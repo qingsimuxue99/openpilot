@@ -1,6 +1,6 @@
 {
-  "version": "1.0.50",
-  "changelog": "新增「参数差异对比」功能：在备份恢复面板新增对比卡片，选择一份设备内备份文件即可与当前参数逐项对比，高亮显示 新增 / 删除 / 修改 项并提供汇总统计（新增/删除/修改/未变计数）。后端新增 POST /api/param-diff，复用现有备份列表与下拉填充。",
-  "tag": "v1.0.50",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.50/release/c3_toolbox.tar.gz"
+  "version": "1.0.51",
+  "changelog": "设备信息面板重绘为赛博卡（带扫描线动效 + 霓虹边框），并新增「一键复制」按钮：把版本/分支/型号/IP/温度/电量等设备信息整段复制到剪贴板，方便报障求助。",
+  "tag": "v1.0.51",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.51/release/c3_toolbox.tar.gz"
 }
