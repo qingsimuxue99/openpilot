@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.17"
+VERSION = "1.0.18"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1256,6 +1256,69 @@ def api_splash_set():
         return jsonify({'success': False, 'message': f'刷入失败: {e}'})
 
 
+# ============= 实时驾驶 HUD 数据收集器（Dashy 风格，精简只读）=============
+# 用 openpilot 自带的 python 起独立子进程订阅 cereal，规避工具箱 venv 的 .so ABI 问题。
+# 收集器每 ~100ms 把最新状态原子写入 /tmp/dashy_state.json，Flask 只负责读文件返回。
+DASHY_STATE = '/tmp/dashy_state.json'
+DASHY_COLLECTOR = os.path.join(SCRIPT_DIR, 'dashy_collector.py')
+
+
+def _find_openpilot_python():
+    """找到能 import cereal.messaging 的 python（即运行 openpilot 的解释器）。"""
+    cands = ['/data/openpilot/venv/bin/python', '/usr/local/bin/python',
+             '/usr/bin/python3', 'python3']
+    for c in cands:
+        try:
+            r = subprocess.run([c, '-c', 'import cereal.messaging'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               timeout=8)
+            if r.returncode == 0:
+                return c
+        except Exception:
+            pass
+    return None
+
+
+def start_dashy_collector():
+    """拉起（或重启）数据收集器子进程。失败静默返回 False，前端将显示「不支持」。"""
+    try:
+        subprocess.run("pkill -f dashy_collector.py", shell=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    except Exception:
+        pass
+    py = _find_openpilot_python()
+    if not py:
+        return False
+    try:
+        subprocess.Popen([py, DASHY_COLLECTOR],
+                         stdout=open('/tmp/dashy_collector.log', 'w'),
+                         stderr=subprocess.STDOUT, start_new_session=True)
+        return True
+    except Exception:
+        return False
+
+
+@app.route('/api/dashy/state', methods=['GET'])
+def api_dashy_state():
+    try:
+        with open(DASHY_STATE) as f:
+            return jsonify(json.load(f))
+    except Exception:
+        return jsonify({'offroad': True, 'noData': True})
+
+
+@app.route('/api/dashy/status', methods=['GET'])
+def api_dashy_status():
+    ok = os.path.exists(DASHY_STATE)
+    fresh = False
+    if ok:
+        try:
+            fresh = (time.time() - os.path.getmtime(DASHY_STATE)) < 3
+        except Exception:
+            pass
+    return jsonify({'collector': bool(ok and fresh), 'stateFile': ok})
+
+
 if __name__ == '__main__':
     PORT = 5588
     # 确保目录存在
@@ -1283,4 +1346,12 @@ if __name__ == '__main__':
     print("  ╚══════════════════════════════════════╝")
     print(f"  自动备份文件: {AUTO_BACKUP_FILE}")
     print()
+    # 启动实时驾驶 HUD 数据收集器（失败不影响其它功能）
+    try:
+        if start_dashy_collector():
+            print("  [✓] 实时驾驶数据收集器已启动")
+        else:
+            print("  [!] 未找到可用 python 加载 cereal，实时画面功能将不可用")
+    except Exception as e:
+        print(f"  [!] 启动实时数据收集器失败: {e}")
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.17",
-  "tag": "v1.0.17",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.17/release/c3_toolbox.tar.gz",
-  "changelog": "移除「备用工具下载」入口（浏览器内已可直接生成 splash_new.bin，原 Windows 工具下载区无用，已删除前端区块、调用、JS 函数及后端 /api/resource 路由）。"
+  "version": "1.0.18",
+  "tag": "v1.0.18",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.18/release/c3_toolbox.tar.gz",
+  "changelog": "新增「实时画面 · 驾驶 HUD」（Dashy 风格，精简只读）：设备端独立子进程订阅 cereal 总线，把车速/车道线/前车距离(TTC)/转向/温度等以纯数据推到浏览器 Canvas HUD，局域网流畅、仅查看不写参数；支持 HUD 镜像翻转（挡风玻璃投射）；停车显示 Offroad。新增 dashy_collector.py，后端加 /api/dashy/state、/api/dashy/status，工具箱启动自动拉起收集器（无法加载 cereal 时优雅降级）。"
 }

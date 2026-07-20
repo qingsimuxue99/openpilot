@@ -359,6 +359,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端</span><span class="cbadge" id="bc-terminal">—</span></div>
     <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份</span><span class="cbadge" id="bc-backup">—</span></div>
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画</span><span class="cbadge" id="bc-bootanim">—</span></div>
+    <div class="cat-card" data-p="dashy" onclick="go('dashy')"><span class="cname">实时画面</span><span class="cbadge" id="bc-dashy">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -573,6 +574,21 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       </div>
     </div>
 
+    <!-- 实时画面 · 驾驶 HUD -->
+    <div class="pnl" id="p-dashy">
+      <div class="ph"><h2>实时画面 · 驾驶 HUD</h2><p>把设备的车速、车道线、前车距离等实时推到本页面（纯数据，局域网流畅）。仅查看，不写参数。</p></div>
+      <div class="cd">
+        <div class="bs-row" style="align-items:center;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px"><input type="checkbox" id="dashyMirror"> HUD 镜像（挡风玻璃投射，上下翻转）</label>
+          <span id="dashyStat" style="font-size:11px;color:var(--dim);margin-left:auto"></span>
+        </div>
+        <div style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
+          <canvas id="dashyCanvas" width="420" height="760" style="width:100%;border-radius:14px;background:#0a0c10;display:block;aspect-ratio:420/760"></canvas>
+        </div>
+        <div class="bs-note">需在设备行驶（有 carState 数据）时才有画面；停车显示 Offroad / 设备信息。若提示「不支持」，说明本设备无法加载 cereal 数据总线（不影响其它功能）。</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -591,6 +607,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
     <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
+    <div class="mn" data-p="dashy" onclick="go('dashy')"><span class="mi">📡</span><span class="mt">实时画面</span></div>
   </div>
 </nav>
 
@@ -883,7 +900,125 @@ function onTabSwitch(id){
   if(id==='dashboard'){loadInfo()}
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
+  else if(id==='dashy'){startDashy();}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
+  if(id!=='dashy'){stopDashy();}
+}
+
+// === 实时驾驶 HUD ===
+var dashyTimer=null, dashyState=null, dashyMirror=false;
+function startDashy(){
+  var cb=document.getElementById('dashyMirror');
+  if(cb){dashyMirror=cb.checked;cb.onchange=function(){dashyMirror=this.checked;};}
+  if(dashyTimer)return;
+  loopDashy();
+  dashyTimer=setInterval(loopDashy,100);
+}
+function stopDashy(){if(dashyTimer){clearInterval(dashyTimer);dashyTimer=null;}}
+async function loopDashy(){
+  try{
+    var d=await (await fetch('/api/dashy/state')).json();
+    dashyState=d;drawDashy();
+    var st=document.getElementById('dashyStat');
+    if(st){st.textContent=d.noData?'未连接数据总线':(d.offroad?'Offroad（未行驶）':'实时 '+new Date().toLocaleTimeString());}
+  }catch(e){}
+}
+function proj(W,H,px,py,near,horizon,mirror){
+  var pp=near/(near+Math.max(px,0.1));
+  var sx=W/2 - py*pp*(W*0.16);
+  var sy=horizon + (1-pp)*(H-horizon)*1.05;
+  if(mirror)sx=W-sx;
+  return [sx,sy];
+}
+function drawDashy(){
+  var c=document.getElementById('dashyCanvas');if(!c)return;
+  var x=c.getContext('2d'),W=c.width,H=c.height;
+  x.save();x.clearRect(0,0,W,H);x.fillStyle='#0a0c10';x.fillRect(0,0,W,H);
+  if(dashyMirror){x.translate(0,H);x.scale(1,-1);}
+  var d=dashyState||{},mirror=dashyMirror,horizon=H*0.40,near=7;
+
+  // 地平线
+  x.strokeStyle='rgba(255,255,255,.08)';x.lineWidth=1;
+  x.beginPath();x.moveTo(0,horizon);x.lineTo(W,horizon);x.stroke();
+
+  if(d.noData){
+    x.fillStyle='#ff6b6b';x.font='bold 18px sans-serif';x.textAlign='center';
+    x.fillText('本设备不支持实时画面',W/2,H/2);
+    x.fillStyle='#8b98a5';x.font='12px sans-serif';
+    x.fillText('（无法加载 cereal 数据总线）',W/2,H/2+24);
+    x.restore();return;
+  }
+
+  // 车道线
+  var lanes=d.lanes||[];
+  for(var i=0;i<lanes.length;i++){
+    var ln=lanes[i];if(!ln||!ln.length)continue;
+    x.beginPath();
+    for(var j=0;j<ln.length;j++){
+      var p=proj(W,H,ln[j][0],ln[j][1],near,horizon,mirror);
+      if(j===0)x.moveTo(p[0],p[1]);else x.lineTo(p[0],p[1]);
+    }
+    x.lineWidth=3;x.strokeStyle=(i===1||i===2)?'#3b82f6':'#4b5563';
+    x.stroke();
+  }
+  // 规划路径（彩虹/白线）
+  var path=d.path||[];
+  if(path.length){
+    x.beginPath();
+    for(var k=0;k<path.length;k++){
+      var pp=proj(W,H,path[k][0],path[k][1],near,horizon,mirror);
+      if(k===0)x.moveTo(pp[0],pp[1]);else x.lineTo(pp[0],pp[1]);
+    }
+    x.lineWidth=2;x.strokeStyle='rgba(255,255,255,.55)';x.stroke();
+  }
+
+  // 前车
+  var lead=d.lead;
+  if(lead){
+    var lp=proj(W,H,lead.dRel,lead.yRel,near,horizon,mirror);
+    var w=Math.max(14,90/(lead.dRel*0.10+1)),h=w*0.6;
+    var urgent=(lead.dRel<25)&&(lead.vRel<-2||lead.dRel<12);
+    x.fillStyle=urgent?'rgba(255,80,80,.85)':'rgba(180,180,180,.8)';
+    x.fillRect(lp[0]-w/2,lp[1]-h/2,w,h);
+    x.fillStyle=urgent?'#ff6b6b':'#cbd5e1';x.font='11px sans-serif';
+    x.textAlign='center';
+    var ttc=(lead.vRel<0&&lead.dRel>0)?(lead.dRel/(-lead.vRel)).toFixed(1)+'s':'—';
+    x.fillText(lead.dRel.toFixed(0)+'m '+ttc,lp[0],lp[1]-h/2-4);
+  }
+
+  // 顶部：速度
+  x.textAlign='center';
+  var kmh=(d.vEgo||0)*(d.isMetric===false?2.23694:3.6);
+  x.fillStyle=d.engaged?'#26d07c':'#cbd5e1';x.font='bold 56px sans-serif';
+  x.fillText(Math.round(kmh),W/2,horizon-46);
+  x.fillStyle='#8b98a5';x.font='13px sans-serif';
+  x.fillText(d.isMetric===false?'mph':'km/h',W/2,horizon-24);
+  // 限速圈标
+  if(d.speedLimit){
+    x.strokeStyle='#eab308';x.lineWidth=2;x.beginPath();x.arc(W/2,horizon-50,40,0,Math.PI*2);x.stroke();
+  }
+  // 状态行
+  x.fillStyle=d.engaged?'#26d07c':'#8b98a5';x.font='bold 13px sans-serif';
+  x.fillText(d.engaged?(d.experimental?'ON · 实验模式':'ON'):'OFF',W/2,horizon-72);
+
+  // 底部信息栏
+  x.fillStyle='#8b98a5';x.font='12px sans-serif';x.textAlign='left';
+  x.fillText('挡位 '+((d.gear)||'?'),12,H-46);
+  x.fillText('转向 '+((d.steer)||0)+'°',12,H-28);
+  x.textAlign='right';
+  x.fillText('巡航 '+(d.cruise?(Math.round((d.cruiseSpeed||0)*3.6)+'km/h'):'关'),W-12,H-46);
+  x.fillText('CPU '+((d.cpuTemp)||0)+'°C · 空闲 '+((d.freeSpace)||0)+'G',W-12,H-28);
+  // 转向灯
+  if(d.blinkerL||d.blinkerR){
+    x.fillStyle='#facc15';x.font='bold 20px sans-serif';x.textAlign='center';
+    x.fillText((d.blinkerL?'◀ ':'')+(d.blinkerR?'▶':''),W/2,H-20);
+  }
+  // Offroad 提示
+  if(d.offroad){
+    x.fillStyle='rgba(139,152,165,.6)';x.font='13px sans-serif';x.textAlign='center';
+    x.fillText('停车 / Offroad',W/2,H-64);
+  }
+  x.restore();
 }
 
 
