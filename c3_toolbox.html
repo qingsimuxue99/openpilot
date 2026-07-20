@@ -606,7 +606,14 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         <div id="bkList" style="margin-top:8px"></div>
       </div>
       <div class="cd"><div class="ct">恢复</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">选择备份文件恢复到设备（支持自动备份和手动备份文件）</p>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">方式一：从设备内已有参数备份文件恢复</p>
+        <select id="bkRestoreSelect" style="width:100%;padding:6px;border-radius:6px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);font-size:12px">
+          <option value="">— 请选择设备内备份文件 —</option>
+        </select>
+        <button class="btn bw" onclick="restoreBkDevice()" style="margin-top:8px">从设备备份文件恢复</button>
+        <div style="border-top:1px dashed var(--rule);margin:12px 0"></div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">方式二：上传本地备份文件恢复</p>
+        <p style="font-size:11px;color:var(--dim);margin-bottom:8px">选择备份文件恢复到设备（支持自动备份和手动备份文件）</p>
         <div class="fg"><input type="file" id="rFile" accept=".json" style="color:var(--ink)"></div>
         <button class="btn bw" onclick="doRestore()" style="margin-top:8px">恢复到设备</button>
       </div>
@@ -1260,7 +1267,31 @@ function doReboot(){document.getElementById('rebootMo').classList.add('show')}
 function closeMo(){document.getElementById('rebootMo').classList.remove('show')}
 async function confirmReboot(){closeMo();try{await fetch('/api/reboot',{method:'POST'});toast('设备重启中...','ok')}catch(e){toast('失败','er')}}
 async function doBackup(){toast('备份中...','in');try{var r=await fetch('/api/backup',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er');if(d.success)loadBkList()}catch(e){toast('失败','er')}}
-function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';return}var h='';d.backups.forEach(function(b){var tag=b.type==='auto'?'<span style="background:rgba(var(--accent-rgb),.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+b.name+tag+'</span><span style="color:var(--dim)">'+b.time+' · '+(b.size/1024).toFixed(1)+'KB</span></div>'});el.innerHTML=h}).catch(function(){})}
+function loadBkList(){fetch('/api/backups').then(function(r){return r.json()}).then(function(d){var el=document.getElementById('bkList');var sel=document.getElementById('bkRestoreSelect');if(!el)return;if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无备份文件</p>';if(sel)sel.innerHTML='<option value="">— 暂无备份文件 —</option>';return}var h='';var opts='';d.backups.forEach(function(b){var kb=(b.size/1024).toFixed(1);var tag=b.type==='auto'?'<span style="background:rgba(var(--accent-rgb),.1);color:var(--accent);font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px">自动</span>':'';h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+tag+'</span>'
+        +'<span style="color:var(--dim)">'+b.time+' · '+kb+'KB '
+        +'<a class="upd-link" onclick="dlBk(\''+esc(b.name)+'\')">下载</a> '
+        +'<a class="upd-link" style="color:var(--accent2)" onclick="delBk(\''+esc(b.name)+'\')">删除</a></span></div>';
+        opts+='<option value="'+esc(b.name)+'">'+esc(b.name)+' ('+kb+'KB)</option>';
+      });el.innerHTML=h;if(sel)sel.innerHTML='<option value="">— 请选择设备内备份文件 —</option>'+opts}).catch(function(){})}
+function dlBk(name){window.open('/api/backup/download/'+encodeURIComponent(name));}
+async function delBk(name){
+  if(!confirm('确定删除参数备份 '+name+' ？此操作不可恢复'))return;
+  try{
+    var r=await fetch('/api/backup/delete/'+encodeURIComponent(name),{method:'POST'});var d=await r.json();
+    toast(d.message||(d.success?'已删除':'删除失败'), d.success?'ok':'er');
+    if(d.success)loadBkList();
+  }catch(e){toast('删除失败','er');}
+}
+async function restoreBkDevice(){
+  var sel=document.getElementById('bkRestoreSelect');var fn=sel?sel.value:'';
+  if(!fn){toast('请先选择备份文件','er');return;}
+  if(!confirm('将从设备备份文件 '+fn+' 恢复参数，此操作会覆盖现有同名参数，确定？'))return;
+  try{
+    var r=await fetch('/api/restore/file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:fn})});var d=await r.json();
+    toast(d.message,d.success?'ok':'er');
+    if(d.success)loadParams();
+  }catch(e){toast('失败','er');}
+}
 function doDisconnect(){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);color:var(--muted);font-size:16px">已断开连接，关闭此页面即可</div>'}
 async function doRestore(){var f=document.getElementById('rFile');if(!f.files.length){toast('请选择备份文件','er');return}
   var reader=new FileReader();reader.onload=async function(e){try{var p=JSON.parse(e.target.result);if(!confirm('恢复 '+Object.keys(p).length+' 个参数?'))return;

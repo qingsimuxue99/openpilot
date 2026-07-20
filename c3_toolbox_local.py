@@ -47,7 +47,7 @@ PERC_DATA = {"available": False, "source": "none", "reason": "init", "boxes": []
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.48"
+VERSION = "1.0.49"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -975,6 +975,66 @@ def api_download_backup(filename):
     if os.path.isfile(fp):
         return send_from_directory(os.path.dirname(fp), os.path.basename(fp), as_attachment=True)
     return jsonify({'success': False, 'message': '文件不存在'})
+
+
+@app.route('/api/restore/file', methods=['POST'])
+def api_restore_file():
+    """从设备内已有参数备份文件恢复（按文件名定位手动或自动备份目录）"""
+    data = request.json or {}
+    filename = data.get('filename', '')
+    if not filename:
+        return jsonify({'success': False, 'message': '未指定备份文件'})
+    sk = safe_key(filename)
+    if not sk.endswith('.json'):
+        return jsonify({'success': False, 'message': '仅支持 .json 备份文件'})
+    # 先查手动备份目录，再查自动备份目录
+    fp = os.path.join(BACKUP_DIR, sk)
+    if not os.path.isfile(fp):
+        fp = os.path.join(AUTO_BACKUP_DIR, sk)
+    if not os.path.isfile(fp):
+        return jsonify({'success': False, 'message': '备份文件不存在'})
+    try:
+        with open(fp, 'r', encoding='utf-8') as f:
+            params = json.load(f)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'读取备份文件失败: {e}'})
+    if not isinstance(params, dict) or not params:
+        return jsonify({'success': False, 'message': '备份文件内容无效（应为参数键值对）'})
+    count = 0
+    try:
+        for key, value in params.items():
+            skk = safe_key(key)
+            if not skk:
+                continue
+            with open(os.path.join(PARAMS_DIR, skk), 'w') as f:
+                f.write(str(value))
+            count += 1
+        return jsonify({'success': True, 'message': f'已从 {sk} 恢复 {count} 个参数', 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'恢复失败: {e}'})
+
+
+@app.route('/api/backup/delete/<filename>', methods=['POST'])
+def api_delete_backup(filename):
+    """删除设备内某个参数备份文件（手动或自动目录），防路径穿越"""
+    sk = safe_key(filename)
+    if not sk.endswith('.json'):
+        return jsonify({'success': False, 'message': '仅支持删除 .json 备份文件'})
+    fp = os.path.join(BACKUP_DIR, sk)
+    if os.path.isfile(fp):
+        try:
+            os.remove(fp)
+            return jsonify({'success': True, 'message': f'已删除 {sk}'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'删除失败: {e}'})
+    fp = os.path.join(AUTO_BACKUP_DIR, sk)
+    if os.path.isfile(fp):
+        try:
+            os.remove(fp)
+            return jsonify({'success': True, 'message': f'已删除 {sk}'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'删除失败: {e}'})
+    return jsonify({'success': False, 'message': '备份文件不存在'})
 
 
 # ============= 完整备份/恢复（/data/openpilot 整目录）=============
