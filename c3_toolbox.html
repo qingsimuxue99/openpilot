@@ -486,6 +486,8 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .vslot-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .vup{position:relative}
 .vtag{font-size:11px;padding:3px 9px;border-radius:14px;background:var(--bg4);color:var(--muted);font-weight:600;white-space:nowrap}
+.vshare{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.vshare .btn{font-size:13px;padding:9px 16px}
 </style>
 </head>
 <body>
@@ -866,6 +868,14 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 
         <div class="ct" style="margin-top:16px">语音提示与替换</div>
         <div id="voiceSlots"></div>
+
+        <div class="ct" style="margin-top:18px">语音包分享（方便备份与分享给朋友）</div>
+        <div class="vshare">
+          <button class="btn bs" id="btnPlayAll" onclick="playAllVoices()">全部试听 🎧</button>
+          <button class="btn bs" onclick="exportVoicePack()">导出语音包 📦</button>
+          <label class="btn bs vup">导入语音包 📥<input type="file" id="vpImport" accept=".zip" onchange="importVoicePack()" hidden></label>
+        </div>
+        <div class="bs-note">「全部试听」按顺序播报全部 6 句语音（再点一次可停止）；「导出语音包」把已上传替换的语音打包成 zip 下载；「导入语音包」可一键应用朋友分享的语音包（同名覆盖，仅接受 6 类合法语音）。</div>
       </div>
     </div>
 
@@ -1950,6 +1960,65 @@ function resetVoice(k){
 function testVoice(k){
   var item=VOICE_TYPES.filter(function(x){return x.k===k;})[0];
   if(item)playEventAudio(k,item.text);
+}
+
+// 全部试听：顺序播报 6 句；再点一次停止
+var _playAllIdx=-1, _playAllTimer=null;
+function playAllVoices(){
+  var b=document.getElementById('btnPlayAll');
+  if(_playAllIdx>=0){ // 正在播放 -> 停止
+    _playAllIdx=-1;
+    if(_playAllTimer){clearTimeout(_playAllTimer);_playAllTimer=null;}
+    if('speechSynthesis' in window)speechSynthesis.cancel();
+    if(b)b.textContent='全部试听 🎧';
+    toast('已停止试听','ok');
+    return;
+  }
+  _playAllIdx=0;
+  if(b)b.textContent='停止 ■';
+  _playOne();
+}
+function _playOne(){
+  if(_playAllIdx<0)return;
+  if(_playAllIdx>=VOICE_TYPES.length){
+    _playAllIdx=-1;
+    var b=document.getElementById('btnPlayAll'); if(b)b.textContent='全部试听 🎧';
+    toast('已全部试听','ok');
+    return;
+  }
+  var item=VOICE_TYPES[_playAllIdx];
+  flashVoice('试听：'+item.label);
+  playEventAudio(item.k, item.text);
+  _playAllIdx++;
+  _playAllTimer=setTimeout(_playOne, 2700); // 间隔，等待上一句播完
+}
+
+// 导出语音包：打包已替换的语音 + manifest 成 zip 下载
+function exportVoicePack(){
+  toast('正在打包语音包…','ok');
+  fetch('/api/voice/export').then(function(r){
+    if(!r.ok){toast('导出失败','er');return null;}
+    return r.blob();
+  }).then(function(blob){
+    if(!blob)return;
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download='c3_voice_pack.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},3000);
+    toast('语音包已导出','ok');
+  }).catch(function(){toast('导出失败','er');});
+}
+
+// 导入语音包：把 zip 内 6 类合法语音一键应用
+function importVoicePack(){
+  var inp=document.getElementById('vpImport');
+  if(!inp||!inp.files||!inp.files[0]){toast('请先选择语音包 zip','er');return;}
+  var fd=new FormData(); fd.append('file',inp.files[0]);
+  toast('正在导入语音包…','ok');
+  fetch('/api/voice/import',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
+    if(d.success){toast('已导入 '+d.imported+' 条语音','ok'); refreshVoiceRepl();} else toast(d.message||'导入失败','er');
+    if(inp)inp.value='';
+  }).catch(function(){toast('导入失败','er'); if(inp)inp.value='';});
 }
 
 // === Init ===

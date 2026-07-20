@@ -1,6 +1,6 @@
 {
-  "version": "1.0.57",
-  "changelog": "新增「语音互动 🔊」（取消昼夜自动主题）：连接 C3 原车动作，实时语音播报——左/右转向、激活/退出 ACC、倒车、智能减速；默认由浏览器台湾腔女声合成，支持上传自定义语音逐个替换。",
-  "tag": "v1.0.57",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.57/release/c3_toolbox.tar.gz"
+  "version": "1.0.58",
+  "changelog": "语音互动增强：新增「语音包分享」——一键「全部试听」顺序播报 6 句语音；「导出语音包」把已上传替换的语音打包成 zip 备份/分享；「导入语音包」可一键应用朋友分享的语音包（仅接受 6 类合法语音、防目录穿越）。",
+  "tag": "v1.0.58",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.58/release/c3_toolbox.tar.gz"
 }

@@ -5,7 +5,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 直接运行在 C3 设备上，浏览器访问 http://设备IP:5588 即可
 """
 
-import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re
+import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re, zipfile
 
 try:
     from flask import Flask, request, jsonify, send_file, send_from_directory, Response
@@ -57,7 +57,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.57"
+VERSION = "1.0.58"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1705,6 +1705,75 @@ def api_voice_reset():
         except Exception as e:
             return jsonify({'success': False, 'message': '删除失败：%s' % e})
     return jsonify({'success': True, 'type': t, 'message': '已恢复默认语音'})
+
+
+@app.route('/api/voice/export')
+def api_voice_export():
+    """打包所有已上传替换的语音 + manifest，方便备份与分享给朋友。"""
+    bins = {}  # type -> 二进制
+    manifest = {'version': 1, 'types': []}
+    for t in sorted(VALID_VOICE):
+        p = os.path.join(VOICE_DIR, t + '.mp3')
+        replaced = os.path.isfile(p)
+        manifest['types'].append({
+            'type': t,
+            'text': VOICE_TEXT.get(t, ''),
+            'replaced': replaced,
+        })
+        if replaced:
+            try:
+                with open(p, 'rb') as f:
+                    data = f.read()
+                if data:
+                    bins[t] = data
+            except Exception:
+                pass
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for t, data in bins.items():
+            z.writestr(t + '.mp3', data)
+        z.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
+    buf.seek(0)
+    resp = send_file(buf, mimetype='application/zip')
+    resp.headers['Content-Disposition'] = 'attachment; filename="c3_voice_pack.zip"'
+    return resp
+
+
+@app.route('/api/voice/import', methods=['POST'])
+def api_voice_import():
+    """导入朋友分享的语音包 zip（仅接受 6 类合法语音，防目录穿越）。"""
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'success': False, 'message': '未收到文件'})
+    fn = (f.filename or '').lower()
+    if not fn.endswith('.zip'):
+        return jsonify({'success': False, 'message': '仅支持 .zip 语音包'})
+    try:
+        raw = f.read()
+        imported = 0
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            for name in z.namelist():
+                base = os.path.basename(name)  # 丢弃路径，防穿越
+                if not base.lower().endswith('.mp3'):
+                    continue
+                t = base[:-4]
+                if t not in VALID_VOICE:
+                    continue
+                try:
+                    content = z.read(name)
+                except Exception:
+                    continue
+                if not content or len(content) > 5 * 1024 * 1024:  # 单文件 5MB 上限
+                    continue
+                os.makedirs(VOICE_DIR, exist_ok=True)
+                with open(os.path.join(VOICE_DIR, t + '.mp3'), 'wb') as out:
+                    out.write(content)
+                imported += 1
+    except zipfile.BadZipFile:
+        return jsonify({'success': False, 'message': '文件不是有效的语音包 zip'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': '导入失败：%s' % e})
+    return jsonify({'success': True, 'imported': imported, 'message': '已导入 %d 条语音' % imported})
 
 
 if __name__ == '__main__':
