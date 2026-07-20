@@ -43,7 +43,6 @@ EVENT_LOCK = threading.Lock()
 EVENT_DATA = {
     "available": False, "reason": "init",
     "left_blinker": False, "right_blinker": False, "acc_enabled": False,
-    "reversing": False, "decelerating": False,
     "last_event": {"type": None, "seq": 0, "ts": 0.0},
 }
 
@@ -57,7 +56,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.61"
+VERSION = "1.0.62"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1544,31 +1543,20 @@ def _perception_collector():
 
 
 def _parse_events(sm):
-    """从 carState / controlsState 解析原车动作，返回状态字典。"""
-    st = {"left_blinker": False, "right_blinker": False, "acc_enabled": False,
-          "reversing": False, "decelerating": False}
+    """从 carState 解析原车动作，返回状态字典。
+    注：倒车(gearShifter 是 capnp 枚举，非字符串 'reverse')与减速(controlsState.decelFor*
+    字段在 cpv9-dev 分支不一定存在)两类信号在该分支不可靠，已移除，避免误判不触发。
+    仅保留转向灯与 ACC——这两类字段跨 openpilot 版本稳定。"""
+    st = {"left_blinker": False, "right_blinker": False, "acc_enabled": False}
     try:
         cs = sm['carState']
         if cs is not None:
             st['left_blinker'] = bool(getattr(cs, 'leftBlinker', False))
             st['right_blinker'] = bool(getattr(cs, 'rightBlinker', False))
-            st['reversing'] = bool(getattr(cs, 'gearShifter', None) == 'reverse')
             try:
                 st['acc_enabled'] = bool(getattr(cs, 'cruiseState', None) and getattr(cs.cruiseState, 'enabled', False))
             except Exception:
                 st['acc_enabled'] = False
-    except Exception:
-        pass
-    # 减速意图：取 controlsState 的各减速原因分值（跨 openpilot 版本字段名稳定）
-    try:
-        ctl = sm['controlsState']
-        if ctl is not None and getattr(ctl, 'enabled', False):
-            for f in ('decelForModel', 'decelForTurn', 'decelForCurve', 'decelForLead'):
-                try:
-                    if float(getattr(ctl, f, 0) or 0) > 0:
-                        st['decelerating'] = True
-                except Exception:
-                    pass
     except Exception:
         pass
     return st
@@ -1583,20 +1571,18 @@ def _event_collector():
         with EVENT_LOCK:
             EVENT_DATA = {"available": False, "reason": "no_cereal:%s" % e,
                           "left_blinker": False, "right_blinker": False, "acc_enabled": False,
-                          "reversing": False, "decelerating": False,
                           "last_event": {"type": None, "seq": 0, "ts": 0.0}}
         print("[事件采集] 无法导入 cereal，事件接口返回 available:false（%s）" % e)
         return
     try:
-        sm = SubMaster(['carState', 'controlsState'])
+        sm = SubMaster(['carState'])
     except Exception as e:
         with EVENT_LOCK:
             EVENT_DATA = {"available": False, "reason": "submaster:%s" % e,
                           "left_blinker": False, "right_blinker": False, "acc_enabled": False,
-                          "reversing": False, "decelerating": False,
                           "last_event": {"type": None, "seq": 0, "ts": 0.0}}
         return
-    print("[事件采集] 已启动，订阅 carState / controlsState")
+    print("[事件采集] 已启动，订阅 carState")
     seq = 0
     prev = {}
     while True:
@@ -1612,10 +1598,6 @@ def _event_collector():
                 edges.append('acc_on')
             if prev.get('acc_enabled') and not st.get('acc_enabled'):
                 edges.append('acc_off')
-            if st.get('reversing') and not prev.get('reversing'):
-                edges.append('reverse')
-            if st.get('decelerating') and not prev.get('decelerating'):
-                edges.append('decel')
             prev = st
             with EVENT_LOCK:
                 d = dict(EVENT_DATA)
@@ -1637,14 +1619,12 @@ def api_perception():
 
 
 # ===== 原车动作事件 + 语音互动 =====
-VALID_VOICE = {'turn_left', 'turn_right', 'acc_on', 'acc_off', 'reverse', 'decel'}
+VALID_VOICE = {'turn_left', 'turn_right', 'acc_on', 'acc_off'}
 VOICE_TEXT = {
     'turn_left': '正在左转向',
     'turn_right': '正在右转向',
     'acc_on': 'OP智能驾驶已激活',
     'acc_off': '退出智能驾驶',
-    'reverse': '倒车中请注意观察四周',
-    'decel': '智能减速中，请注意安全',
 }
 
 
