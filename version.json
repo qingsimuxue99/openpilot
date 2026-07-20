@@ -1,6 +1,6 @@
 {
-  "version": "1.0.26",
-  "changelog": "投屏修正：抓 X11/Wayland 显示(x11grab)得到真实 UI 屏幕(含车速/车道线/报警HUD)，不再误投道路相机(uiDebug.frame 实为相机帧)。修掉相机帧靠 mtime 覆盖 UI 帧的优先级 bug；ffmpeg 一键安装改为确保带 x11grab。",
-  "tag": "v1.0.26",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.26/release/c3_toolbox.tar.gz"
+  "version": "1.0.27",
+  "changelog": "投屏修正：改用 VisionIpc 订阅 UI 屏幕流(uiDebug)，抓真正的 UI 屏幕(含车速/车道线/报警 HUD)，不再误抓相机/帧缓冲；适配 comma c3 嵌入式设备（无 X11）",
+  "tag": "v1.0.27",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.27/release/c3_toolbox.tar.gz"
 }

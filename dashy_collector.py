@@ -9,7 +9,8 @@
 - 用 openpilot 自带的 python 运行（由工具箱探测后拉起），绕开工具箱 venv 的编译 .so ABI 问题。
 - cereal 是 openpilot / carrot / sunnypilot / frogpilot 通用的消息总线，五分支都适用。
 """
-import sys, os, time, json
+import sys, os, time, json, threading
+import numpy as np
 
 OPENPILOT_DIR = "/data/openpilot"
 STATE = "/tmp/dashy_state.json"
@@ -49,31 +50,187 @@ def downsample_pts(pts, n=17):
     return out
 
 
-def screen_loop():
-    """独立线程：订阅 cereal uiDebug，把屏幕帧(JPEG)写到 /tmp/screen.jpg，供投屏使用。
+# ===== UI 屏幕流采集（VisionIpc，comma connect 同款机制）=====
+# comma 设备上的「屏幕画面」= selfdrive/ui 进程通过 VisionIpc 发布的 uiDebug 像素流（合成后的
+# UI 屏幕，含车速/车道线/报警等 HUD 叠加层），不是 cereal 的 uiDebug.frame（那是相机/metadata）。
+# 故用 VisionIpcClient 直接订阅该像素流，解码成 JPEG 写 /tmp/screen.jpg 供投屏。
 
-    与数据 HUD 主循环完全隔离：本分支若没有 uiDebug（或 frame 非 JPEG），
-    只是此线程不写文件，绝不影响 HUD。仅读取，不写参数。
+def _vipc_diag(msg):
+    try:
+        with open("/tmp/screen_vipc.log", "a") as f:
+            f.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
+    except Exception:
+        pass
+
+
+def _battr(buf, name, default=0):
+    try:
+        v = getattr(buf, name, default)
+        if callable(v):
+            v = v()
+        return int(v)
+    except Exception:
+        return default
+
+
+def _decode_rgb(buf, is_rgb):
+    """从 VisionBuf 解码出 HxWx3 uint8 RGB。is_rgb=True 表示 RGB 流，否则 NV12 流。"""
+    w = _battr(buf, "width"); h = _battr(buf, "height")
+    if not w or not h:
+        return None
+    try:
+        raw = buf.data
+        if isinstance(raw, (bytes, bytearray, memoryview)):
+            data = np.frombuffer(raw, dtype=np.uint8)
+        elif isinstance(raw, np.ndarray):
+            data = raw.ravel().view(np.uint8) if raw.dtype != np.uint8 else raw.ravel()
+        else:
+            data = np.frombuffer(bytes(raw), dtype=np.uint8)
+    except Exception:
+        return None
+    try:
+        if is_rgb:
+            return data.reshape(h, w, 3).copy()
+        stride = _battr(buf, "stride") or w
+        uv_off = _battr(buf, "uv_offset")
+        if not uv_off:
+            uv_off = stride * (((h // 2) + 15) // 16 * 16)
+        y = data[:uv_off].reshape(-1, stride)[:h, :w]
+        uv_plane = stride * (((h // 2) + 15) // 16 * 16)
+        uv = data[uv_off:uv_off + uv_plane]
+        u = uv[::2].reshape(-1, stride // 2)[:h // 2, :w // 2]
+        v = uv[1::2].reshape(-1, stride // 2)[:h // 2, :w // 2]
+        u2 = u.repeat(2, 0).repeat(2, 1)[:h, :w]
+        v2 = v.repeat(2, 0).repeat(2, 1)[:h, :w]
+        yuv = np.dstack((y.astype(np.int16), u2.astype(np.int16), v2.astype(np.int16))).astype(np.int16)
+        yuv[:, :, 1:] -= 128
+        mat = np.array([[1.0, 1.0, 1.0],
+                        [0.0, -0.39465, 2.03211],
+                        [1.13983, -0.58060, 0.0]])
+        rgb = np.dot(yuv, mat).clip(0, 255).astype(np.uint8)
+        return rgb
+    except Exception as e:
+        _vipc_diag("decode error: %s" % e)
+        return None
+
+
+def _rgb_to_jpg(rgb):
+    try:
+        from PIL import Image
+        import io
+        out = io.BytesIO()
+        Image.fromarray(rgb).save(out, "JPEG", quality=82)
+        return out.getvalue()
+    except Exception:
+        pass
+    try:
+        import cv2
+        ok, buf = cv2.imencode(".jpg", rgb[..., ::-1])
+        if ok:
+            return buf.tobytes()
+    except Exception:
+        pass
+    return None
+
+
+def _recv_timeout(client, timeout):
+    res = [None]
+
+    def _r():
+        try:
+            res[0] = client.recv()
+        except Exception:
+            res[0] = None
+    t = threading.Thread(target=_r, daemon=True)
+    t.start()
+    t.join(timeout)
+    return res[0]
+
+
+def screen_loop():
+    """独立线程：用 VisionIpc 订阅 UI 屏幕流（comma connect 同款机制），把合成后的 UI 屏幕
+    （含车速/车道线/报警等 HUD 叠加层）解码成 JPEG 写到 /tmp/screen.jpg，供投屏使用。
+
+    真正的「屏幕画面」在 comma 设备上是 selfdrive/ui 进程通过 VisionIpc 发布的 uiDebug 像素流，
+    而不是 cereal 的 uiDebug.frame（那是相机/metadata，之前误抓到摄像头画面就源于此）。
+    本线程直接抓 VisionIpc 像素流。仅读取，不写参数。失败不影响 HUD 主循环。诊断写入 /tmp/screen_vipc.log。
     """
     try:
-        from cereal.messaging import SubMaster
-        sm = SubMaster(["uiDebug"])
-    except Exception:
-        return
-    last = None
-    while True:
         try:
-            sm.update(200)
-            f = sm["uiDebug"].frame
-            # 仅当是有效 JPEG（SOI 标记）、足够大、且内容相比上一帧有变化时才写，
-            # 避免写入固定帧（部分分支 uiDebug.frame 只发初始帧），让投屏能正确回退到 /dev/shm 活源
-            if f and f[:2] == b'\xff\xd8' and len(f) > 1000 and f != last:
-                last = f
-                with open(SCREEN_JPG, "wb") as fh:
-                    fh.write(f)
+            from cereal.visionipc import VisionIpcClient, VisionStreamType
+        except Exception:
+            from msgq.visionipc import VisionIpcClient, VisionStreamType
+    except Exception as e:
+        _vipc_diag("import VisionIpc 失败: %s" % e)
+        return
+
+    servers = ["uiDebug", "ui"]
+    # 候选 stream 类型（NV12 / RGB），不同分支/硬件名称不同
+    rgb_flags = {"VISION_STREAM_RGB_UI_BACK": True, "VISION_STREAM_RGB_UI_FRONT": True,
+                 "VISION_STREAM_UI_BACK": False, "VISION_STREAM_UI_FRONT": False}
+    cands = []
+    for sn, is_rgb in rgb_flags.items():
+        try:
+            cands.append((sn, getattr(VisionStreamType, sn), is_rgb))
         except Exception:
             pass
-        time.sleep(0.1)
+    if not cands:
+        _vipc_diag("无可用 UI stream 枚举（VisionStreamType 不含 UI_*）")
+        return
+
+    last = None
+    while True:
+        connected = False
+        for srv in servers:
+            for sn, st, is_rgb in cands:
+                try:
+                    client = VisionIpcClient(srv, st, True)
+                    try:
+                        client.connect()
+                    except TypeError:
+                        client.connect(True)
+                    buf0 = _recv_timeout(client, 3)
+                    if buf0 is None:
+                        try:
+                            client.stop()
+                        except Exception:
+                            pass
+                        continue
+                    rgb0 = _decode_rgb(buf0, is_rgb)
+                    if rgb0 is None:
+                        try:
+                            client.stop()
+                        except Exception:
+                            pass
+                        continue
+                    _vipc_diag("connected %s/%s %dx%d" % (srv, sn, _battr(buf0, "width"), _battr(buf0, "height")))
+                    connected = True
+                    last = None
+                    while True:
+                        try:
+                            buf = _recv_timeout(client, 1)
+                            if buf is None:
+                                break  # 超时/断开，回到外层重连
+                            rgb = _decode_rgb(buf, is_rgb)
+                            if rgb is None:
+                                continue
+                            jpg = _rgb_to_jpg(rgb)
+                            if jpg and jpg != last:
+                                last = jpg
+                                with open(SCREEN_JPG, "wb") as fh:
+                                    fh.write(jpg)
+                        except Exception:
+                            break
+                    try:
+                        client.stop()
+                    except Exception:
+                        pass
+                    break
+                except Exception as e:
+                    _vipc_diag("exc %s/%s: %s" % (srv, sn, e))
+            if connected:
+                break
+        time.sleep(0.5)
 
 
 def main():

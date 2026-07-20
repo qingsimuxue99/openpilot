@@ -576,7 +576,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 
     <!-- 实时画面 · 屏幕投屏 / 数据 HUD -->
     <div class="pnl" id="p-dashy">
-      <div class="ph"><h2>实时画面 · 屏幕投屏 / 驾驶 HUD</h2><p>「投屏」= 把电脑显示器上 openpilot 的 <b>UI 屏幕</b>（含 HUD 叠加层）实时镜像到本页——这就是你要的「屏幕画面」，不是摄像头；「数据 HUD」= 纯数据仪表盘。均仅查看，不写参数。</p></div>
+      <div class="ph"><h2>实时画面 · 屏幕投屏 / 驾驶 HUD</h2><p>「投屏」= 把 comma 设备屏幕上的 openpilot <b>UI 屏幕</b>（含车速/车道线/报警等 HUD 叠加层）实时镜像到本页——这就是你要的「屏幕画面」，不是摄像头；「数据 HUD」= 纯数据仪表盘。均仅查看，不写参数。</p></div>
       <div class="cd">
         <div class="bs-row" style="align-items:center;flex-wrap:wrap;gap:10px">
           <label style="font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px"><input type="radio" name="dashySrc" value="screen" checked onchange="setDashySrc('screen')"> 投屏（屏幕镜像）</label>
@@ -589,7 +589,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
             <img id="dashyScreen" alt="投屏" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block">
           </div>
           <div id="dashyEnv" style="display:none;margin-top:8px;font-size:12px;color:var(--muted)"></div>
-          <div class="bs-note">低延迟投屏：把电脑显示器上 openpilot 的 <b>UI 屏幕</b>（车速/车道线/报警等 HUD 叠加层）实时镜像到本页——即你要的「屏幕画面」，不是摄像头。通过抓取 X 显示(x11grab)实现，延迟通常 100ms 级。若提示「不可用」：①确认 openpilot UI 正在显示器上运行；②确认工具箱是在图形界面终端启动的（需要 DISPLAY 环境变量）；③若缺 ffmpeg，点上方「一键安装」。</div>
+          <div class="bs-note">低延迟投屏：把 comma 设备屏幕上的 openpilot <b>UI 屏幕</b>（车速/车道线/报警等 HUD 叠加层）实时镜像到本页——即你要的「屏幕画面」，不是摄像头。通过订阅设备 UI 进程的 VisionIpc 屏幕流(uiDebug)实现，延迟通常 100ms 级。若提示「不可用」：① 确认 openpilot UI 正在设备屏幕运行（非 offroad 黑屏）；② 工具箱需更新到 v1.0.27+（已改用 VisionIpc 抓屏）；③ 若缺 ffmpeg 点上方「一键安装」。</div>
         </div>
         <div id="dashyHudWrap" style="display:none">
           <div style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
@@ -948,7 +948,7 @@ function checkScreenEnv(){
   fetch('/api/screen/status').then(r=>r.json()).then(function(s){
     var st=document.getElementById('dashyStat'), env=document.getElementById('dashyEnv');
     if(s.available){
-      if(st){var txt='投屏中（'+(s.source||'未知')+'）'; if(s.is_camera)txt+=' · ⚠ 当前为相机画面(非UI)'; else if(s.frame_age_s!=null)txt+=' · 实时'; st.textContent=txt;}
+      if(st){var txt='投屏中（UI 屏幕流）'; if(s.is_camera)txt+=' · ⚠ 当前为相机画面(非UI)'; else if(s.frame_age_s!=null)txt+=' · 实时('+s.frame_age_s+'s前)'; st.textContent=txt;}
       if(env)env.style.display='none';
     }else{
       if(st)st.textContent='投屏不可用';
@@ -957,7 +957,7 @@ function checkScreenEnv(){
         if(!s.ffmpeg){
           env.innerHTML='<span style="color:#ff6b6b">缺少 ffmpeg</span> · <button class="upd-btn" onclick="installFfmpeg()">一键安装 ffmpeg</button>';
         }else{
-          env.innerHTML='<span style="color:#ff6b6b">无可用投屏源</span> · 需要 X11 显示(x11grab)或 ffmpeg。<br>请确认：① openpilot UI 正在显示器运行；② 工具箱在图形界面终端启动（有 DISPLAY）；③ 若缺 ffmpeg 点上方「一键安装」。<br>诊断：<code style="font-size:10px">echo $DISPLAY; ffmpeg -devices 2>&1 | grep -i x11grab; xdpyinfo 2>/dev/null | grep dimensions</code>';
+          env.innerHTML='<span style="color:#ff6b6b">UI 屏幕流未就绪</span> · 请确认：① openpilot UI 正在设备屏幕运行（非 offroad 黑屏）；② 工具箱已更新到 v1.0.27+（已改用 VisionIpc 抓屏）。<br>若仍不可用，请在设备执行 <code style="font-size:10px">cat /tmp/screen_vipc.log</code> 把内容发我，我据此适配你的分支。';
         }
       }
     }

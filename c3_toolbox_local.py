@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.26"
+VERSION = "1.0.27"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1438,7 +1438,7 @@ def _probe_capture_source(force=False):
 #       neo/front 等相机类型)，并非合成后的 UI 屏幕。真正的「屏幕画面」= 显示器上 openpilot UI 窗口，
 #       必须用 ffmpeg -f x11grab 抓 X 显示才能得到（含车速/车道线/报警等 HUD 叠加层）。
 def _dashy_screen_jpeg():
-    """uiDebug.frame 兜底（道路相机画面，非 UI 屏幕），仅作最后兜底。要求近期有更新。"""
+    """读取 dashy_collector 通过 VisionIpc 维护的 UI 屏幕帧 /tmp/screen.jpg（真正的屏幕画面：含 HUD）。要求近期有更新。"""
     try:
         if not os.path.exists(SCREEN_JPG):
             return None
@@ -1550,16 +1550,23 @@ def _display_works():
     return ok
 
 
+def _read_vipc_diag():
+    """读取 dashy_collector 的 VisionIpc 诊断日志末几行。"""
+    try:
+        with open('/tmp/screen_vipc.log', 'r') as f:
+            lines = f.read().splitlines()
+        return '\n'.join(lines[-6:]) if lines else ''
+    except Exception:
+        return ''
+
+
 def _current_screen_source():
-    """返回 (源名, is_camera)。优先级：X/Wayland 显示 -> 嵌入式 fbdev/kmsgrab -> uiDebug 相机兜底。"""
-    if _display_works():
-        disp, _ = _display_env()
-        return 'x11grab:' + disp, False
+    """返回 (源名, is_camera)。comma 设备优先级：UI 屏幕流(VisionIpc->/tmp/screen.jpg) -> ffmpeg 兜底。"""
+    if _dashy_screen_jpeg():
+        return 'uiStream:/tmp/screen.jpg', False  # False=UI 屏幕（非相机）
     src = _probe_capture_source()
     if src:
         return src[0], False
-    if _dashy_screen_jpeg():
-        return 'uiDebug:/tmp/screen.jpg', True  # True=相机画面（非 UI）
     return None, False
 
 
@@ -1568,8 +1575,8 @@ def detect_fb_source():
 
 
 def screen_supported():
-    """投屏可用 = 真实显示(x11grab/kmsgrab/fbdev) 可达，或 uiDebug 相机兜底可达。"""
-    name, is_cam = _current_screen_source()
+    """投屏可用 = UI 屏幕流(VisionIpc) 已就绪，或 ffmpeg 兜底可达。"""
+    name, _ = _current_screen_source()
     return name is not None
 
 
@@ -1590,56 +1597,36 @@ def _capture_single_cmd():
 
 
 def gen_screen_stream():
-    """MJPEG 生成器：优先抓 X/Wayland 真实显示（含完整 UI），失败再回退嵌入式/相机。"""
-    # 主源：X/Wayland 显示（真正的 UI 屏幕），ffmpeg 退出自动重连
-    if _display_works():
-        for _ in range(5):
-            dc = _display_capture(stream=True)
-            if not dc:
-                break
-            name, cmd, env = dc
-            try:
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, bufsize=0)
-            except Exception:
-                proc = None
-            if not proc:
-                break
-            try:
-                for jpg in _iter_mjpeg(proc.stdout):
-                    yield _mjpeg_part(jpg)
-            except Exception:
-                pass
-            finally:
-                _kill(proc)
-            time.sleep(0.5)
-        return
-    # 回退1：嵌入式 fbdev/kmsgrab（无 X 显示时抓 DRM/帧缓冲真实屏幕）
-    src = _probe_capture_source()
-    if src:
-        name, test, streamcmd = src
-        try:
-            proc = subprocess.Popen(streamcmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
-        except Exception:
-            proc = None
-        if proc:
-            try:
-                for jpg in _iter_mjpeg(proc.stdout):
-                    yield _mjpeg_part(jpg)
-            except Exception:
-                pass
-            finally:
-                _kill(proc)
-            return
-    # 回退2：uiDebug 文件（道路相机画面，最后兜底，明确标注）
+    """MJPEG 生成器：主源 UI 屏幕流（dashy 经 VisionIpc 写到 /tmp/screen.jpg，含完整 HUD），
+    mtime 变化才推帧，低延迟；ffmpeg(fbdev/kmsgrab) 仅作兜底。"""
     last_sig = None
     while True:
         jpg = _dashy_screen_jpeg()
         if jpg:
-            sig = ('uiDebug', round(os.path.getmtime(SCREEN_JPG), 3))
+            sig = ('ui', round(os.path.getmtime(SCREEN_JPG), 3))
             if sig != last_sig:
                 last_sig = sig
                 yield _mjpeg_part(jpg)
-        time.sleep(0.1)
+            time.sleep(0.04)
+            continue
+        # 兜底：ffmpeg 抓帧缓冲/DRM（comma 嵌入式通常无 kmsgrab，故多半不可用，仅留作回退）
+        src = _probe_capture_source()
+        if src:
+            name, test, streamcmd = src
+            try:
+                proc = subprocess.Popen(streamcmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+            except Exception:
+                proc = None
+            if proc:
+                try:
+                    for jpg in _iter_mjpeg(proc.stdout):
+                        yield _mjpeg_part(jpg)
+                except Exception:
+                    pass
+                finally:
+                    _kill(proc)
+                return
+        time.sleep(0.2)
 
 @app.route('/api/screen/stream')
 def api_screen_stream():
@@ -1651,35 +1638,31 @@ def api_screen_stream():
 
 @app.route('/api/screen/status', methods=['GET'])
 def api_screen_status():
-    if _display_works():
-        disp, _ = _display_env()
-        return jsonify({'available': True, 'source': 'x11grab:' + disp, 'is_camera': False,
-                        'message': '正在镜像 X/Wayland 显示（真实 UI 屏幕：含车速/车道线/报警等 HUD 叠加层）'})
+    if _dashy_screen_jpeg():
+        age = round(time.time() - os.path.getmtime(SCREEN_JPG), 1)
+        return jsonify({'available': True, 'source': 'uiStream:/tmp/screen.jpg', 'is_camera': False,
+                        'frame_age_s': age,
+                        'message': '正在镜像 UI 屏幕（VisionIpc uiDebug 流：含车速/车道线/报警等 HUD 叠加层）'})
     src = _probe_capture_source()
     if src:
         return jsonify({'available': True, 'source': src[0], 'is_camera': False,
                         'message': '正在镜像帧缓冲/DRM 显示（真实 UI 屏幕）'})
-    if _dashy_screen_jpeg():
-        return jsonify({'available': True, 'source': 'uiDebug:/tmp/screen.jpg', 'is_camera': True,
-                        'message': '仅能取到道路相机画面（uiDebug.frame），并非 UI 屏幕。请确认 openpilot UI 正在显示器上运行，并在图形界面终端启动工具箱'})
     ffmpeg_ok = os.path.exists(_ffmpeg_path())
-    hint = '' if os.environ.get('DISPLAY') else ' 当前无 DISPLAY 环境变量，无法抓屏——请在图形界面(X11)终端中启动工具箱。'
+    diag = _read_vipc_diag()
     return jsonify({'available': False, 'source': None, 'is_camera': False, 'ffmpeg': ffmpeg_ok,
-                    'message': ('缺少 ffmpeg，请点「一键安装」' if not ffmpeg_ok else '无可用投屏源（需要 X11 显示或 ffmpeg）') + hint})
+                    'vipc_diag': diag,
+                    'message': ('UI 屏幕流未就绪。请确认：① openpilot UI 正在设备屏幕运行（非 offroad 黑屏）；'
+                                '② 工具箱已更新到 v1.0.27+（已改用 VisionIpc 抓屏）。'
+                                + (' 另：缺少 ffmpeg（可网页一键安装）。' if not ffmpeg_ok else ''))
+                               + (' 诊断：' + diag if diag else '')})
 
 
 @app.route('/api/screen/frame', methods=['GET'])
 def api_screen_frame():
-    """单帧快照（用于环境自检/静态预览），优先级同 gen_screen_stream。"""
-    if _display_works():
-        dc = _display_capture(stream=False)
-        name, cmd, env = dc
-        try:
-            out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, env=env)
-            if out.returncode == 0 and out.stdout[:2] == b'\xff\xd8':
-                return Response(out.stdout, mimetype='image/jpeg')
-        except Exception:
-            pass
+    """单帧快照（用于环境自检/静态预览），UI 屏幕流优先，ffmpeg 兜底。"""
+    jpg = _dashy_screen_jpeg()
+    if jpg:
+        return Response(jpg, mimetype='image/jpeg')
     src = _probe_capture_source()
     if src:
         try:
@@ -1688,9 +1671,6 @@ def api_screen_frame():
                 return Response(out.stdout, mimetype='image/jpeg')
         except Exception:
             pass
-    jpg = _dashy_screen_jpeg()
-    if jpg:
-        return Response(jpg, mimetype='image/jpeg')
     return jsonify({'error': 'grab failed'}), 500
 
 @app.route('/api/env/install', methods=['POST'])
