@@ -862,6 +862,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
           <div class="vlight" id="l-turn-l">◀ 左转向</div>
           <div class="vlight" id="l-turn-r">右转向 ▶</div>
           <div class="vlight" id="l-acc">ACC 激活</div>
+          <div class="vlight" id="l-acc-off">ACC 退出</div>
         </div>
 
         <div class="ct" style="margin-top:16px">语音提示与替换</div>
@@ -1922,6 +1923,7 @@ function pollCarEvents(){
     setVoiceLight('l-turn-l', d.left_blinker);
     setVoiceLight('l-turn-r', d.right_blinker);
     setVoiceLight('l-acc', d.acc_enabled);
+    setVoiceLight('l-acc-off', !d.acc_enabled);
     if(_voiceOn && conn && d.last_event && d.last_event.seq>_voiceSeq){
       _voiceSeq=d.last_event.seq;
       var item=VOICE_TYPES.filter(function(x){return x.k===d.last_event.type;})[0];

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.63",
-  "changelog": "导航顺序调整：把「语音互动 🔊」从末尾移到「终端 💻」上方，侧栏与移动底栏同步，方便更快触达语音互动面板。",
-  "tag": "v1.0.63",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.63/release/c3_toolbox.tar.gz"
+  "version": "1.0.64",
+  "changelog": "语音面板实时状态灯区新增「ACC 退出」灯，与「ACC 激活」灯互补：激活时亮激活灯、退出/未激活时亮退出灯，直观对应4个语音事件。",
+  "tag": "v1.0.64",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.64/release/c3_toolbox.tar.gz"
 }
