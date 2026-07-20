@@ -31,7 +31,7 @@ body{font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;background
 .rc-row{display:flex;align-items:center;justify-content:space-between;padding:9px 2px;border-bottom:1px solid #ece8e0}
 .rc-row:last-child{border-bottom:none}
 .rc-lbl{font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:7px}
-.rc-lbl .em{font-size:17px;line-height:1}
+.rc-lbl .em{font-size:17px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Android Emoji",sans-serif}
 .rc-val{font-size:20px;font-weight:800;color:var(--ink)}
 .rc-grade{text-align:center;margin-top:12px;font-size:21px;font-weight:800;color:var(--accent)}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
@@ -58,10 +58,10 @@ body{font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;background
           <div class='rc-sub' id='rcSub'>晚風的OP工具箱</div>
         </div>
         <div class='rc-rows'>
-          <div class='rc-row'><span class='rc-lbl'><span class='em'>🛣️</span>里程</span><span class='rc-val' id='vDist'>—</span></div>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>🚗</span>里程</span><span class='rc-val' id='vDist'>—</span></div>
           <div class='rc-row'><span class='rc-lbl'><span class='em'>⏱️</span>时长</span><span class='rc-val' id='vDur'>—</span></div>
           <div class='rc-row'><span class='rc-lbl'><span class='em'>🏎️</span>最高车速</span><span class='rc-val' id='vSpd'>—</span></div>
-          <div class='rc-row'><span class='rc-lbl'><span class='em'>🔄</span>平均转向</span><span class='rc-val' id='vSteer'>—</span></div>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>↪️</span>平均转向</span><span class='rc-val' id='vSteer'>—</span></div>
           <div class='rc-row'><span class='rc-lbl'><span class='em'>✨</span>平滑度评分</span><span class='rc-val' id='vSmooth'>—</span></div>
         </div>
         <div class='rc-grade' id='rcGrade'>开始统计后生成报告</div>
@@ -72,14 +72,16 @@ body{font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;background
       <button class='btn warn' onclick='stopRec()'>⏸ 停止统计</button>
       <button class='btn' onclick='genReport()'>🎨 生成报告卡片</button>
       <button class='btn' onclick='dlReport()'>⬇ 保存图片</button>
+      <button class='btn' onclick='clearRec()'>🗑 清空数据</button>
     </div>
-    <div class='tip' id='repTip'>点「开始统计本次行程」，行驶一会儿，再点「生成报告卡片」。卡片可保存发朋友圈装逼。</div>
+    <div class='tip' id='repTip'>数据来自设备 /api/hud 实时通道，静止/未连接车辆时也可能输出非零值。请在行驶后点「开始统计本次行程」，超过 10 秒后再点「生成报告卡片」。</div>
   </div>
 </div>
 <div id='toast'></div>
 
 <script>
 var recTimer=null, recOn=false, samples=[], recStart=0;
+var MIN_RECORD_SECONDS=10, WARMUP_MS=1500;
 
 function toast(m){
   var t=document.getElementById('toast');
@@ -92,7 +94,8 @@ function setVal(id,v){ var e=document.getElementById(id); if(e) e.textContent=v;
 async function poll(){
   try{
     var d=await (await fetch('/api/hud')).json();
-    if(recOn && d) samples.push({t:Date.now(),spd:d.speed,steer:Math.abs(d.steer),acc:Math.abs(d.accel)});
+    /* 前 1.5 秒当作热启动/噪声，不计入采样 */
+    if(recOn && d && (Date.now()-recStart)>=WARMUP_MS) samples.push({t:Date.now(),spd:d.speed,steer:Math.abs(d.steer),acc:Math.abs(d.accel)});
   }catch(e){}
 }
 function startHud(){ if(recTimer) return; poll(); recTimer=setInterval(poll,500); }
@@ -116,6 +119,13 @@ function genReport(){
     if(s.spd>maxSpd) maxSpd=s.spd;
     sumS+=s.steer; sumA+=s.acc;
   }
+  /* 防止误点生成：过短采样大概率是静止/幽灵数据 */
+  if(dur<MIN_RECORD_SECONDS){
+    setVal('vDist','—'); setVal('vDur','—'); setVal('vSpd','—'); setVal('vSteer','—'); setVal('vSmooth','—');
+    var g=document.getElementById('rcGrade'); g.textContent='采样时间过短 / 疑似静止数据'; g.style.color='#e85d50';
+    document.getElementById('repTip').textContent='行驶时间需超过 '+MIN_RECORD_SECONDS+' 秒才能生成有效报告，静止时设备仍可能输出非零值。';
+    toast('采样过短，未生成报告'); return;
+  }
   var avgS=sumS/samples.length, avgA=sumA/samples.length;
   var smooth=Math.max(0,Math.min(100,100-avgA*40-avgS*0.15));
   setVal('vDist', dist.toFixed(2)+' km');
@@ -130,6 +140,15 @@ function genReport(){
   g.style.color=smooth>=60?'#1aab8a':'#e85d50';
   document.getElementById('repTip').textContent='已生成 '+samples.length+' 个采样点，点「保存图片」可分享。';
   toast('报告已生成');
+}
+
+function clearRec(){
+  samples=[]; recOn=false; recStart=0;
+  setVal('vDist','—'); setVal('vDur','—'); setVal('vSpd','—'); setVal('vSteer','—'); setVal('vSmooth','—');
+  var g=document.getElementById('rcGrade'); g.textContent='开始统计后生成报告'; g.style.color='#1aab8a';
+  document.getElementById('rcSub').textContent='晚風的OP工具箱';
+  document.getElementById('repTip').textContent='数据来自设备 /api/hud 实时通道，静止/未连接车辆时也可能输出非零值，请行驶后统计。';
+  toast('已清空数据');
 }
 
 function dlReport(){

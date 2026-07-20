@@ -1,6 +1,6 @@
 {
-  "version": "1.0.38",
-  "changelog": "修复驾驶报告左侧标签 emoji 不显示：报告由 canvas 改为真实 HTML DOM 卡片（emoji 走浏览器字体稳定显示，打开页面即见标签），平均转向图标🧭改为🔄；「保存图片」用本地打包的 html2canvas（新增 vendor/ 依赖，离线可用）。",
-  "tag": "v1.0.38",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.38/release/c3_toolbox.tar.gz"
+  "version": "1.0.39",
+  "changelog": "主工具箱左侧标签全部加上适配 emoji（设备信息📱/参数控制⚙️/横向↔️/纵向↕️/弯道🌀/变道↪️/导航🗺️/显示🖥️/设置⚙️/其他📦/工具🛠️/终端💻/备份💾/开机动画🎬/驾驶报告📊），底部导航同步去掉🧭改用🗺️；驾驶报告进一步修复 emoji 渲染（里程🚗/平均转向↪️），并增加防幽灵数据逻辑：前 1.5 秒热启动不计入采样，生成报告需满足 10 秒以上行程，否则提示采样过短；新增「清空数据」按钮。",
+  "tag": "v1.0.39",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.39/release/c3_toolbox.tar.gz"
 }

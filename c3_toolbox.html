@@ -262,8 +262,9 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .cat-card{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:8px 6px;border-radius:14px;background:var(--bg2);border:1px solid var(--rule);cursor:pointer;transition:all .15s}
 .cat-card:hover{border-color:var(--accent)}
 .cat-card.on{background:rgba(26,171,138,.1);border-color:var(--accent)}
-.cat-card .cname{font-size:14px;font-weight:500;color:var(--ink)}
+.cat-card .cname{font-size:14px;font-weight:500;color:var(--ink);font-family:'PingFang SC','Microsoft YaHei','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji','Android Emoji',system-ui,sans-serif}
 .cat-card.on .cname{color:var(--accent);font-weight:600}
+.mn .mi{font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji','Android Emoji',system-ui,sans-serif}
 .cat-card .cbadge{background:var(--bg4);color:var(--muted);font-size:12px;padding:3px 12px;border-radius:20px;font-weight:700;min-width:32px;text-align:center}
 .cat-card.on .cbadge{background:var(--accent);color:#fff}
 
@@ -345,21 +346,21 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 <div class="wrap">
   <!-- Sidebar -->
   <nav class="side" style="padding:12px 8px">
-    <div class="cat-card on" data-p="dashboard" onclick="go('dashboard')"><span class="cname">设备信息</span><span class="cbadge" id="bc-dashboard">—</span></div>
-    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">参数控制 <span id="branchBadge" class="branch-badge"></span></div>
-    <div class="cat-card" data-p="lateral" onclick="go('lateral')"><span class="cname">横向</span><span class="cbadge" id="bc-lateral">0</span></div>
-    <div class="cat-card" data-p="longitudinal" onclick="go('longitudinal')"><span class="cname">纵向</span><span class="cbadge" id="bc-longitudinal">0</span></div>
-    <div class="cat-card" data-p="curve" onclick="go('curve')"><span class="cname">弯道</span><span class="cbadge" id="bc-curve">0</span></div>
-    <div class="cat-card" data-p="lanechange" onclick="go('lanechange')"><span class="cname">变道</span><span class="cbadge" id="bc-lanechange">0</span></div>
-    <div class="cat-card" data-p="nav" onclick="go('nav')"><span class="cname">导航</span><span class="cbadge" id="bc-nav">0</span></div>
-    <div class="cat-card" data-p="display" onclick="go('display')"><span class="cname">显示</span><span class="cbadge" id="bc-display">0</span></div>
-    <div class="cat-card" data-p="settings" onclick="go('settings')"><span class="cname">设置</span><span class="cbadge" id="bc-settings">0</span></div>
-    <div class="cat-card" data-p="info" onclick="go('info')"><span class="cname">其他</span><span class="cbadge" id="bc-info">0</span></div>
-    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">工具</div>
-    <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端</span><span class="cbadge" id="bc-terminal">—</span></div>
-    <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份</span><span class="cbadge" id="bc-backup">—</span></div>
-    <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画</span><span class="cbadge" id="bc-bootanim">—</span></div>
-    <div class="cat-card" data-p="report" onclick="go('report')"><span class="cname">驾驶报告</span><span class="cbadge" id="bc-report">📊</span></div>
+    <div class="cat-card on" data-p="dashboard" onclick="go('dashboard')"><span class="cname">设备信息 📱</span><span class="cbadge" id="bc-dashboard">—</span></div>
+    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">参数控制 ⚙️ <span id="branchBadge" class="branch-badge"></span></div>
+    <div class="cat-card" data-p="lateral" onclick="go('lateral')"><span class="cname">横向 ↔️</span><span class="cbadge" id="bc-lateral">0</span></div>
+    <div class="cat-card" data-p="longitudinal" onclick="go('longitudinal')"><span class="cname">纵向 ↕️</span><span class="cbadge" id="bc-longitudinal">0</span></div>
+    <div class="cat-card" data-p="curve" onclick="go('curve')"><span class="cname">弯道 🌀</span><span class="cbadge" id="bc-curve">0</span></div>
+    <div class="cat-card" data-p="lanechange" onclick="go('lanechange')"><span class="cname">变道 ↪️</span><span class="cbadge" id="bc-lanechange">0</span></div>
+    <div class="cat-card" data-p="nav" onclick="go('nav')"><span class="cname">导航 🗺️</span><span class="cbadge" id="bc-nav">0</span></div>
+    <div class="cat-card" data-p="display" onclick="go('display')"><span class="cname">显示 🖥️</span><span class="cbadge" id="bc-display">0</span></div>
+    <div class="cat-card" data-p="settings" onclick="go('settings')"><span class="cname">设置 ⚙️</span><span class="cbadge" id="bc-settings">0</span></div>
+    <div class="cat-card" data-p="info" onclick="go('info')"><span class="cname">其他 📦</span><span class="cbadge" id="bc-info">0</span></div>
+    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">工具 🛠️</div>
+    <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端 💻</span><span class="cbadge" id="bc-terminal">—</span></div>
+    <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份 💾</span><span class="cbadge" id="bc-backup">—</span></div>
+    <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
+    <div class="cat-card" data-p="report" onclick="go('report')"><span class="cname">驾驶报告 📊</span><span class="cbadge" id="bc-report">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -585,12 +586,12 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 <!-- Mobile Bottom Nav -->
 <nav class="mnav">
   <div class="mnav-in">
-    <div class="mn on" data-p="dashboard" onclick="go('dashboard')"><span class="mi">📊</span><span class="mt">设备</span></div>
+    <div class="mn on" data-p="dashboard" onclick="go('dashboard')"><span class="mi">📱</span><span class="mt">设备</span></div>
     <div class="mn" data-p="lateral" onclick="go('lateral')"><span class="mi">↔️</span><span class="mt">横向</span></div>
     <div class="mn" data-p="longitudinal" onclick="go('longitudinal')"><span class="mi">↕️</span><span class="mt">纵向</span></div>
     <div class="mn" data-p="curve" onclick="go('curve')"><span class="mi">🌀</span><span class="mt">弯道</span></div>
     <div class="mn" data-p="lanechange" onclick="go('lanechange')"><span class="mi">↪️</span><span class="mt">变道</span></div>
-    <div class="mn" data-p="nav" onclick="go('nav')"><span class="mi">🧭</span><span class="mt">导航</span></div>
+    <div class="mn" data-p="nav" onclick="go('nav')"><span class="mi">🗺️</span><span class="mt">导航</span></div>
     <div class="mn" data-p="display" onclick="go('display')"><span class="mi">🖥️</span><span class="mt">显示</span></div>
     <div class="mn" data-p="settings" onclick="go('settings')"><span class="mi">⚙️</span><span class="mt">设置</span></div>
     <div class="mn" data-p="info" onclick="go('info')"><span class="mi">📦</span><span class="mt">其他</span></div>
