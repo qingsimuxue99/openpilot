@@ -4,6 +4,7 @@
 <meta charset='UTF-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no'>
 <title>赛博驾驶报告 · 晚風的OP工具箱</title>
+<script src='/vendor/html2canvas.min.js'></script>
 <style>
 :root{
   --bg:#f5f2ec;--bg2:#ffffff;--bg3:#f9f7f3;
@@ -21,7 +22,18 @@ body{font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;background
 .panel h3{font-size:13px;letter-spacing:1px;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:6px}
 .panel h3::before{content:'';width:4px;height:14px;background:var(--accent);border-radius:2px}
 .rep-stage{background:var(--bg3);border:1px solid var(--rule);border-radius:12px;padding:14px;display:flex;justify-content:center}
-#repCanvas{box-shadow:0 8px 24px rgba(0,0,0,.12);border-radius:8px;max-width:100%}
+/* 报告卡片：真实 DOM，emoji 走浏览器字体稳定显示 */
+.rep-card{width:340px;max-width:100%;background:linear-gradient(180deg,#ffffff 0%,#f3f0ea 100%);border:2px solid var(--accent);border-radius:12px;padding:16px 16px 14px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.rc-head{text-align:center;padding-bottom:10px;border-bottom:1px solid #ece8e0;margin-bottom:10px}
+.rc-title{font-size:22px;font-weight:800;letter-spacing:2px;color:var(--accent)}
+.rc-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.rc-rows{display:flex;flex-direction:column;gap:2px}
+.rc-row{display:flex;align-items:center;justify-content:space-between;padding:9px 2px;border-bottom:1px solid #ece8e0}
+.rc-row:last-child{border-bottom:none}
+.rc-lbl{font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:7px}
+.rc-lbl .em{font-size:17px;line-height:1}
+.rc-val{font-size:20px;font-weight:800;color:var(--ink)}
+.rc-grade{text-align:center;margin-top:12px;font-size:21px;font-weight:800;color:var(--accent)}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .btn{padding:9px 16px;border-radius:9px;border:1px solid var(--rule);background:var(--bg3);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
 .btn:hover{border-color:var(--accent);background:#fff}
@@ -40,7 +52,20 @@ body{font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;background
   <div class='panel'>
     <h3>赛博驾驶报告 · 分享卡片</h3>
     <div class='rep-stage'>
-      <canvas id='repCanvas' width='360' height='560'></canvas>
+      <div class='rep-card' id='repCard'>
+        <div class='rc-head'>
+          <div class='rc-title'>DRIVE REPORT</div>
+          <div class='rc-sub' id='rcSub'>晚風的OP工具箱</div>
+        </div>
+        <div class='rc-rows'>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>🛣️</span>里程</span><span class='rc-val' id='vDist'>—</span></div>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>⏱️</span>时长</span><span class='rc-val' id='vDur'>—</span></div>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>🏎️</span>最高车速</span><span class='rc-val' id='vSpd'>—</span></div>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>🔄</span>平均转向</span><span class='rc-val' id='vSteer'>—</span></div>
+          <div class='rc-row'><span class='rc-lbl'><span class='em'>✨</span>平滑度评分</span><span class='rc-val' id='vSmooth'>—</span></div>
+        </div>
+        <div class='rc-grade' id='rcGrade'>开始统计后生成报告</div>
+      </div>
     </div>
     <div class='btns'>
       <button class='btn alt' onclick='startRec()'>▶ 开始统计本次行程</button>
@@ -61,6 +86,7 @@ function toast(m){
   t.textContent=m; t.classList.add('show');
   clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('show')},2600);
 }
+function setVal(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
 
 /* 持续拉取 /api/hud 仅为采集行程采样（记录开启时） */
 async function poll(){
@@ -79,32 +105,10 @@ function startRec(){
 }
 function stopRec(){ recOn=false; toast('已停止统计'); }
 
-/* 浅色主题卡片底图（与整体工具箱主题一致） */
-function drawCardBg(x,W,H){
-  var g=x.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#ffffff');
-  g.addColorStop(1,'#f3f0ea');
-  x.fillStyle=g; x.fillRect(0,0,W,H);
-  x.strokeStyle='#1aab8a'; x.lineWidth=2; x.strokeRect(8,8,W-16,H-16);
-  x.fillStyle='#1aab8a'; x.fillRect(8,8,W-16,4);
-}
-
-function drawEmptyRep(){
-  var c=document.getElementById('repCanvas'); if(!c) return;
-  var x=c.getContext('2d'),W=c.width,H=c.height;
-  drawCardBg(x,W,H);
-  x.fillStyle='#1aab8a'; x.textAlign='center'; x.font='800 24px sans-serif'; x.fillText('DRIVE REPORT',W/2,60);
-  x.fillStyle='#8a8690'; x.font='12px sans-serif'; x.fillText('晚風的OP工具箱',W/2,82);
-  x.fillStyle='#e85d50'; x.font='13px sans-serif'; x.fillText('暂无数据，请先点「开始统计本次行程」',W/2,300);
-}
+function fmtDur(s){ var m=Math.floor(s/60), sec=Math.floor(s%60); return m+'分'+sec+'秒'; }
 
 function genReport(){
-  var c=document.getElementById('repCanvas'); if(!c) return;
-  var x=c.getContext('2d'),W=c.width,H=c.height;
-  drawCardBg(x,W,H);
-  x.fillStyle='#1aab8a'; x.textAlign='center'; x.font='800 24px sans-serif'; x.fillText('DRIVE REPORT',W/2,60);
-  x.fillStyle='#8a8690'; x.font='12px sans-serif'; x.fillText('晚風的OP工具箱 · '+new Date().toLocaleDateString(),W/2,82);
-  if(!samples.length){ x.fillStyle='#e85d50'; x.fillText('暂无数据，请先开始统计',W/2,300); return; }
+  if(!samples.length){ toast('请先点「开始统计本次行程」'); return; }
   var dist=0, dur=(samples[samples.length-1].t-samples[0].t)/1000, maxSpd=0, sumS=0, sumA=0;
   for(var i=0;i<samples.length;i++){
     var s=samples[i];
@@ -114,37 +118,31 @@ function genReport(){
   }
   var avgS=sumS/samples.length, avgA=sumA/samples.length;
   var smooth=Math.max(0,Math.min(100,100-avgA*40-avgS*0.15));
-  var rows=[
-    ['里程 🛣️', dist.toFixed(2)+' km'],
-    ['时长 ⏱️', fmtDur(dur)],
-    ['最高车速 🏎️', maxSpd.toFixed(0)+' km/h'],
-    ['平均转向 🧭', avgS.toFixed(1)+'°'],
-    ['平滑度评分 ✨', smooth.toFixed(0)+' / 100']
-  ];
-  var y=140;
-  rows.forEach(function(r){
-    x.textAlign='left';  x.fillStyle='#8a8690'; x.font='13px sans-serif'; x.fillText(r[0],40,y);
-    x.textAlign='right'; x.fillStyle='#2d2d2d'; x.font='800 20px sans-serif'; x.fillText(r[1],W-40,y+4);
-    x.strokeStyle='#ece8e0'; x.lineWidth=1; x.beginPath(); x.moveTo(40,y+14); x.lineTo(W-40,y+14); x.stroke();
-    y+=52;
-  });
-  x.textAlign='center';
+  setVal('vDist', dist.toFixed(2)+' km');
+  setVal('vDur', fmtDur(dur));
+  setVal('vSpd', maxSpd.toFixed(0)+' km/h');
+  setVal('vSteer', avgS.toFixed(1)+'°');
+  setVal('vSmooth', smooth.toFixed(0)+' / 100');
+  document.getElementById('rcSub').textContent='晚風的OP工具箱 · '+new Date().toLocaleDateString();
   var grade=smooth>=80?'S级 · 老司机':smooth>=60?'A级 · 稳健':smooth>=40?'B级 · 熟练':'C级 · 生猛';
-  x.fillStyle=smooth>=60?'#1aab8a':'#e85d50'; x.font='800 22px sans-serif';
-  x.fillText(grade,W/2,H-50);
-  document.getElementById('repTip').textContent='已生成 '+samples.length+' 个采样点，可保存图片分享。';
+  var g=document.getElementById('rcGrade');
+  g.textContent=grade;
+  g.style.color=smooth>=60?'#1aab8a':'#e85d50';
+  document.getElementById('repTip').textContent='已生成 '+samples.length+' 个采样点，点「保存图片」可分享。';
   toast('报告已生成');
 }
-function fmtDur(s){ var m=Math.floor(s/60), sec=Math.floor(s%60); return m+'分'+sec+'秒'; }
+
 function dlReport(){
-  var c=document.getElementById('repCanvas');
-  if(!c){ toast('请先生成'); return; }
-  var a=document.createElement('a');
-  a.href=c.toDataURL('image/png'); a.download='drive_report.png';
-  document.body.appendChild(a); a.click(); setTimeout(function(){a.remove();},500);
+  var card=document.getElementById('repCard');
+  if(typeof html2canvas==='undefined'){ toast('保存库未加载，请直接截图'); return; }
+  html2canvas(card,{backgroundColor:'#ffffff',scale:2,logging:false}).then(function(cv){
+    var a=document.createElement('a');
+    a.href=cv.toDataURL('image/png'); a.download='drive_report.png';
+    document.body.appendChild(a); a.click(); setTimeout(function(){a.remove();},500);
+    toast('已保存图片');
+  }).catch(function(e){ toast('保存失败，请直接截图'); });
 }
 
-drawEmptyRep();
 startHud();
 </script>
 </body>

@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.37"
+VERSION = "1.0.38"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -427,6 +427,16 @@ def hud_page():
     if os.path.isfile(p):
         return send_file(p)
     return "<h1>hud.html 不存在</h1>", 404
+
+
+@app.route('/vendor/<path:filename>')
+def vendor_files(filename):
+    """提供本地打包的前端依赖（如 html2canvas），避免设备离线时依赖外网 CDN。"""
+    vp = os.path.join(SCRIPT_DIR, 'vendor')
+    fp = os.path.join(vp, filename)
+    if os.path.isfile(fp):
+        return send_file(fp)
+    return "<h1>vendor 文件不存在</h1>", 404
 
 
 @app.route('/api/status')
