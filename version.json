@@ -1,6 +1,6 @@
 {
-  "version": "1.0.33",
-  "changelog": "HUD 车辆姿态升级为「特斯拉彩虹路径」动画：车居中行驶，身后拖一条随转向弯折、随车速变长的彩虹道路，配滚动网格地面与霓虹车模；基于独立 requestAnimationFrame 循环，平滑不卡顿。LIVE 用真实转向角驱动，DEMO 自动平滑游走演示。",
-  "tag": "v1.0.33",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.33/release/c3_toolbox.tar.gz"
+  "version": "1.0.34",
+  "changelog": "HUD 车辆姿态完全重做为特斯拉 FSD 风格：三车道透视道路、自车居底、中间车道彩虹渐变、车道虚线随车速滚动、远处随机发光车辆、转向使道路远端弯曲；LIVE 用真实转向角，DEMO 自动游走。",
+  "tag": "v1.0.34",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.34/release/c3_toolbox.tar.gz"
 }
