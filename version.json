@@ -1,6 +1,6 @@
 {
-  "version": "1.0.15",
-  "tag": "v1.0.15",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.15/release/c3_toolbox.tar.gz",
-  "changelog": "支持 dragonpilot / sunnypilot 等其他 openpilot 衍生分支：\n- 新增分支自动识别（读 GitBranch 参数或 git 信息），「参数控制」标题旁显示当前分支标识，页面副标题也同步显示；\n- 内置 dp / sp 常见自定义参数中文说明库与布尔判定（如 dp_long、sp_mads_enabled 等会显示中文名、说明与开关类型），随分支自动叠加到内置说明；\n- 工具箱对 openpilot 原版 / carrot / dragonpilot / sunnypilot 部署与升级命令完全一致（仅依赖通用 /data/params/d、/data/openpilot 与硬件分区）；\n- README 增加「支持的分支」说明与 dp/sp 自启脚本路径注意事项。"
+  "version": "1.0.16",
+  "tag": "v1.0.16",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.16/release/c3_toolbox.tar.gz",
+  "changelog": "新增 frogpilot（青蛙领航，fp）分支支持：\n- 分支自动识别新增 frogpilot 匹配（读 GitBranch 参数或 .git 信息，含 FrogAi/FrogPilot、FrogPilot:devel 等命名）；\n- 内置 fp 常见自定义参数中文说明库与布尔判定（FrogTrafficLight / FrogStandState / FrogSNG / FrogConditionalExperimental / FrogSpeedLimitController 等显示中文名、说明与开关类型）；\n- 工具箱现已覆盖 openpilot 原版 / carrot / dragonpilot(dp) / sunnypilot(sp) / frogpilot(fp) 五类分支自动识别与参数说明；\n- README「支持的分支」章节补充 frogpilot；说明库基于社区常见参数整理，发现遗漏可在反馈后补充。"
 }

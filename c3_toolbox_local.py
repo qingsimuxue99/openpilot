@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.15"
+VERSION = "1.0.16"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -505,35 +505,35 @@ def api_delete_param():
 
 # ============= 分支识别与 dp/sp 自定义参数说明库 =============
 def detect_branch():
-    """识别当前运行的 openpilot 衍生版（原版 / dragonpilot / sunnypilot）。
+    """识别当前运行的 openpilot 衍生版（原版 / dragonpilot / sunnypilot / frogpilot）。
     优先读 GitBranch 参数，再读 /data/openpilot/.git/HEAD 与 config；匹配不到回退 'openpilot'。"""
+    def _match(s):
+        s = (s or '').lower()
+        if 'dragonpilot' in s:
+            return 'dragonpilot'
+        if 'sunny' in s:
+            return 'sunnypilot'
+        if 'frogpilot' in s:
+            return 'frogpilot'
+        if 'commaai' in s or 'openpilot' in s:
+            return 'openpilot'
+        return None
     try:
         gb = os.path.join(PARAMS_DIR, 'GitBranch')
         if os.path.isfile(gb):
-            b = open(gb, 'r').read().strip().lower()
-            if b:
-                if 'dragonpilot' in b:
-                    return 'dragonpilot'
-                if 'sunny' in b:
-                    return 'sunnypilot'
-                if 'commaai' in b or 'openpilot' in b:
-                    return 'openpilot'
+            r = _match(open(gb, 'r').read().strip())
+            if r:
+                return r
         head = '/data/openpilot/.git/HEAD'
         if os.path.isfile(head):
-            h = open(head, 'r').read().strip().lower()
-            if 'dragonpilot' in h:
-                return 'dragonpilot'
-            if 'sunny' in h:
-                return 'sunnypilot'
-            if 'commaai' in h or 'openpilot' in h:
-                return 'openpilot'
+            r = _match(open(head, 'r').read().strip())
+            if r:
+                return r
         cfg = '/data/openpilot/.git/config'
         if os.path.isfile(cfg):
-            c = open(cfg, 'r').read().lower()
-            if 'dragonpilot' in c:
-                return 'dragonpilot'
-            if 'sunny' in c:
-                return 'sunnypilot'
+            r = _match(open(cfg, 'r').read())
+            if r:
+                return r
     except Exception:
         pass
     return 'openpilot'
@@ -650,6 +650,78 @@ BRANCH_META = {
             'sp_experimental_mode', 'sp_mads_enabled', 'sp_auto_resume', 'sp_traffic_light_enabled',
             'sp_stop_at_stop_sign', 'sp_turn_signal_confirmation', 'sp_obd', 'sp_auto_enabled',
             'sp_lkas_button', 'sp_disable_offroad_alert', 'sp_lat_lane_priority', 'sp_hso',
+        ],
+    },
+    'frogpilot': {
+        'names': {
+            'FrogPilot': 'FrogPilot 母开关', 'FrogTrafficLight': '红绿灯识别', 'FrogStandState': '待机模式',
+            'FrogSNG': 'SNG 启停补全（无原厂SNG车型）', 'FrogTheme': 'Frog 主题', 'FrogModel': '驾驶模型选择',
+            'FrogAlertVolume': '提示音量', 'FrogRandomEvents': '随机事件音效', 'FrogSounds': 'Frog 音效',
+            'FrogConditionalExperimental': '条件实验模式', 'FrogInitialExperimentalState': '初始实验模式状态',
+            'FrogAccelerationProfile': '加速风格', 'FrogSpeedLimitController': '限速控制', 'FrogTrafficMode': '交通模式',
+            'FrogSportMode': '运动模式', 'FrogEcoMode': '节能模式', 'FrogIncreasedStoppedDistance': '增大停止距离',
+            'FrogLaneWidth': '车道线宽度', 'FrogPathWidth': '路径宽度', 'FrogEdgeWidth': '路沿宽度',
+            'FrogRoadUI': '道路UI', 'FrogCompass': '指南针', 'FrogCameraView': '摄像头视图',
+            'FrogGreenLightAlert': '绿灯提醒', 'FrogTurnLaneChange': '无感变道', 'FrogSteeringOnSignal': '转向灯时微调',
+            'FrogNNFF': 'NNFF 平滑转向', 'FrogZSS': 'ZSS 转向支持', 'FrogAlwaysOnLateral': '常驻横向控制',
+            'FrogLateralTorque': '横向扭矩控制', 'FrogReverseCruise': '倒车巡航', 'FrogStockLateral': '原厂横向',
+            'FrogGMMode': 'GM 模式', 'FrogAutoShutdown': '自动关机', 'FrogScreenBrightness': '屏幕亮度',
+            'FrogVisionTurnSpeedController': '视觉弯道限速', 'FrogMapTurnSpeedController': '地图弯道限速',
+            'FrogAdjacentPathLines': '相邻车道线', 'FrogBlindSpotPath': '盲区路径', 'FrogSilentMode': '静音模式',
+            'FrogCustomTheme': '自定义主题', 'FrogCumulativeDistance': '累计里程', 'FrogDeviceShutdown': '离车自动关机',
+        },
+        'desc': {
+            'FrogPilot': 'FrogPilot 总开关（关闭则回落原厂体验）',
+            'FrogTrafficLight': '识别红绿灯并据此启停',
+            'FrogStandState': '待机模式：熄屏但保持后台，重要提醒时唤醒',
+            'FrogSNG': '为无原厂 Stop&Go 的车型补全启停功能',
+            'FrogTheme': '启用 Frog 青蛙主题（含配色与图标）',
+            'FrogModel': '选择使用的驾驶模型（不同版本/风格）',
+            'FrogAlertVolume': '各类提示音音量',
+            'FrogRandomEvents': '行驶中随机触发 Frog 彩蛋音效',
+            'FrogSounds': '启用 Frog 专属音效',
+            'FrogConditionalExperimental': '满足条件时自动激活实验模式（路口/弯道/红灯等）',
+            'FrogInitialExperimentalState': '上车时实验模式的初始状态',
+            'FrogAccelerationProfile': '加速激进度档位',
+            'FrogSpeedLimitController': '按地图/识别限速自动控制车速',
+            'FrogTrafficMode': '针对拥堵路况的驾驶模式',
+            'FrogSportMode': '运动加速/减速曲线',
+            'FrogEcoMode': '节能加速/减速曲线',
+            'FrogIncreasedStoppedDistance': '前车静止时增大本车停车距离',
+            'FrogLaneWidth': 'HUD 车道线显示宽度',
+            'FrogPathWidth': 'HUD 规划路径显示宽度',
+            'FrogEdgeWidth': 'HUD 路沿显示宽度',
+            'FrogRoadUI': '道路 UI 自定义显示',
+            'FrogCompass': '屏幕显示指南针',
+            'FrogCameraView': '选择偏好摄像头视图',
+            'FrogGreenLightAlert': '绿灯亮起时提醒',
+            'FrogTurnLaneChange': '无方向盘拨杆提示的变道',
+            'FrogSteeringOnSignal': '打转向灯时暂停横向控制/微调',
+            'FrogNNFF': '启用 NNFF 神经网络前馈使转向更平滑',
+            'FrogZSS': '启用 ZSS 转向传感器支持',
+            'FrogAlwaysOnLateral': '仅按巡航键即激活横向控制（常驻）',
+            'FrogLateralTorque': '使用扭矩式横向控制',
+            'FrogReverseCruise': '倒车时保持巡航',
+            'FrogStockLateral': '横向控制回落原厂算法',
+            'FrogGMMode': 'GM 车型专属模式',
+            'FrogAutoShutdown': '离车后自动关机延时',
+            'FrogScreenBrightness': '屏幕亮度（onroad/offroad 分别）',
+            'FrogVisionTurnSpeedController': '基于视觉的弯道自动减速',
+            'FrogMapTurnSpeedController': '基于地图的弯道自动减速',
+            'FrogAdjacentPathLines': '显示相邻车道测量线',
+            'FrogBlindSpotPath': '显示盲区路径指示',
+            'FrogSilentMode': '完全静音驾驶',
+            'FrogCustomTheme': '自定义 UI 主题',
+            'FrogCumulativeDistance': '显示累计驾驶里程',
+            'FrogDeviceShutdown': '离车自动关机',
+        },
+        'bool_params': [
+            'FrogPilot', 'FrogTrafficLight', 'FrogStandState', 'FrogSNG', 'FrogTheme', 'FrogRandomEvents',
+            'FrogSounds', 'FrogConditionalExperimental', 'FrogInitialExperimentalState', 'FrogTrafficMode',
+            'FrogSportMode', 'FrogEcoMode', 'FrogIncreasedStoppedDistance', 'FrogRoadUI', 'FrogCompass',
+            'FrogGreenLightAlert', 'FrogTurnLaneChange', 'FrogSteeringOnSignal', 'FrogNNFF', 'FrogZSS',
+            'FrogAlwaysOnLateral', 'FrogLateralTorque', 'FrogReverseCruise', 'FrogStockLateral', 'FrogGMMode',
+            'FrogAutoShutdown', 'FrogBlindSpotPath', 'FrogSilentMode', 'FrogCustomTheme', 'FrogDeviceShutdown',
         ],
     },
 }

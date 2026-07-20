@@ -20,8 +20,9 @@
 - **openpilot 原版 / carrot（cpv9-dev 等）**
 - **dragonpilot（龙领航，dp）**
 - **sunnypilot（阳光领航，sp）**
+- **frogpilot（青蛙领航，fp）**
 
-工具箱会**自动识别当前分支**（读 `GitBranch` 参数或 git 信息），在「参数控制」标题旁显示分支标识，并**自动加载该分支的自定义参数中文说明与开关类型**——dp 的 `dp_long`、sp 的 `sp_mads_enabled` 等都会显示中文名和说明，不再是一堆英文裸参数。
+工具箱会**自动识别当前分支**（读 `GitBranch` 参数或 git 信息），在「参数控制」标题旁显示分支标识，并**自动加载该分支的自定义参数中文说明与开关类型**——dp 的 `dp_long`、sp 的 `sp_mads_enabled`、fp 的 `FrogTrafficLight` / `FrogStandState` 等都会显示中文名和说明，不再是一堆英文裸参数。
 
 > 部署 / 升级命令对**所有分支完全一致**（见下方），因为工具箱只依赖通用的 `/data/params/d`、`/data/openpilot` 与硬件分区，不读分支特有结构。
 
@@ -30,7 +31,7 @@
 ## 一、第一次部署到设备
 
 ### 准备
-- 设备已刷 openpilot 衍生版（openpilot 原版 / carrot / dragonpilot / sunnypilot 均可）。
+- 设备已刷 openpilot 衍生版（openpilot 原版 / carrot / dragonpilot / sunnypilot / frogpilot 均可）。
 - 手机或电脑与设备在同一 WiFi，能 SSH 进设备（知道设备 IP）。
 
 ### 1. 把这三个文件放进设备
