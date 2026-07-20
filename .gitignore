@@ -6,3 +6,4 @@ device_params.json
 release/*.tmp
 reltmp/relchk/latchk/
 server.log
+_exe_extract/

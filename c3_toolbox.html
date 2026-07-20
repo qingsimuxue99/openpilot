@@ -355,6 +355,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">工具</div>
     <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端</span><span class="cbadge" id="bc-terminal">—</span></div>
     <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份</span><span class="cbadge" id="bc-backup">—</span></div>
+    <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画</span><span class="cbadge" id="bc-bootanim">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -511,36 +512,67 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         </div>
         <p style="font-size:11px;color:var(--dim);margin-top:8px">备份包保存于 <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/备份恢复包openpilot_backup_*.tar.gz</code></p>
       </div>
-      <div class="cd"><div class="ct">开机屏定制</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">修改设备开机画面，无需电脑命令行：上传图片/文件一键刷入，并自动备份原文件。</p>
-
-        <div style="border:1px solid var(--rule);border-radius:10px;padding:10px 12px;margin-bottom:10px">
-          <div style="font-weight:700;font-size:12px;color:var(--ink);margin-bottom:8px">第二屏 · 启动背景图</div>
-          <div class="bs-info" id="bgInfo">加载中...</div>
-          <div class="bs-row">
-            <input type="file" id="bgFile" accept=".jpg,.jpeg,.png" style="color:var(--ink);font-size:11px;max-width:200px">
-            <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px"><input type="checkbox" id="bgReboot" checked> 刷入后重启</label>
-            <button class="btn bp" onclick="bgSet()">刷入背景图</button>
-            <button class="btn bw" onclick="bgBackup()">备份当前图</button>
-          </div>
-          <div class="bs-note">要求：<code>1080×2160</code> 竖屏 jpg/png。工具会先备份原 <code>/usr/comma/bg.jpg</code> 为 <code>bg.jpg.bak</code>，再写入并重启生效。第一屏（Qualcomm splash）结束后即显示此背景。</div>
-        </div>
-
-        <div style="border:1px solid var(--rule);border-radius:10px;padding:10px 12px">
-          <div style="font-weight:700;font-size:12px;color:var(--ink);margin-bottom:8px">第一屏 · 开机 Logo（splash）</div>
-          <div class="bs-info" id="splashInfo">加载中...</div>
-          <div class="bs-row">
-            <input type="file" id="splashFile" accept=".bin" style="color:var(--ink);font-size:11px;max-width:200px">
-            <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px"><input type="checkbox" id="splashReboot" checked> 刷入后重启</label>
-            <button class="btn bp" onclick="splashSet()">刷入开机画面</button>
-            <button class="btn bw" onclick="splashBackup()">备份原分区</button>
-          </div>
-          <div class="bs-note">先在电脑用 <code>splash_maker</code> 工具把 Logo 生成 <code>splash_new.bin</code>（大小须与原厂 splash 分区一致，约 34MB），上传刷入即可。工具自动备份原分区到 <code>/data/splash_backup.bin</code>。刷 splash 分区不会变砖，最多开机画面异常。</div>
-        </div>
-      </div>
       <div class="cd"><div class="ct">自定义写入</div>
         <div class="fg"><textarea id="cParams" rows="5" placeholder='{"AutoCruiseControl": "1"}' style="font-family:monospace;font-size:11px"></textarea></div>
         <button class="btn bp" onclick="applyCustom()" style="margin-top:8px">应用</button>
+      </div>
+    </div>
+
+    <!-- 开机动画定制 -->
+    <div class="pnl" id="p-bootanim">
+      <div class="ph"><h2>开机动画定制</h2><p>自定义开机第一屏（Logo）与第二屏（背景图），浏览器内一键生成，无需电脑工具</p></div>
+
+      <!-- 第一屏：splash 浏览器生成器 -->
+      <div class="cd"><div class="ct">第一屏 · 开机 Logo（splash）</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">上传任意图片，工具箱在浏览器内直接生成合法的 <code style="background:var(--bg);padding:1px 5px;border-radius:4px">splash_new.bin</code>（1080×2160，自动转 BGR 像素），生成后可直接刷入，或下载到电脑备用。</p>
+
+        <div class="bs-row" style="align-items:flex-start">
+          <div style="flex:1;min-width:200px">
+            <input type="file" id="splashImg" accept="image/*" style="color:var(--ink);font-size:11px;max-width:230px"><br>
+            <select id="splashFit" style="margin-top:8px;padding:5px;border-radius:6px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);font-size:11px">
+              <option value="cover">裁剪填充（推荐，不变形）</option>
+              <option value="stretch">拉伸填充（可能变形）</option>
+            </select>
+          </div>
+          <canvas id="splashPrev" width="108" height="216" style="border:1px solid var(--rule);border-radius:8px;background:#000;width:108px;height:216px;flex-shrink:0"></canvas>
+        </div>
+
+        <div class="bs-row" style="margin-top:10px;flex-wrap:wrap">
+          <button class="btn bp" onclick="genSplash()">生成 splash_new.bin</button>
+          <button class="btn bw" onclick="flashSplash()">生成并直接刷入</button>
+          <button class="btn bw" onclick="downloadSplash()">下载 bin</button>
+          <button class="btn bw" onclick="splashBackup()">备份原分区</button>
+        </div>
+
+        <div class="bs-info" id="splashInfo" style="margin-top:8px">加载中...</div>
+        <div class="bs-note">生成过程 100% 在浏览器完成，图片不会上传到任何服务器。若你已有现成 <code>splash_new.bin</code>，也可在下方直接上传刷入。刷 splash 分区不会变砖，最多开机画面异常。</div>
+
+        <div style="border-top:1px dashed var(--rule);margin:12px 0 8px"></div>
+        <div style="font-weight:700;font-size:12px;color:var(--ink);margin-bottom:6px">或上传已有 bin 刷入</div>
+        <div class="bs-row">
+          <input type="file" id="splashFile" accept=".bin" style="color:var(--ink);font-size:11px;max-width:200px">
+          <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px"><input type="checkbox" id="splashReboot" checked> 刷入后重启</label>
+          <button class="btn bp" onclick="splashSet()">刷入开机画面</button>
+        </div>
+      </div>
+
+      <!-- 第二屏：背景图 -->
+      <div class="cd"><div class="ct">第二屏 · 启动背景图</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">替换开机后显示的全屏背景图。</p>
+        <div class="bs-info" id="bgInfo">加载中...</div>
+        <div class="bs-row">
+          <input type="file" id="bgFile" accept=".jpg,.jpeg,.png" style="color:var(--ink);font-size:11px;max-width:200px">
+          <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px"><input type="checkbox" id="bgReboot" checked> 刷入后重启</label>
+          <button class="btn bp" onclick="bgSet()">刷入背景图</button>
+          <button class="btn bw" onclick="bgBackup()">备份当前图</button>
+        </div>
+        <div class="bs-note">要求：<code>1080×2160</code> 竖屏 jpg/png。工具会先备份原 <code>/usr/comma/bg.jpg</code> 为 <code>bg.jpg.bak</code>，再写入并重启生效。第一屏（Qualcomm splash）结束后即显示此背景。</div>
+      </div>
+
+      <!-- 备用资源 -->
+      <div class="cd"><div class="ct">备用工具下载（可选）</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">浏览器已能直接生成，通常无需电脑工具。若仍想用原 Windows 工具，把 <code>comma开机画面修改.exe</code> 与 <code>splash_template.bin</code> 放到设备 <code>/data/c3_toolbox/res/</code> 后，即可在此下载分享给朋友。</p>
+        <div id="resList" style="font-size:12px;color:var(--muted)">加载中...</div>
       </div>
     </div>
 
@@ -561,6 +593,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="mn" data-p="info" onclick="go('info')"><span class="mi">📦</span><span class="mt">其他</span></div>
     <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
     <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
+    <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
   </div>
 </nav>
 
@@ -834,7 +867,8 @@ function updBadge(){}
 
 function onTabSwitch(id){
   if(id==='dashboard'){loadInfo()}
-  else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();loadBgInfo();loadSplashInfo();checkUpdate();}
+  else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
+  else if(id==='bootanim'){loadBgInfo();loadSplashInfo();loadResList();}
   else if(id!=='terminal'){loadParams()}
 }
 
@@ -1007,6 +1041,69 @@ async function splashSet(){
   }catch(e){toast('失败','er');}
 }
 function splashBackup(){window.open('/api/splash_backup');}
+
+// === 第一屏 splash 浏览器生成器（无需电脑工具）===
+// 格式逆向自 comma开机画面修改.exe：DDPH + version(1) + 16376零 + 54字节BMP头 + 1080x2160x3 BGR888(纵向翻转) + 尾部零 = 34226176 字节
+const SPLASH_W=1080, SPLASH_H=2160, SPLASH_TOTAL=34226176, SPLASH_BMP_OFF=16384, SPLASH_BMP_HDR=54;
+const SPLASH_B64="Qk22yWoAAAAAADYAAAAoAAAAOAQAAHAIAAABABgAAAAAAIDJagAAAAAAAAAAAAAAAAAAAAAA";
+function base64ToBytes(b64){var bin=atob(b64),a=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+function loadImageFile(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){res(im)};im.onerror=rej;im.src=r.result;};r.onerror=rej;r.readAsDataURL(file);});}
+function drawSplashCanvas(ctx,img,mode){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,SPLASH_W,SPLASH_H);
+  var iw=img.width,ih=img.height;
+  if(mode==='stretch'){ctx.drawImage(img,0,0,SPLASH_W,SPLASH_H);return;}
+  var s=Math.max(SPLASH_W/iw,SPLASH_H/ih),dw=iw*s,dh=ih*s,dx=(SPLASH_W-dw)/2,dy=(SPLASH_H-dh)/2;
+  ctx.drawImage(img,dx,dy,dw,dh);
+}
+async function genSplash(){
+  var f=document.getElementById('splashImg');
+  if(!f.files.length){toast('请先选择图片','er');return;}
+  toast('正在生成...','in');
+  var img;try{img=await loadImageFile(f.files[0]);}catch(e){toast('图片读取失败','er');return;}
+  var mode=document.getElementById('splashFit').value;
+  var c=document.createElement('canvas');c.width=SPLASH_W;c.height=SPLASH_H;
+  var ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  drawSplashCanvas(ctx,img,mode);
+  // 预览（按比例缩放到预览框）
+  var pv=document.getElementById('splashPrev');var pctx=pv.getContext('2d');pctx.fillStyle='#000';pctx.fillRect(0,0,pv.width,pv.height);
+  var ps=Math.min(pv.width/img.width,pv.height/img.height),pdw=img.width*ps,pdh=img.height*ps,pdx=(pv.width-pdw)/2,pdy=(pv.height-pdh)/2;
+  pctx.drawImage(img,pdx,pdy,pdw,pdh);
+  // 生成像素：BGR888，纵向翻转（bottom-up BMP）
+  var data=ctx.getImageData(0,0,SPLASH_W,SPLASH_H).data;
+  var PIX=SPLASH_W*SPLASH_H*3;var pixel=new Uint8Array(PIX);var p=0;
+  for(var y=SPLASH_H-1;y>=0;y--){var row=y*SPLASH_W*4;for(var x=0;x<SPLASH_W;x++){var i=row+x*4;pixel[p++]=data[i+2];pixel[p++]=data[i+1];pixel[p++]=data[i];}}
+  // 组装完整 bin
+  var out=new Uint8Array(SPLASH_TOTAL);
+  out[0]=0x44;out[1]=0x44;out[2]=0x50;out[3]=0x48; // 'DDPH'
+  out[4]=1; // version uint32 LE
+  out.set(base64ToBytes(SPLASH_B64),SPLASH_BMP_OFF);
+  out.set(pixel,SPLASH_BMP_OFF+SPLASH_BMP_HDR);
+  window._splashBin=out;
+  toast('已生成 splash_new.bin（'+(SPLASH_TOTAL/1048576).toFixed(1)+' MB）','ok');
+}
+function downloadSplash(){
+  if(!window._splashBin){toast('请先生成','er');return;}
+  var blob=new Blob([window._splashBin],{type:'application/octet-stream'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='splash_new.bin';document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+async function flashSplash(){
+  if(!window._splashBin){toast('请先生成','er');return;}
+  if(!confirm('将刷入该画面到开机第一屏，原分区会自动备份，确定？'))return;
+  var fd=new FormData();
+  fd.append('file',new File([window._splashBin],'splash_new.bin',{type:'application/octet-stream'}),'splash_new.bin');
+  fd.append('reboot',document.getElementById('splashReboot').checked?'1':'0');
+  toast('正在刷入开机画面...','in');
+  try{var d=await (await fetch('/api/splash_set',{method:'POST',body:fd})).json();toast(d.message,d.success?'ok':'er');if(d.success)loadSplashInfo();}
+  catch(e){toast('失败','er');}
+}
+async function loadResList(){
+  var el=document.getElementById('resList');if(!el)return;
+  try{var d=await (await fetch('/api/resource/list')).json();
+    if(!d.files||!d.files.length){el.innerHTML='未部署备用工具（浏览器生成已足够，无需下载）';return;}
+    el.innerHTML=d.files.map(function(f){return '<a class="upd-link" href="/api/resource/'+encodeURIComponent(f.name)+'" style="margin-right:14px">⬇ '+esc(f.name)+' ('+(f.size/1048576).toFixed(1)+' MB)</a>';}).join('');
+  }catch(e){el.textContent='加载失败';}
+}
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
