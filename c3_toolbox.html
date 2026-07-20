@@ -1880,10 +1880,31 @@ function speakTW(text){
 function playEventAudio(k, text){
   if(_voiceRepl[k]){
     var a=new Audio('/api/voice/'+k+'?t='+Date.now());
-    a.play().catch(function(){speakTW(text);});
+    var done=false;
+    var fb=function(){ if(done)return; done=true; speakTW(text); }; // mp3 被拦/解码失败 → 兜底念文案
+    a.addEventListener('error', fb);
+    var p=a.play();
+    if(p&&p.catch)p.catch(fb);
   }else{
     speakTW(text);
   }
+}
+// 浏览器自动播放策略：定时器触发的播放可能被拦截，需在首次用户手势时解锁音频
+var _audioUnlocked=false, _unlockBound=false;
+function unlockAudio(){
+  if(_audioUnlocked)return;
+  _audioUnlocked=true;
+  try{
+    var s=new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAD//w==');
+    s.play().catch(function(){});
+  }catch(e){}
+  try{ if('speechSynthesis' in window){ speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } }catch(e){}
+}
+function bindVoiceUnlock(){
+  if(_unlockBound)return; _unlockBound=true;
+  document.addEventListener('pointerdown', unlockAudio, false);
+  document.addEventListener('touchstart', unlockAudio, false);
+  document.addEventListener('keydown', unlockAudio, false);
 }
 function setVoiceLight(id,on){var e=document.getElementById(id); if(e)e.className='vlight'+(on?' on':'');}
 function flashVoice(label){
@@ -1919,6 +1940,7 @@ function initVoice(){
   renderVoiceSlots();
   refreshVoiceRepl();
   startVoice();   // 全局监听，不依赖打开面板即可实时互动
+  bindVoiceUnlock();   // 注册首次手势解锁音频（解决定时器触发被自动播放拦截）
 }
 function refreshVoiceRepl(){
   fetch('/api/voice/list').then(function(r){return r.json();}).then(function(d){

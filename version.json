@@ -1,6 +1,6 @@
 {
-  "version": "1.0.58",
-  "changelog": "语音互动增强：新增「语音包分享」——一键「全部试听」顺序播报 6 句语音；「导出语音包」把已上传替换的语音打包成 zip 备份/分享；「导入语音包」可一键应用朋友分享的语音包（仅接受 6 类合法语音、防目录穿越）。",
-  "tag": "v1.0.58",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.58/release/c3_toolbox.tar.gz"
+  "version": "1.0.59",
+  "changelog": "修复上传 MP3 后实时播报无声：新增「首次用户手势即解锁浏览器音频」（解决定时器触发的播放被自动播放策略拦截）；MP3 解码失败/被拦截时兜底用台湾腔女声念文案（防重入）。建议上传前用「试听」按钮确认 MP3 本身有声。",
+  "tag": "v1.0.59",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.59/release/c3_toolbox.tar.gz"
 }
