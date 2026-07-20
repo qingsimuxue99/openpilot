@@ -12,36 +12,61 @@
   --accent:#1aab8a;--accent2:#e85d50;--accent3:#4a90d9;
   --accent-rgb:26,171,138;
   --rule:#e8e4dd;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+  --hdr:rgba(255,255,255,.85);
 }
-/* === 赛博皮肤主题（data-theme 切换，默认 = 晚风亮色） === */
-:root[data-theme="neon"]{
-  --bg:#0e0b1a;--bg2:#16122b;--bg3:#1d1838;--bg4:#241d44;
-  --ink:#ece9ff;--muted:#9a92c4;--dim:#4a4170;
-  --accent:#b15cff;--accent2:#ff5ca8;--accent3:#5ce1ff;
-  --accent-rgb:177,92,255;
-  --rule:#2e2750;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+/* === 皮肤主题（data-theme 切换，default = 当前默认背景） === */
+:root[data-theme="black"]{
+  --bg:#161618;--bg2:#1c1c1f;--bg3:#202024;--bg4:#26262b;
+  --ink:#ededed;--muted:#9a9a9a;--dim:#3a3a3f;
+  --accent:#2dd4bf;--accent2:#f472b6;--accent3:#60a5fa;
+  --accent-rgb:45,212,191;
+  --rule:#2a2a2f;--glow:rgba(var(--accent-rgb),.12);--radius:12px;
+  --hdr:rgba(15,15,17,.85);
+  --bg-grad:linear-gradient(160deg,#0b0b0c 0%,#16161a 100%);
 }
-:root[data-theme="acid"]{
-  --bg:#06120c;--bg2:#0c1f15;--bg3:#102a1c;--bg4:#163a27;
-  --ink:#e8ffe8;--muted:#7fcf9a;--dim:#335c44;
-  --accent:#39ff14;--accent2:#c6ff00;--accent3:#00e5ff;
-  --accent-rgb:57,255,20;
-  --rule:#1f3d2a;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+:root[data-theme="mint"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#f0fdf9;--bg4:#d1fae5;
+  --ink:#0f3d2e;--muted:#4f9e85;--dim:#9fd9c4;
+  --accent:#10b981;--accent2:#f59e0b;--accent3:#0ea5e9;
+  --accent-rgb:16,185,129;
+  --rule:#cdeede;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.82);
+  --bg-grad:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 55%,#ecfdf5 100%);
 }
-:root[data-theme="vapor"]{
-  --bg:#1a1030;--bg2:#241544;--bg3:#2e1a55;--bg4:#3a2068;
-  --ink:#ffe9fb;--muted:#c79bdd;--dim:#5e3f86;
-  --accent:#ff6ad5;--accent2:#26c6ff;--accent3:#ffd86b;
-  --accent-rgb:255,106,213;
-  --rule:#3a2a66;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+:root[data-theme="cream"]{
+  --bg:#fefdf7;--bg2:#ffffff;--bg3:#f6f9ef;--bg4:#eef2dd;
+  --ink:#3a3a24;--muted:#8a8a5e;--dim:#c9cba6;
+  --accent:#84cc16;--accent2:#f97316;--accent3:#22c55e;
+  --accent-rgb:132,204,22;
+  --rule:#e3e8cf;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#fdf6e3 0%,#eef7df 50%,#fbfaf0 100%);
+}
+:root[data-theme="redblue"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#f5f7ff;--bg4:#fecaca;
+  --ink:#1e293b;--muted:#64748b;--dim:#cbd5e1;
+  --accent:#3b82f6;--accent2:#ef4444;--accent3:#6366f1;
+  --accent-rgb:59,130,246;
+  --rule:#dbe3f3;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#fee2e2 0%,#dbeafe 50%,#e0e7ff 100%);
+}
+:root[data-theme="fresh"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#f0fdf4;--bg4:#dcfce7;
+  --ink:#14532d;--muted:#4f9d6b;--dim:#a7d8bd;
+  --accent:#16a34a;--accent2:#f59e0b;--accent3:#0ea5e9;
+  --accent-rgb:22,163,74;
+  --rule:#c8ebd4;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.8);
+  --bg-grad:linear-gradient(135deg,#e8f8ee 0%,#f4fcf6 60%,#eafaf0 100%);
 }
 html,body{height:100%}
-body{font-family:'PingFang SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden}
+body{font-family:'PingFang SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;background:var(--bg-grad,var(--bg));color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden}
 body::before{content:'';position:fixed;top:-30%;right:-15%;width:500px;height:500px;background:radial-gradient(circle,rgba(var(--accent-rgb),.07) 0%,transparent 65%);pointer-events:none;z-index:0}
 body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:400px;background:radial-gradient(circle,rgba(74,144,217,.05) 0%,transparent 65%);pointer-events:none;z-index:0}
 
 /* === Header === */
-.hdr{height:52px;background:rgba(255,255,255,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 20px;position:relative;z-index:100;gap:16px}
+.hdr{height:52px;background:var(--hdr);backdrop-filter:blur(20px);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 20px;position:relative;z-index:100;gap:16px}
 .logo{font-size:17px;font-weight:800;letter-spacing:1.5px;background:linear-gradient(135deg,var(--accent),var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .logo i{font-style:normal;font-weight:400;font-size:12px;opacity:.6;-webkit-text-fill-color:var(--muted);margin-left:6px;letter-spacing:0}
 .hdr-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:var(--bg3);padding:5px 14px;border-radius:20px;border:1px solid var(--rule)}
@@ -396,6 +421,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份 💾</span><span class="cbadge" id="bc-backup">—</span></div>
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
     <div class="cat-card" data-p="perception" onclick="go('perception')"><span class="cname">感知 🧊</span><span class="cbadge" id="bc-perception">—</span></div>
+    <div class="cat-card" data-p="theme" onclick="go('theme')"><span class="cname">主题 🎨</span><span class="cbadge" id="bc-theme">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -474,18 +500,6 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       <div class="ph"><h2>系统设置</h2><p>系统开关、按钮模式、连接与录制</p></div>
       <div class="shc" id="sh-settings">已读取 0 项</div>
       <div id="sp-settings"></div>
-
-      <!-- 外观主题 -->
-      <div class="cd">
-        <div class="ct">外观主题 🎨</div>
-        <div class="theme-row" id="themeRow">
-          <button class="theme-dot on" data-theme="default" style="--d:#1aab8a" onclick="setTheme('default')" title="晚风（默认亮色）"></button>
-          <button class="theme-dot" data-theme="neon" style="--d:#b15cff" onclick="setTheme('neon')" title="霓虹紫"></button>
-          <button class="theme-dot" data-theme="acid" style="--d:#39ff14" onclick="setTheme('acid')" title="酸性绿"></button>
-          <button class="theme-dot" data-theme="vapor" style="--d:#ff6ad5" onclick="setTheme('vapor')" title="蒸汽波"></button>
-        </div>
-        <div class="bs-info" id="themeName">当前：晚风（默认）</div>
-      </div>
     </div>
 
     <!-- 信息 -->
@@ -643,6 +657,24 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       </div>
     </div>
 
+    <!-- 主题皮肤 -->
+    <div class="pnl" id="p-theme">
+      <div class="ph"><h2>主题皮肤 🎨</h2><p>一键切换整体配色风格，选择会被记住</p></div>
+      <div class="cd">
+        <div class="ct">选择皮肤</div>
+        <div class="theme-row" id="themeRow">
+          <button class="theme-dot on" data-theme="default" style="--d:linear-gradient(135deg,#f5f2ec,#1aab8a)" onclick="setTheme('default')" title="当前默认背景"></button>
+          <button class="theme-dot" data-theme="black" style="--d:linear-gradient(160deg,#0b0b0c,#16161a)" onclick="setTheme('black')" title="黑色"></button>
+          <button class="theme-dot" data-theme="mint" style="--d:linear-gradient(135deg,#d1fae5,#a7f3d0,#10b981)" onclick="setTheme('mint')" title="薄荷绿渐变"></button>
+          <button class="theme-dot" data-theme="cream" style="--d:linear-gradient(135deg,#fdf6e3,#eef7df,#84cc16)" onclick="setTheme('cream')" title="奶油绿渐变"></button>
+          <button class="theme-dot" data-theme="redblue" style="--d:linear-gradient(135deg,#ef4444,#3b82f6)" onclick="setTheme('redblue')" title="红蓝渐变"></button>
+          <button class="theme-dot" data-theme="fresh" style="--d:linear-gradient(135deg,#22c55e,#e8f8ee)" onclick="setTheme('fresh')" title="清新绿"></button>
+        </div>
+        <div class="bs-info" id="themeName">当前：当前默认背景</div>
+        <div class="bs-note">说明：深色 / 渐变皮肤只改变工具箱界面配色，不会影响设备本身的显示。选择会保存到本地浏览器。</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -662,6 +694,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
     <div class="mn" data-p="perception" onclick="go('perception')"><span class="mi">🧊</span><span class="mt">感知</span></div>
+    <div class="mn" data-p="theme" onclick="go('theme')"><span class="mi">🎨</span><span class="mt">主题</span></div>
   </div>
 </nav>
 
@@ -967,13 +1000,14 @@ function onTabSwitch(id){
   else if(id==='perception'){startPerception()}
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
+  else if(id==='theme'){}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
 }
 
 
 
 // === 外观主题（赛博皮肤切换） ===
-var THEME_NAMES={'default':'晚风（默认）','neon':'霓虹紫','acid':'酸性绿','vapor':'蒸汽波'};
+var THEME_NAMES={'default':'当前默认背景','black':'黑色','mint':'薄荷绿渐变','cream':'奶油绿渐变','redblue':'红蓝渐变','fresh':'清新绿'};
 function setTheme(t){
   if(t==='default'){document.documentElement.removeAttribute('data-theme');}
   else{document.documentElement.setAttribute('data-theme',t);}

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.46",
-  "changelog": "新增两项赛博视觉功能：① 外观主题 🎨（设置面板内一键切换 晚风/霓虹紫/酸性绿/蒸汽波 四套皮肤，localStorage 持久化，全局 CSS 变量驱动）；② 感知线框 🧊（新增「感知」面板，Canvas 透视投影把模型检测到的车辆/行人画成赛博线框 3D 场景，含地面网格、规划路径、车道线、HUD；后端订阅 cereal modelV2/liveTracks/radarState 提供真实感知数据，未行驶/离线时诚实返回 available:false；内置明确标注的演示模式用于预览）。",
-  "tag": "v1.0.46",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.46/release/c3_toolbox.tar.gz"
+  "version": "1.0.47",
+  "changelog": "主题切换改为独立「主题 🎨」标签页（从设置中移出）；重新绘制 6 套皮肤：① 当前默认背景 ② 黑色 ③ 薄荷绿渐变 ④ 奶油绿渐变 ⑤ 红蓝渐变 ⑥ 清新绿。渐变/深色皮肤通过 --bg-grad 与 --hdr 变量驱动，仅改变工具箱界面配色，不影响设备显示；选择仍 localStorage 持久化。",
+  "tag": "v1.0.47",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.47/release/c3_toolbox.tar.gz"
 }
