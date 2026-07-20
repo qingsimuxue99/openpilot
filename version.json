@@ -1,6 +1,6 @@
 {
-  "version": "1.0.40",
-  "changelog": "终端新增 tmux a 实时日志：网页终端输入 `tmux a` 或点「📜 tmux a 实时日志」按钮，通过 SSE 实时推送 server.log（先回放最近 30 行再持续推新行）；设备端启动自动创建 tmux 会话 c3logs 持续 tail 日志，设备 shell 可直接 `tmux a -t c3logs` 查看实时日志；新增「⏹ 停止日志」按钮。参数控制标签栏 emoji 保持适配（横向↔️/纵向↕️/弯道🌀/变道↪️/导航🗺️/显示🖥️/设置⚙️），随本次发布确保设备更新到位。",
-  "tag": "v1.0.40",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.40/release/c3_toolbox.tar.gz"
+  "version": "1.0.41",
+  "changelog": "优化终端 tmux a 实时日志：SSE 生成器改为二进制模式读取 server.log（readline 循环在部分环境下对外部追加内容不敏感，二进制 f.read() 跨平台稳定），确保实时推送新行可靠，并兼容非 UTF-8 日志（decode errors=replace）；设备端启动仍自动创建 tmux 会话 c3logs 持续 tail 日志，设备 shell 可 `tmux a -t c3logs` 看实时日志。",
+  "tag": "v1.0.41",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.41/release/c3_toolbox.tar.gz"
 }

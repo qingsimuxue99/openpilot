@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.40"
+VERSION = "1.0.41"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -894,16 +894,20 @@ def api_logstream():
     def gen():
         yield "data: ┌── 实时日志 (tmux a) 已连接 ──┐\n\n"
         try:
-            with open(log_path, 'r', errors='replace') as f:
-                lines = f.readlines()
-                tail = lines[-30:] if len(lines) > 30 else lines
+            with open(log_path, 'rb') as f:
+                # 先回放最近 30 行
+                data = f.read()
+                lines = data.split(b'\n')
+                tail = lines[-31:-1] if len(lines) > 31 else lines[:-1]
                 for ln in tail:
-                    yield "data: " + ln.rstrip('\n') + "\n\n"
-                f.seek(0, 2)
+                    yield "data: " + ln.decode('utf-8', 'replace') + "\n\n"
+                f.seek(0, 2)  # 定位到末尾，之后只推新内容
                 while True:
-                    line = f.readline()
-                    if line:
-                        yield "data: " + line.rstrip('\n') + "\n\n"
+                    chunk = f.read()
+                    if chunk:
+                        for ln in chunk.split(b'\n'):
+                            if ln:
+                                yield "data: " + ln.decode('utf-8', 'replace') + "\n\n"
                     else:
                         time.sleep(0.25)
         except GeneratorExit:
