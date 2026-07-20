@@ -1879,12 +1879,18 @@ function speakTW(text){
 }
 function playEventAudio(k, text){
   if(_voiceRepl[k]){
-    var a=new Audio('/api/voice/'+k+'?t='+Date.now());
-    var done=false;
-    var fb=function(){ if(done)return; done=true; speakTW(text); }; // mp3 被拦/解码失败 → 兜底念文案
-    a.addEventListener('error', fb);
-    var p=a.play();
-    if(p&&p.catch)p.catch(fb);
+    // 用 fetch 取完整文件再以 Blob URL 播放，彻底绕开服务器必须支持 HTTP Range 的限制（iOS Safari 强要求）
+    fetch('/api/voice/'+k+'?t='+Date.now())
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); })
+      .then(function(blob){
+        var url=URL.createObjectURL(blob);
+        var a=new Audio(url);
+        a.onended=function(){ try{URL.revokeObjectURL(url);}catch(e){} };
+        a.onerror=function(){ try{URL.revokeObjectURL(url);}catch(e){} speakTW(text); }; // 文件损坏 → 兜底念文案
+        var p=a.play();
+        if(p&&p.catch)p.catch(function(){ speakTW(text); });
+      })
+      .catch(function(e){ console.warn('[语音] 文件加载失败，改用合成语音：', e); speakTW(text); });
   }else{
     speakTW(text);
   }
@@ -1961,6 +1967,7 @@ function renderVoiceSlots(){
         '<button class="btn bs" onclick="testVoice(\''+x.k+'\')">试听</button>'+
         '<label class="btn bs vup">上传替换<input type="file" id="vf-'+x.k+'" accept="audio/*" onchange="uploadVoice(\''+x.k+'\')" hidden></label>'+
         '<button class="btn bs" onclick="resetVoice(\''+x.k+'\')">恢复</button>'+
+        '<a class="btn bs" href="/api/voice/'+x.k+'" download>下载</a>'+
         '<span class="vtag" id="vr-'+x.k+'">默认合成</span>'+
       '</div>'+
     '</div>';
@@ -1980,6 +1987,7 @@ function resetVoice(k){
   }).catch(function(){toast('恢复失败','er');});
 }
 function testVoice(k){
+  unlockAudio(); // 确保音频已解锁（首次手势内调用，满足浏览器自动播放策略）
   var item=VOICE_TYPES.filter(function(x){return x.k===k;})[0];
   if(item)playEventAudio(k,item.text);
 }

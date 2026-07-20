@@ -1,6 +1,6 @@
 {
-  "version": "1.0.59",
-  "changelog": "修复上传 MP3 后实时播报无声：新增「首次用户手势即解锁浏览器音频」（解决定时器触发的播放被自动播放策略拦截）；MP3 解码失败/被拦截时兜底用台湾腔女声念文案（防重入）。建议上传前用「试听」按钮确认 MP3 本身有声。",
-  "tag": "v1.0.59",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.59/release/c3_toolbox.tar.gz"
+  "version": "1.0.60",
+  "changelog": "修复点「试听」上传的 MP3 无声音：播放改为 fetch 取完整文件→Blob URL 播放，彻底绕开 iOS Safari 等浏览器强制要求的 HTTP Range(206) 分段支持限制；语音接口补 Accept-Ranges 头；试听前先解锁音频；每个语音槽位新增「下载」按钮便于自检文件是否真存上。",
+  "tag": "v1.0.60",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.60/release/c3_toolbox.tar.gz"
 }
