@@ -839,14 +839,40 @@ function formatUptime(s){
   return min+'分钟';
 }
 
+// === 设备信息字段格式化（让非极客也能看懂）===
+function fmtMem(s){
+  var m=String(s).match(/([\d.]+)\s*MB\s*total\s*\/\s*([\d.]+)\s*MB\s*used\s*\/\s*([\d.]+)\s*MB\s*free/i);
+  if(!m)return s;
+  var tot=parseFloat(m[1]),used=parseFloat(m[2]);
+  var pct=tot>0?Math.round(used/tot*100):0;
+  return (used/1024).toFixed(1)+'GB / 共 '+(tot/1024).toFixed(1)+'GB ('+pct+'%)';
+}
+function fmtDisk(s){
+  var m=String(s).match(/([\d.]+)\s*G\s*\/\s*([\d.]+)\s*G\s*\((\d+)%\s*used\)/i);
+  if(!m)return s;
+  return '已用 '+m[1]+'G / 共 '+m[2]+'G ('+m[3]+'%)';
+}
+function fmtLoad(s){
+  var p=String(s).trim().split(/\s+/).filter(Boolean);
+  if(!p.length)return s;
+  var v=parseFloat(p[0]);
+  var lvl = isNaN(v)?'':(v<1?'很空闲':(v<4?'正常':(v<8?'较忙':'繁忙')));
+  var extra = p.length>=3 ? (' · 1/5/15分钟：'+p.join('/')) : '';
+  return p[0]+extra+(lvl?(' · '+lvl):'');
+}
+function fmtCharging(s){
+  var m={'Discharging':'未充电（放电中）','Charging':'充电中','Full':'已充满','Not charging':'未充电'};
+  return m[String(s)]||s;
+}
+
 // === Device Info ===
 var DI_LINES=[];
 function loadInfo(){toast('正在刷新设备信息...','in');fetch('/api/device_info').then(function(r){return r.json()}).then(function(d){
-  // 基本信息
+  // 基本信息（已移除版本/分支/Commit 等开发者信息）
   var g1=document.getElementById('infoBasic');
   var basic=[
-    {l:'设备 ID',k:'dongle_id',c:'g'},{l:'版本',k:'version',c:'g'},{l:'分支',k:'branch',c:'b'},
-    {l:'Commit',k:'commit',c:'b'},{l:'设备型号',k:'model',c:'g'},{l:'车辆',k:'car_name',c:'o'},
+    {l:'设备 ID',k:'dongle_id',c:'g'},
+    {l:'设备型号',k:'model',c:'g'},{l:'车辆',k:'car_name',c:'o'},
     {l:'CPU型号',k:'cpu_model',c:'b'},{l:'CPU核心',k:'cpu_cores',c:'b'},{l:'摄像头类型',k:'camera_type',c:'o'},
     {l:'启动次数',k:'boot_count',c:'o'},{l:'IP地址',k:'ip',c:'b'},{l:'WiFi',k:'wifi',c:'g'}
   ];
@@ -857,22 +883,21 @@ function loadInfo(){toast('正在刷新设备信息...','in');fetch('/api/device
     DI_LINES.push(i.l+': '+v);
   });
 
-  // 运行状态
+  // 运行状态（已移除电量；内存/分区/负载已转成易懂中文）
   var g2=document.getElementById('infoHealth');
   var health=[
-    {l:'运行时间',k:'uptime',c:'b',fmt:'uptime'},
+    {l:'已运行',k:'uptime',c:'b',fmt:'uptime'},
     {l:'openpilot状态',k:'manager_running',c:'b',fmt:'status'},
-    {l:'内存',k:'memory',c:'g'},
+    {l:'内存占用',k:'memory',c:'g',fmt:'mem'},
     {l:'CPU温度',k:'cpu_temp',c:'o'},
     {l:'GPU温度',k:'gpu_temp',c:'o'},
     {l:'环境温度',k:'ambient_temp',c:'o'},
     {l:'BMS温度',k:'bms_temp',c:'o'},
-    {l:'电量',k:'battery',c:'g'},
-    {l:'充电状态',k:'charging',c:'b'},
+    {l:'充电状态',k:'charging',c:'b',fmt:'charging'},
     {l:'屏幕亮度',k:'brightness',c:'b'},
-    {l:'数据分区',k:'disk',c:'g'},
-    {l:'系统分区',k:'system_disk',c:'g'},
-    {l:'系统负载',k:'load_avg',c:'o'},
+    {l:'数据盘',k:'disk',c:'g',fmt:'disk'},
+    {l:'系统盘',k:'system_disk',c:'g',fmt:'disk'},
+    {l:'系统负载',k:'load_avg',c:'o',fmt:'load'},
     {l:'进程数',k:'proc_count',c:'b'},
     {l:'网络状态',k:'network',c:'g'}
   ];
@@ -880,13 +905,17 @@ function loadInfo(){toast('正在刷新设备信息...','in');fetch('/api/device
   health.forEach(function(i){
     var v=d[i.k]||'';if(!v)return;
     if(i.fmt==='status') v=d[i.k]?'运行中':'已停止';
-    if(i.fmt==='uptime') v=formatUptime(v);
+    if(i.fmt==='uptime') v=formatUptime(v)+'（自开机）';
+    if(i.fmt==='mem') v=fmtMem(v);
+    if(i.fmt==='disk') v=fmtDisk(v);
+    if(i.fmt==='load') v=fmtLoad(v);
+    if(i.fmt==='charging') v=fmtCharging(v);
     g2.innerHTML+='<div class="ii '+i.c+'"><div class="lb">'+i.l+'</div><div class="vl">'+esc(v)+'</div></div>';
     DI_LINES.push(i.l+': '+v);
   });
-  // 赛博卡标题
-  var tt=document.getElementById('ccTitle');if(tt)tt.innerHTML='设备信息 <b>'+(d.model||d.version||'—')+'</b>';
-  var sb=document.getElementById('ccSub');if(sb)sb.textContent=(d.branch||'')+(d.version?(' · '+d.version):'');
+  // 赛博卡标题/副标题
+  var tt=document.getElementById('ccTitle');if(tt)tt.innerHTML='设备信息 <b>'+(d.model||'—')+'</b>';
+  var sb=document.getElementById('ccSub');if(sb)sb.textContent=(d.car_name?('车辆：'+d.car_name.replace(/_/g,' ')):'');
 }).catch(function(){})}
 async function copyDeviceInfo(){
   if(!DI_LINES||!DI_LINES.length){toast('暂无设备信息可复制','er');return;}
