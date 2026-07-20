@@ -1,6 +1,6 @@
 {
-  "version": "1.0.53",
-  "changelog": "设备信息按反馈微调：仅移除 Commit 与「充电状态」两项；内存值转「已用/共 (百分比)」、系统负载标注「1/5/15分钟 + 繁忙程度」；版本/分支/电量/运行时间/数据分区/系统分区及副标题全部恢复为原样。",
-  "tag": "v1.0.53",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.53/release/c3_toolbox.tar.gz"
+  "version": "1.0.54",
+  "changelog": "设备信息去除「系统负载」标签及其格式化死代码；检查更新机制自动化：打开页面即查、切换任意标签即静默复查、每 5 分钟后台定时复检，无需再手动点击「检查更新」。",
+  "tag": "v1.0.54",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.54/release/c3_toolbox.tar.gz"
 }

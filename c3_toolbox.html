@@ -847,14 +847,6 @@ function fmtMem(s){
   var pct=tot>0?Math.round(used/tot*100):0;
   return (used/1024).toFixed(1)+'GB / 共 '+(tot/1024).toFixed(1)+'GB ('+pct+'%)';
 }
-function fmtLoad(s){
-  var p=String(s).trim().split(/\s+/).filter(Boolean);
-  if(!p.length)return s;
-  var v=parseFloat(p[0]);
-  var lvl = isNaN(v)?'':(v<1?'很空闲':(v<4?'正常':(v<8?'较忙':'繁忙')));
-  var extra = p.length>=3 ? (' · 1/5/15分钟：'+p.join('/')) : '';
-  return p[0]+extra+(lvl?(' · '+lvl):'');
-}
 
 // === Device Info ===
 var DI_LINES=[];
@@ -888,7 +880,6 @@ function loadInfo(){toast('正在刷新设备信息...','in');fetch('/api/device
     {l:'屏幕亮度',k:'brightness',c:'b'},
     {l:'数据分区',k:'disk',c:'g'},
     {l:'系统分区',k:'system_disk',c:'g'},
-    {l:'系统负载',k:'load_avg',c:'o',fmt:'load'},
     {l:'进程数',k:'proc_count',c:'b'},
     {l:'网络状态',k:'network',c:'g'}
   ];
@@ -898,7 +889,6 @@ function loadInfo(){toast('正在刷新设备信息...','in');fetch('/api/device
     if(i.fmt==='status') v=d[i.k]?'运行中':'已停止';
     if(i.fmt==='uptime') v=formatUptime(v);
     if(i.fmt==='mem') v=fmtMem(v);
-    if(i.fmt==='load') v=fmtLoad(v);
     g2.innerHTML+='<div class="ii '+i.c+'"><div class="lb">'+i.l+'</div><div class="vl">'+esc(v)+'</div></div>';
     DI_LINES.push(i.l+': '+v);
   });
@@ -1141,10 +1131,12 @@ function onTabSwitch(id){
   if(id!=='perception')stopPerception();
   if(id==='dashboard'){loadInfo()}
   else if(id==='perception'){startPerception()}
-  else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
+  else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id==='theme'){}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
+  // 每次切换标签都静默检查更新（无需手动点击）
+  checkUpdate();
 }
 
 
@@ -1648,6 +1640,9 @@ document.addEventListener('click',function(e){
 setTimeout(function(){loadBkList()},2000);
 // 应用保存的皮肤主题
 initTheme();
+// 自动检查更新：打开页面即查（上方 init 已调用），切标签即查（onTabSwitch 内已调用），
+// 并每 5 分钟后台静默复检一次，全程无需手动点击「检查更新」按钮。
+setInterval(function(){try{checkUpdate()}catch(e){}},5*60*1000);
 </script>
 </body>
 </html>
