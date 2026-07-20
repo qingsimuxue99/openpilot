@@ -359,7 +359,6 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端</span><span class="cbadge" id="bc-terminal">—</span></div>
     <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份</span><span class="cbadge" id="bc-backup">—</span></div>
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画</span><span class="cbadge" id="bc-bootanim">—</span></div>
-    <div class="cat-card" data-p="hud" onclick="go('hud')"><span class="cname">HUD 仪表盘</span><span class="cbadge" id="bc-hud">🚀</span></div>
     <div class="cat-card" data-p="report" onclick="go('report')"><span class="cname">驾驶报告</span><span class="cbadge" id="bc-report">📊</span></div>
   </nav>
 
@@ -575,14 +574,9 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       </div>
     </div>
 
-    <div class="pnl" id="p-hud">
-      <div class="ph"><h2>赛博 HUD 仪表盘</h2><p>实时车速 / 转向 / 3D 车模（数据来自 openpilot 实时通道）</p></div>
-      <iframe src="/hud#hud" style="width:100%;height:calc(100vh - 160px);border:0;border-radius:14px;background:#05080f"></iframe>
-    </div>
-
     <div class="pnl" id="p-report">
-      <div class="ph"><h2>炫酷驾驶报告</h2><p>基于统计行程数据，一键生成赛博风分享卡片</p></div>
-      <iframe src="/hud#report" style="width:100%;height:calc(100vh - 160px);border:0;border-radius:14px;background:#05080f"></iframe>
+      <div class="ph"><h2>炫酷驾驶报告</h2><p>先点「开始统计本次行程」，行驶后一键生成赛博风分享卡片</p></div>
+      <iframe src="/hud" style="width:100%;height:calc(100vh - 160px);border:0;border-radius:14px;background:#f5f2ec"></iframe>
     </div>
 
   </div>
@@ -603,7 +597,6 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
     <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
-    <div class="mn" data-p="hud" onclick="go('hud')"><span class="mi">🚀</span><span class="mt">HUD</span></div>
     <div class="mn" data-p="report" onclick="go('report')"><span class="mi">📊</span><span class="mt">报告</span></div>
   </div>
 </nav>

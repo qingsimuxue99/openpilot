@@ -1,6 +1,6 @@
 {
-  "version": "1.0.36",
-  "changelog": "HUD 车辆姿态升级为真正的 3D 通用轿车模型：用 CSS 3D 构建立体车身/车顶/挡风玻璃/车灯/四轮，居中行驶在 3D 透视彩虹道路上；车速控制彩虹流动与路面滚动速度，转向角控制前轮旋转。",
-  "tag": "v1.0.36",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.36/release/c3_toolbox.tar.gz"
+  "version": "1.0.37",
+  "changelog": "去除 HUD 仪表盘（3D 车模/彩虹路），仅保留驾驶报告；报告卡片背景改为与整体工具箱一致的浅色主题，左侧标签加适配 emoji（里程🛣️/时长⏱️/最高车速🏎️/平均转向🧭/平滑度评分✨）；「开始/停止统计」按钮移入报告页。",
+  "tag": "v1.0.37",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.37/release/c3_toolbox.tar.gz"
 }
