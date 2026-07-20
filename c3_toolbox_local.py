@@ -5,7 +5,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 直接运行在 C3 设备上，浏览器访问 http://设备IP:5588 即可
 """
 
-import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re
+import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re, shutil
 
 try:
     from flask import Flask, request, jsonify, send_file, send_from_directory
@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.18"
+VERSION = "1.0.19"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1319,6 +1319,59 @@ def api_dashy_status():
     return jsonify({'collector': bool(ok and fresh), 'stateFile': ok})
 
 
+# ============= 屏幕镜像（投屏）：捕获设备显示帧缓冲，ffmpeg 转 JPEG =============
+# 把设备"屏幕上显示的内容"原样镜像到浏览器（不连摄像头，纯显示像素）。
+# 用 ffmpeg 持续把 /dev/fb0 帧缓冲写成 JPEG，前端轮询读取即投屏。
+SCREEN_JPG = '/tmp/screen.jpg'
+screen_avail = False
+
+
+def detect_fb_source():
+    if os.path.exists('/dev/fb0'):
+        return 'fb0'
+    return None
+
+
+def _start_screen_capture():
+    global screen_avail
+    src = detect_fb_source()
+    ff = shutil.which('ffmpeg') or '/usr/bin/ffmpeg'
+    if not src or not os.path.exists(ff):
+        screen_avail = False
+        return False
+    try:
+        subprocess.run("pkill -f 'image2 -update 1 %s'" % SCREEN_JPG, shell=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    except Exception:
+        pass
+    try:
+        subprocess.Popen([ff, '-f', 'fbdev', '-i', '/dev/fb0',
+                          '-vf', 'fps=8,scale=480:-1', '-f', 'image2',
+                          '-update', '1', SCREEN_JPG],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
+                         start_new_session=True)
+        screen_avail = True
+        return True
+    except Exception:
+        screen_avail = False
+        return False
+
+
+@app.route('/api/screen/status', methods=['GET'])
+def api_screen_status():
+    return jsonify({'available': screen_avail, 'source': detect_fb_source()})
+
+
+@app.route('/api/screen/frame', methods=['GET'])
+def api_screen_frame():
+    if not screen_avail or not os.path.exists(SCREEN_JPG):
+        return jsonify({'error': 'unavailable'}), 404
+    try:
+        return send_file(SCREEN_JPG, mimetype='image/jpeg')
+    except Exception:
+        return jsonify({'error': 'read failed'}), 500
+
+
 if __name__ == '__main__':
     PORT = 5588
     # 确保目录存在
@@ -1354,4 +1407,12 @@ if __name__ == '__main__':
             print("  [!] 未找到可用 python 加载 cereal，实时画面功能将不可用")
     except Exception as e:
         print(f"  [!] 启动实时数据收集器失败: {e}")
+    # 启动屏幕镜像（投屏）：失败不影响其它功能
+    try:
+        if _start_screen_capture():
+            print("  [✓] 屏幕镜像（投屏）已启动")
+        else:
+            print("  [!] 屏幕镜像不可用（无 /dev/fb0 帧缓冲或缺少 ffmpeg）")
+    except Exception as e:
+        print(f"  [!] 启动屏幕镜像失败: {e}")
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

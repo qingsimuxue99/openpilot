@@ -574,18 +574,26 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
       </div>
     </div>
 
-    <!-- 实时画面 · 驾驶 HUD -->
+    <!-- 实时画面 · 屏幕投屏 / 数据 HUD -->
     <div class="pnl" id="p-dashy">
-      <div class="ph"><h2>实时画面 · 驾驶 HUD</h2><p>把设备的车速、车道线、前车距离等实时推到本页面（纯数据，局域网流畅）。仅查看，不写参数。</p></div>
+      <div class="ph"><h2>实时画面 · 屏幕投屏 / 驾驶 HUD</h2><p>「投屏」= 把设备屏幕显示的内容实时镜像到本页面（纯屏幕像素，不连摄像头）；「数据 HUD」= 纯数据仪表盘。均仅查看，不写参数。</p></div>
       <div class="cd">
-        <div class="bs-row" style="align-items:center;flex-wrap:wrap">
-          <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px"><input type="checkbox" id="dashyMirror"> HUD 镜像（挡风玻璃投射，上下翻转）</label>
+        <div class="bs-row" style="align-items:center;flex-wrap:wrap;gap:10px">
+          <label style="font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px"><input type="radio" name="dashySrc" value="screen" checked onchange="setDashySrc('screen')"> 投屏（屏幕镜像）</label>
+          <label style="font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px"><input type="radio" name="dashySrc" value="hud" onchange="setDashySrc('hud')"> 数据 HUD</label>
+          <label id="dashyMirrorWrap" style="font-size:11px;color:var(--muted);display:none;align-items:center;gap:6px"><input type="checkbox" id="dashyMirror"> HUD 镜像（挡风玻璃投射，上下翻转）</label>
           <span id="dashyStat" style="font-size:11px;color:var(--dim);margin-left:auto"></span>
         </div>
-        <div style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
-          <canvas id="dashyCanvas" width="420" height="760" style="width:100%;border-radius:14px;background:#0a0c10;display:block;aspect-ratio:420/760"></canvas>
+        <div id="dashyScreenWrap" style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
+          <img id="dashyScreen" alt="投屏" style="width:100%;border-radius:14px;background:#000;display:block;aspect-ratio:9/16">
+          <div class="bs-note">实时镜像设备屏幕（无需摄像头）。若黑屏/提示不可用，说明本设备无 <code>/dev/fb0</code> 帧缓冲或缺少 <code>ffmpeg</code>（可装：<code>apt-get install -y ffmpeg</code> 或 entware）。</div>
         </div>
-        <div class="bs-note">需在设备行驶（有 carState 数据）时才有画面；停车显示 Offroad / 设备信息。若提示「不支持」，说明本设备无法加载 cereal 数据总线（不影响其它功能）。</div>
+        <div id="dashyHudWrap" style="display:none">
+          <div style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
+            <canvas id="dashyCanvas" width="420" height="760" style="width:100%;border-radius:14px;background:#0a0c10;display:block;aspect-ratio:420/760"></canvas>
+          </div>
+          <div class="bs-note">需在设备行驶（有 carState 数据）时才有画面；停车显示 Offroad。若提示「不支持」，说明本设备无法加载 cereal 数据总线（不影响其它功能）。</div>
+        </div>
       </div>
     </div>
 
@@ -905,17 +913,41 @@ function onTabSwitch(id){
   if(id!=='dashy'){stopDashy();}
 }
 
-// === 实时驾驶 HUD ===
-var dashyTimer=null, dashyState=null, dashyMirror=false;
-function startDashy(){
-  var cb=document.getElementById('dashyMirror');
-  if(cb){dashyMirror=cb.checked;cb.onchange=function(){dashyMirror=this.checked;};}
-  if(dashyTimer)return;
-  loopDashy();
-  dashyTimer=setInterval(loopDashy,100);
+// === 实时画面：投屏（帧缓冲镜像）+ 数据 HUD ===
+var dashyScreenTimer=null, dashyHudTimer=null, dashyState=null, dashyMirror=false, dashySrc='screen', dashyScreenOk=false;
+function setDashySrc(s){dashySrc=s;applyDashySrc();}
+function applyDashySrc(){
+  stopDashy();
+  var isScreen=dashySrc==='screen';
+  document.getElementById('dashyScreenWrap').style.display=isScreen?'block':'none';
+  document.getElementById('dashyHudWrap').style.display=isScreen?'none':'block';
+  document.getElementById('dashyMirrorWrap').style.display=isScreen?'none':'flex';
+  if(isScreen){
+    loopScreen();
+    dashyScreenTimer=setInterval(loopScreen,130);
+  }else{
+    var cb=document.getElementById('dashyMirror');
+    if(cb){dashyMirror=cb.checked;cb.onchange=function(){dashyMirror=this.checked;};}
+    loopHud();
+    dashyHudTimer=setInterval(loopHud,100);
+  }
 }
-function stopDashy(){if(dashyTimer){clearInterval(dashyTimer);dashyTimer=null;}}
-async function loopDashy(){
+function startDashy(){applyDashySrc();}
+function stopDashy(){
+  if(dashyScreenTimer){clearInterval(dashyScreenTimer);dashyScreenTimer=null;}
+  if(dashyHudTimer){clearInterval(dashyHudTimer);dashyHudTimer=null;}
+}
+async function loopScreen(){
+  var st=document.getElementById('dashyStat');
+  if(!dashyScreenOk){
+    try{var s=await (await fetch('/api/screen/status')).json();dashyScreenOk=!!s.available;}catch(e){dashyScreenOk=false;}
+    if(!dashyScreenOk){if(st)st.textContent='投屏不可用（无 /dev/fb0 或缺少 ffmpeg）';return;}
+  }
+  var img=document.getElementById('dashyScreen');
+  if(img)img.src='/api/screen/frame?t='+Date.now();
+  if(st)st.textContent='投屏中…';
+}
+async function loopHud(){
   try{
     var d=await (await fetch('/api/dashy/state')).json();
     dashyState=d;drawDashy();

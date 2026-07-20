@@ -1,6 +1,6 @@
 {
-  "version": "1.0.18",
-  "tag": "v1.0.18",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.18/release/c3_toolbox.tar.gz",
-  "changelog": "新增「实时画面 · 驾驶 HUD」（Dashy 风格，精简只读）：设备端独立子进程订阅 cereal 总线，把车速/车道线/前车距离(TTC)/转向/温度等以纯数据推到浏览器 Canvas HUD，局域网流畅、仅查看不写参数；支持 HUD 镜像翻转（挡风玻璃投射）；停车显示 Offroad。新增 dashy_collector.py，后端加 /api/dashy/state、/api/dashy/status，工具箱启动自动拉起收集器（无法加载 cereal 时优雅降级）。"
+  "version": "1.0.19",
+  "tag": "v1.0.19",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.19/release/c3_toolbox.tar.gz",
+  "changelog": "「实时画面」标签新增「投屏（屏幕镜像）」源：用 ffmpeg 持续捕获设备 /dev/fb0 帧缓冲并转 JPEG，前端轮询实时镜像设备屏幕显示的内容（纯屏幕像素，不连摄像头），实现\"设备上屏幕显示什么就投屏什么\"。与「数据 HUD」（Dashy 风格纯数据）可一键切换；投屏不可用时（无 fb0/缺 ffmpeg）自动降级并提示。"
 }
