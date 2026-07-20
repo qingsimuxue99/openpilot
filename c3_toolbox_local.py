@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.14"
+VERSION = "1.0.15"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -501,6 +501,171 @@ def api_delete_param():
         os.remove(fpath)
         return jsonify({'success': True, 'message': f'已删除: {key}'})
     return jsonify({'success': False, 'message': f'参数不存在: {key}'})
+
+
+# ============= 分支识别与 dp/sp 自定义参数说明库 =============
+def detect_branch():
+    """识别当前运行的 openpilot 衍生版（原版 / dragonpilot / sunnypilot）。
+    优先读 GitBranch 参数，再读 /data/openpilot/.git/HEAD 与 config；匹配不到回退 'openpilot'。"""
+    try:
+        gb = os.path.join(PARAMS_DIR, 'GitBranch')
+        if os.path.isfile(gb):
+            b = open(gb, 'r').read().strip().lower()
+            if b:
+                if 'dragonpilot' in b:
+                    return 'dragonpilot'
+                if 'sunny' in b:
+                    return 'sunnypilot'
+                if 'commaai' in b or 'openpilot' in b:
+                    return 'openpilot'
+        head = '/data/openpilot/.git/HEAD'
+        if os.path.isfile(head):
+            h = open(head, 'r').read().strip().lower()
+            if 'dragonpilot' in h:
+                return 'dragonpilot'
+            if 'sunny' in h:
+                return 'sunnypilot'
+            if 'commaai' in h or 'openpilot' in h:
+                return 'openpilot'
+        cfg = '/data/openpilot/.git/config'
+        if os.path.isfile(cfg):
+            c = open(cfg, 'r').read().lower()
+            if 'dragonpilot' in c:
+                return 'dragonpilot'
+            if 'sunny' in c:
+                return 'sunnypilot'
+    except Exception:
+        pass
+    return 'openpilot'
+
+
+# 各分支常见自定义参数说明（中文）。框架可随时扩展；工具箱识别分支后把对应说明叠加到内置库。
+# 仅覆盖“分支特有的自定义参数”，原版/carrot 参数已由前端内置 PN_DESC 覆盖。
+BRANCH_META = {
+    'dragonpilot': {
+        'names': {
+            'dp_long': 'DP 纵向控制', 'dp_toggle': 'DP 总开关', 'dp_following_profile': 'DP 跟车风格',
+            'dp_accel_profile': 'DP 加减速风格', 'dp_steering_limit': 'DP 转向限速', 'dp_lat_lane_priority': 'DP 车道优先',
+            'dp_allow_gas': 'DP 允许油门', 'dp_allow_engage_without_stock_dc': 'DP 无原厂巡航也可启用',
+            'dp_camera_offset': 'DP 摄像头偏移', 'dp_path_offset': 'DP 路径偏移', 'dp_tire_km': 'DP 轮胎里程',
+            'dp_ignore_can_valid': 'DP 忽略 CAN 校验', 'dp_engine_sound': 'DP 引擎音效', 'dp_dots': 'DP 转向点显示',
+            'dp_device_shutdown': 'DP 定时关机', 'dp_logger': 'DP 扩展日志', 'dp_upload_raw': 'DP 上传原始数据',
+            'dp_atl': 'DP 自动扭矩限速', 'dp_print': 'DP 调试打印', 'dp_gas_to_100': 'DP 油门至100%',
+            'dp_gear_check': 'DP 档位检测', 'dp_allow_alps': 'DP 允许 ALPS', 'dp_enable_joystick': 'DP 启用摇杆',
+            'dp_sound_rate': 'DP 提示音频率', 'dp_using_daemon': 'DP 守护进程', 'dp_panda_sync': 'DP Panda 同步',
+            'dp_audible_alert_mode': 'DP 提示音模式', 'dp_steering_on_signal': 'DP 转向时微调', 'dp_animate_steering': 'DP 转向动画',
+            'dp_camera_offset_video': 'DP 视频摄像头偏移', 'dp_calibration': 'DP 标定方式', 'dp_experimental_long': 'DP 实验性纵向',
+            'dp_allow_brake': 'DP 允许刹车', 'dp_gear_confirm': 'DP 换挡确认',
+        },
+        'desc': {
+            'dp_long': '启用 dragonpilot 自定义纵向控制（替代原厂）',
+            'dp_toggle': 'DP 功能总开关',
+            'dp_following_profile': '跟车距离/风格档位（0=最近，越大越远）',
+            'dp_accel_profile': '加减速激进度档位',
+            'dp_steering_limit': '方向盘转角限速（度/秒）',
+            'dp_lat_lane_priority': '横向控制是否优先跟随车道线',
+            'dp_allow_gas': '允许 DP 控制油门加速',
+            'dp_allow_engage_without_stock_dc': '未开启原厂定速时也允许启用 openpilot',
+            'dp_camera_offset': '摄像头相对车道中心的横向偏移修正',
+            'dp_path_offset': '规划路径横向偏移修正',
+            'dp_tire_km': '轮胎累计里程（胎压/磨损提示用）',
+            'dp_ignore_can_valid': '忽略部分 CAN 信号有效性校验（老旧车型兼容）',
+            'dp_engine_sound': '播放引擎模拟音效',
+            'dp_dots': 'HUD 显示转向/路径圆点',
+            'dp_device_shutdown': '离车后自动关机延时（分钟，0=不关）',
+            'dp_logger': '启用 DP 扩展日志',
+            'dp_upload_raw': '上传原始传感器数据到云端',
+            'dp_atl': '根据路况自动限制扭矩（Auto Torque Limit）',
+            'dp_print': '终端打印调试信息',
+            'dp_gas_to_100': '油门请求可直接到 100%',
+            'dp_gear_check': '启用档位（PRND）检测',
+            'dp_allow_alps': '允许 ALPS 功能',
+            'dp_enable_joystick': '启用方向盘摇杆（调试用）',
+            'dp_sound_rate': '提示音播放速率',
+            'dp_using_daemon': 'DP 以守护进程方式运行',
+            'dp_panda_sync': '与 Panda 同步参数',
+            'dp_audible_alert_mode': '提示音模式选择',
+            'dp_steering_on_signal': '打转向灯时微调转向',
+            'dp_animate_steering': '方向盘动画显示',
+            'dp_camera_offset_video': '视频流摄像头偏移',
+            'dp_calibration': '摄像头标定方式',
+            'dp_experimental_long': '启用实验性纵向算法',
+            'dp_allow_brake': '允许 DP 主动刹车',
+            'dp_gear_confirm': '换挡需确认',
+        },
+        'bool_params': [
+            'dp_long', 'dp_toggle', 'dp_lat_lane_priority', 'dp_allow_gas',
+            'dp_allow_engage_without_stock_dc', 'dp_ignore_can_valid', 'dp_engine_sound', 'dp_dots',
+            'dp_logger', 'dp_upload_raw', 'dp_atl', 'dp_print', 'dp_gas_to_100', 'dp_gear_check',
+            'dp_allow_alps', 'dp_enable_joystick', 'dp_using_daemon', 'dp_panda_sync',
+            'dp_steering_on_signal', 'dp_animate_steering', 'dp_experimental_long', 'dp_allow_brake',
+            'dp_gear_confirm',
+        ],
+    },
+    'sunnypilot': {
+        'names': {
+            'sp_experimental_mode': 'SP 实验模式', 'sp_mads_enabled': 'SP MADS 启用', 'sp_personality_profile': 'SP 驾驶性格',
+            'sp_auto_resume': 'SP 自动恢复', 'sp_speed_limit_control': 'SP 限速控制', 'sp_speed_limit_delta': 'SP 限速偏移',
+            'sp_speed_limit_factor': 'SP 限速系数', 'sp_navigation_based_speed_adjust': 'SP 导航限速调整',
+            'sp_traffic_light_enabled': 'SP 红绿灯启用', 'sp_stop_at_stop_sign': 'SP 停止标志停车',
+            'sp_turn_signal_confirmation': 'SP 转向灯确认', 'sp_lane_change_time': 'SP 变道时间',
+            'sp_obd': 'SP OBD 启用', 'sp_obd_port': 'SP OBD 端口', 'sp_auto_enabled': 'SP 自动启用',
+            'sp_lkas_button': 'SP LKAS 按钮', 'sp_disable_offroad_alert': 'SP 关闭离车提醒',
+            'sp_lateral_control': 'SP 横向控制', 'sp_longitudinal_control': 'SP 纵向控制',
+            'sp_steer_ratio': 'SP 转向比', 'sp_torque_factor': 'SP 扭矩系数', 'sp_lat_lane_priority': 'SP 车道优先',
+            'sp_cruise_state': 'SP 巡航状态', 'sp_cruise_btn': 'SP 巡航按钮', 'sp_ui_mode': 'SP 界面模式',
+            'sp_hso': 'SP 高速优化', 'sp_road_speed_adjust': 'SP 道路限速调整', 'sp_auto_navi_speed': 'SP 自动导航限速',
+        },
+        'desc': {
+            'sp_experimental_mode': '启用 sunnypilot 实验性（更激进）驾驶模式',
+            'sp_mads_enabled': '启用 MADS（手动领航）模式',
+            'sp_personality_profile': '驾驶性格档位（0=温和 1=标准 2=激进）',
+            'sp_auto_resume': '红灯/停车后自动恢复巡航',
+            'sp_speed_limit_control': '根据地图/识别限速自动控制车速',
+            'sp_speed_limit_delta': '限速上下偏移量（km/h，正=上限 负=下限）',
+            'sp_speed_limit_factor': '限速系数（乘性）',
+            'sp_navigation_based_speed_adjust': '基于导航路线自动调整限速',
+            'sp_traffic_light_enabled': '启用红绿灯识别与启停',
+            'sp_stop_at_stop_sign': '在停止标志处停车',
+            'sp_turn_signal_confirmation': '变道需打转向灯确认',
+            'sp_lane_change_time': '自动变道最小时间间隔（秒）',
+            'sp_obd': '通过 OBD 读取车速/转速',
+            'sp_obd_port': 'OBD 端口号',
+            'sp_auto_enabled': '启动即自动启用',
+            'sp_lkas_button': 'LKAS 按钮行为映射',
+            'sp_disable_offroad_alert': '关闭离车安全提醒',
+            'sp_lateral_control': '横向控制方式（扭矩/角度）',
+            'sp_longitudinal_control': '纵向控制开关（0=原厂 1=SP）',
+            'sp_steer_ratio': '转向比修正系数',
+            'sp_torque_factor': '扭矩输出系数',
+            'sp_lat_lane_priority': '横向优先跟随车道线',
+            'sp_cruise_state': '巡航状态显示模式',
+            'sp_cruise_btn': '巡航按钮功能映射',
+            'sp_ui_mode': 'HUD 界面布局模式',
+            'sp_hso': '高速优化开关',
+            'sp_road_speed_adjust': '道路限速整体调整',
+            'sp_auto_navi_speed': '根据导航自动限速',
+        },
+        'bool_params': [
+            'sp_experimental_mode', 'sp_mads_enabled', 'sp_auto_resume', 'sp_traffic_light_enabled',
+            'sp_stop_at_stop_sign', 'sp_turn_signal_confirmation', 'sp_obd', 'sp_auto_enabled',
+            'sp_lkas_button', 'sp_disable_offroad_alert', 'sp_lat_lane_priority', 'sp_hso',
+        ],
+    },
+}
+
+
+@app.route('/api/param_meta')
+def api_param_meta():
+    """返回当前分支识别结果与对应自定义参数说明库，前端合并到内置说明。"""
+    branch = detect_branch()
+    meta = BRANCH_META.get(branch, {})
+    return jsonify({
+        'branch': branch,
+        'names': meta.get('names', {}),
+        'desc': meta.get('desc', {}),
+        'bool_params': meta.get('bool_params', []),
+    })
 
 
 @app.route('/api/command', methods=['POST'])

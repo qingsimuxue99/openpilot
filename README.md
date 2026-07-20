@@ -13,10 +13,24 @@
 
 ---
 
+## 支持的分支（重要）
+
+工具箱**不绑定任何特定分支**，跑在 comma 硬件（C3 / C3X 等）上的 openpilot 衍生版都能用：
+
+- **openpilot 原版 / carrot（cpv9-dev 等）**
+- **dragonpilot（龙领航，dp）**
+- **sunnypilot（阳光领航，sp）**
+
+工具箱会**自动识别当前分支**（读 `GitBranch` 参数或 git 信息），在「参数控制」标题旁显示分支标识，并**自动加载该分支的自定义参数中文说明与开关类型**——dp 的 `dp_long`、sp 的 `sp_mads_enabled` 等都会显示中文名和说明，不再是一堆英文裸参数。
+
+> 部署 / 升级命令对**所有分支完全一致**（见下方），因为工具箱只依赖通用的 `/data/params/d`、`/data/openpilot` 与硬件分区，不读分支特有结构。
+
+---
+
 ## 一、第一次部署到设备
 
 ### 准备
-- 设备已刷 openpilot（carrot / cpv9-dev 等分支）。
+- 设备已刷 openpilot 衍生版（openpilot 原版 / carrot / dragonpilot / sunnypilot 均可）。
 - 手机或电脑与设备在同一 WiFi，能 SSH 进设备（知道设备 IP）。
 
 ### 1. 把这三个文件放进设备
@@ -56,6 +70,8 @@ grep -q c3_toolbox_autostart /data/openpilot/launch_chffrplus.sh || \
   sed -i '2i bash /data/c3_toolbox/c3_toolbox_autostart.sh &' /data/openpilot/launch_chffrplus.sh
 ```
 重启设备生效：`sudo reboot`
+
+> **dragonpilot / sunnypilot 注意**：自启靠挂载到 openpilot 的启动脚本。原版 / carrot 是 `launch_chffrplus.sh`；dp / sp 若使用了不同的启动脚本（如 `launch_openpilot.sh` 或各自分支的 launch 脚本），请把上面命令里的 `/data/openpilot/launch_chffrplus.sh` 换成你分支实际的启动脚本路径，否则开机不会自动拉起。
 
 **想取消自启**：
 ```bash

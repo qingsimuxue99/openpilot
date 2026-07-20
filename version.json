@@ -1,6 +1,6 @@
 {
-  "version": "1.0.14",
-  "tag": "v1.0.14",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.14/release/c3_toolbox.tar.gz",
-  "changelog": "开机第一屏（splash）浏览器生成器 + 独立的「开机动画」左侧标签：\n- 逆向 comma开机画面修改.exe，确认第一屏 splash 分区格式（DDPH + 1080×2160 BGR888 纵向翻转 + 尾部零填充，共 34226176 字节）；\n- 工具箱新增「开机动画」左侧标签，把开机屏定制从「备份」移出独立成页；\n- 第一屏支持浏览器内上传任意图片直接生成合法 splash_new.bin（canvas 转 BGR888、自动裁剪/拉伸、预览），可一键直接刷入或下载，朋友无需任何 Windows 工具；\n- 保留「上传已有 bin 刷入」与「备份原分区」；可选把 Windows 工具放到设备 res/ 目录供下载分享。"
+  "version": "1.0.15",
+  "tag": "v1.0.15",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.15/release/c3_toolbox.tar.gz",
+  "changelog": "支持 dragonpilot / sunnypilot 等其他 openpilot 衍生分支：\n- 新增分支自动识别（读 GitBranch 参数或 git 信息），「参数控制」标题旁显示当前分支标识，页面副标题也同步显示；\n- 内置 dp / sp 常见自定义参数中文说明库与布尔判定（如 dp_long、sp_mads_enabled 等会显示中文名、说明与开关类型），随分支自动叠加到内置说明；\n- 工具箱对 openpilot 原版 / carrot / dragonpilot / sunnypilot 部署与升级命令完全一致（仅依赖通用 /data/params/d、/data/openpilot 与硬件分区）；\n- README 增加「支持的分支」说明与 dp/sp 自启脚本路径注意事项。"
 }
