@@ -60,12 +60,15 @@ def screen_loop():
         sm = SubMaster(["uiDebug"])
     except Exception:
         return
+    last = None
     while True:
         try:
             sm.update(200)
             f = sm["uiDebug"].frame
-            # 仅当是有效 JPEG（SOI 标记）且足够大时才写，避免写入空/损坏帧
-            if f and f[:2] == b'\xff\xd8' and len(f) > 1000:
+            # 仅当是有效 JPEG（SOI 标记）、足够大、且内容相比上一帧有变化时才写，
+            # 避免写入固定帧（部分分支 uiDebug.frame 只发初始帧），让投屏能正确回退到 /dev/shm 活源
+            if f and f[:2] == b'\xff\xd8' and len(f) > 1000 and f != last:
+                last = f
                 with open(SCREEN_JPG, "wb") as fh:
                     fh.write(f)
         except Exception:

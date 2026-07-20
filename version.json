@@ -1,6 +1,6 @@
 {
-  "version": "1.0.24",
-  "changelog": "投屏改用三源兜底：cereal uiDebug.frame(/tmp/screen.jpg) → /dev/shm 共享内存扫描 → ffmpeg 回退；绕开 ffmpeg 无 kmsgrab 限制",
-  "tag": "v1.0.24",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.24/release/c3_toolbox.tar.gz"
+  "version": "1.0.25",
+  "changelog": "投屏修复：跨源自动选最新帧(uiDebug固定则回退/dev/shm活源)、画面实时刷新、显示2160×1080横屏宽显(去旋转切换)、加最后更新时间诊断",
+  "tag": "v1.0.25",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.25/release/c3_toolbox.tar.gz"
 }

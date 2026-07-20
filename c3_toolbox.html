@@ -584,15 +584,12 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
           <label id="dashyMirrorWrap" style="font-size:11px;color:var(--muted);display:none;align-items:center;gap:6px"><input type="checkbox" id="dashyMirror"> HUD 镜像（挡风玻璃投射，上下翻转）</label>
           <span id="dashyStat" style="font-size:11px;color:var(--dim);margin-left:auto"></span>
         </div>
-        <div id="dashyScreenWrap" style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
-          <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
-            <button class="upd-btn" id="scrRotBtn" onclick="toggleScreenRot()">↻ 横屏显示</button>
-          </div>
-          <div id="dashyScreenStage" style="position:relative;width:100%;aspect-ratio:9/16;background:#000;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center">
-            <img id="dashyScreen" alt="投屏" style="max-width:100%;max-height:100%;display:block;transition:transform .2s">
+        <div id="dashyScreenWrap" style="position:relative;width:100%;max-width:600px;margin:12px auto 0">
+          <div id="dashyScreenStage" style="position:relative;width:100%;aspect-ratio:2/1;background:#000;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+            <img id="dashyScreen" alt="投屏" style="position:absolute;top:50%;left:50%;height:200%;width:auto;max-width:none;transform:translate(-50%,-50%) rotate(90deg);display:block">
           </div>
           <div id="dashyEnv" style="display:none;margin-top:8px;font-size:12px;color:var(--muted)"></div>
-          <div class="bs-note">低延迟投屏：ffmpeg 抓一帧即推（MJPEG 流），屏幕上显示什么就镜像什么，无需摄像头。延迟通常 100ms 级。点右上「横屏显示」可旋转画面。若提示「不可用」且缺 ffmpeg，点上方「一键安装」即可（网页内完成，不用 ssh）。</div>
+          <div class="bs-note">低延迟投屏：把设备屏幕显示的内容实时镜像到本页面（纯屏幕像素，不连摄像头）。画面以 2160×1080 横屏宽屏显示。延迟通常 100ms 级。若提示「不可用」且缺 ffmpeg，点上方「一键安装」即可（网页内完成，不用 ssh）。</div>
         </div>
         <div id="dashyHudWrap" style="display:none">
           <div style="position:relative;width:100%;max-width:420px;margin:12px auto 0">
@@ -951,7 +948,7 @@ function checkScreenEnv(){
   fetch('/api/screen/status').then(r=>r.json()).then(function(s){
     var st=document.getElementById('dashyStat'), env=document.getElementById('dashyEnv');
     if(s.available){
-      if(st)st.textContent='投屏中（'+(s.source||'未知')+'）';
+      if(st)st.textContent='投屏中（'+(s.source||'未知')+'）'+(s.frame_age_s!=null?(' · 最后更新 '+s.frame_age_s+'s前'):'');
       if(env)env.style.display='none';
     }else{
       if(st)st.textContent='投屏不可用';
@@ -970,25 +967,6 @@ function checkScreenEnv(){
 function startScreenStream(){
   var img=document.getElementById('dashyScreen');
   if(img && !dashyStreaming){img.src='/api/screen/stream';dashyStreaming=true;}
-}
-// 横屏/竖屏切换：设备屏是竖屏(1080x2160)，旋转 90° 更便于横持手机观看
-function toggleScreenRot(){
-  dashyScreenLand=!dashyScreenLand;
-  var stage=document.getElementById('dashyScreenStage');
-  var img=document.getElementById('dashyScreen');
-  var btn=document.getElementById('scrRotBtn');
-  if(dashyScreenLand){
-    stage.style.aspectRatio='2/1';
-    img.style.maxWidth='none'; img.style.maxHeight='none';
-    img.style.height='200%'; img.style.width='auto';
-    img.style.transform='rotate(90deg)';
-    if(btn)btn.textContent='↻ 竖屏显示';
-  }else{
-    stage.style.aspectRatio='9/16';
-    img.style.maxWidth='100%'; img.style.maxHeight='100%';
-    img.style.height=''; img.style.width=''; img.style.transform='none';
-    if(btn)btn.textContent='↻ 横屏显示';
-  }
 }
 // 一键安装 ffmpeg（后台任务 + 进度）
 async function installFfmpeg(){

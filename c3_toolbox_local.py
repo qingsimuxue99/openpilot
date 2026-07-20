@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.24"
+VERSION = "1.0.25"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1385,7 +1385,7 @@ def _dashy_screen_jpeg():
     try:
         if not os.path.exists(SCREEN_JPG):
             return None
-        if time.time() - os.path.getmtime(SCREEN_JPG) > 4:
+        if time.time() - os.path.getmtime(SCREEN_JPG) > 8:
             return None
         with open(SCREEN_JPG, 'rb') as f:
             data = f.read()
@@ -1424,19 +1424,8 @@ def _discover_ui_shm():
     return None
 
 
-_UI_SHM_CACHE = None
-def _ui_shm_path():
-    global _UI_SHM_CACHE
-    if _UI_SHM_CACHE and os.path.exists(_UI_SHM_CACHE):
-        return _UI_SHM_CACHE
-    _UI_SHM_CACHE = _discover_ui_shm()
-    return _UI_SHM_CACHE
-
-
-def _read_ui_shm_jpeg():
-    p = _ui_shm_path()
-    if not p:
-        return None
+def _read_ui_shm_jpeg_file(p):
+    """从指定 shm 文件抽取 JPEG 帧（按 FFD8..FFD9 标记）。"""
     try:
         with open(p, 'rb') as f:
             data = f.read()
@@ -1449,6 +1438,13 @@ def _read_ui_shm_jpeg():
         return data[soi:eoi + 2]
     except Exception:
         return None
+
+
+def _read_ui_shm_jpeg():
+    p = _discover_ui_shm()
+    if not p:
+        return None
+    return _read_ui_shm_jpeg_file(p)
 
 
 def _current_screen_source():
@@ -1481,70 +1477,43 @@ def _capture_single_cmd():
 
 
 def gen_screen_stream():
-    """MJPEG 生成器：三源优先级 cereal uiDebug -> /dev/shm -> ffmpeg。"""
-    # 源1：cereal uiDebug.frame（dashy_collector 写到 /tmp/screen.jpg）
-    if _dashy_screen_jpeg():
+    """MJPEG 生成器：跨源选最新帧（cereal uiDebug / /dev/shm），mtime 变化才推送，低延迟。"""
+    last_sig = None
+    last_scan = 0.0
+    cached_shm = None
+    while True:
+        now = time.time()
+        best = None
+        # 源1：cereal uiDebug.frame（dashy_collector 维护的 /tmp/screen.jpg）
         try:
-            while True:
-                jpg = _dashy_screen_jpeg()
-                if jpg:
-                    yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
-                time.sleep(0.05)
-        except GeneratorExit:
-            pass
-        return
-    # 源2：/dev/shm 共享内存扫描
-    if _read_ui_shm_jpeg():
-        try:
-            while True:
-                jpg = _read_ui_shm_jpeg()
-                if jpg:
-                    yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
-                time.sleep(0.05)
-        except GeneratorExit:
-            pass
-        return
-    # 源3：ffmpeg（fbdev / kmsgrab），已知多数设备不可用，作为保底
-    cmd = _capture_stream_cmd()
-    if not cmd:
-        return
-    try:
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
-    except Exception:
-        return
-    soi, eoi = b'\xff\xd8', b'\xff\xd9'
-    buf = b''
-    try:
-        while True:
-            chunk = p.stdout.read(65536)
-            if not chunk:
-                break
-            buf += chunk
-            while True:
-                i = buf.find(soi)
-                if i < 0:
-                    buf = b''
-                    break
-                j = buf.find(eoi, i + 2)
-                if j < 0:
-                    buf = buf[i:]
-                    break
-                frame = buf[i:j + 2]
-                buf = buf[j + 2:]
-                yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    finally:
-        try:
-            p.terminate()
-            try:
-                p.wait(timeout=2)
-            except Exception:
-                p.kill()
+            if os.path.exists(SCREEN_JPG):
+                mt = os.path.getmtime(SCREEN_JPG)
+                with open(SCREEN_JPG, 'rb') as f:
+                    data = f.read()
+                if data[:2] == b'\xff\xd8' and len(data) > 1000:
+                    best = ('uiDebug:/tmp/screen.jpg', data, mt)
         except Exception:
             pass
-
+        # 源2：/dev/shm（每 0.5s 重新扫描避免缓存旧 inode；跨源选 mtime 最新者）
+        if now - last_scan > 0.5:
+            last_scan = now
+            cached_shm = _discover_ui_shm()
+        if cached_shm and os.path.exists(cached_shm):
+            try:
+                mt = os.path.getmtime(cached_shm)
+                d = _read_ui_shm_jpeg_file(cached_shm)
+                if d and (best is None or mt > best[2]):
+                    best = ('shm:' + os.path.basename(cached_shm), d, mt)
+            except Exception:
+                pass
+        if best:
+            name, data, mt = best
+            sig = (name, round(mt, 3))
+            if sig != last_sig:
+                last_sig = sig
+                yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
+        time.sleep(0.04)
 
 @app.route('/api/screen/stream')
 def api_screen_stream():
@@ -1558,11 +1527,38 @@ def api_screen_stream():
 def api_screen_status():
     src = _current_screen_source()
     ffmpeg_ok = os.path.exists(_ffmpeg_path())
+    diag = {}
+    try:
+        if os.path.exists(SCREEN_JPG):
+            diag['uiDebug_mtime'] = round(os.path.getmtime(SCREEN_JPG), 1)
+            diag['uiDebug_size'] = os.path.getsize(SCREEN_JPG)
+    except Exception:
+        pass
+    sp = _discover_ui_shm()
+    if sp:
+        try:
+            diag['shm_file'] = sp
+            diag['shm_mtime'] = round(os.path.getmtime(sp), 1)
+            diag['shm_size'] = os.path.getsize(sp)
+        except Exception:
+            pass
+    frame_age = None
+    try:
+        cand = []
+        if os.path.exists(SCREEN_JPG):
+            cand.append(os.path.getmtime(SCREEN_JPG))
+        if sp and os.path.exists(sp):
+            cand.append(os.path.getmtime(sp))
+        if cand:
+            frame_age = round(time.time() - max(cand), 1)
+    except Exception:
+        pass
     return jsonify({'available': screen_supported(),
                     'source': src,
                     'ffmpeg': ffmpeg_ok,
+                    'frame_age_s': frame_age,
+                    'diag': diag,
                     'message': src if src else ('缺少 ffmpeg' if not ffmpeg_ok else '无可用投屏源（cereal/uiDebug、/dev/shm、ffmpeg 均不可访问）')})
-
 
 @app.route('/api/screen/frame', methods=['GET'])
 def api_screen_frame():
