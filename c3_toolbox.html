@@ -571,12 +571,6 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         </div>
         <div class="bs-note">要求：<code>1080×2160</code> 竖屏 jpg/png。工具会先备份原 <code>/usr/comma/bg.jpg</code> 为 <code>bg.jpg.bak</code>，再写入并重启生效。第一屏（Qualcomm splash）结束后即显示此背景。</div>
       </div>
-
-      <!-- 备用资源 -->
-      <div class="cd"><div class="ct">备用工具下载（可选）</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">浏览器已能直接生成，通常无需电脑工具。若仍想用原 Windows 工具，把 <code>comma开机画面修改.exe</code> 与 <code>splash_template.bin</code> 放到设备 <code>/data/c3_toolbox/res/</code> 后，即可在此下载分享给朋友。</p>
-        <div id="resList" style="font-size:12px;color:var(--muted)">加载中...</div>
-      </div>
     </div>
 
   </div>
@@ -888,7 +882,7 @@ function updBadge(){}
 function onTabSwitch(id){
   if(id==='dashboard'){loadInfo()}
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();checkUpdate();}
-  else if(id==='bootanim'){loadBgInfo();loadSplashInfo();loadResList();}
+  else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
 }
 
@@ -1117,14 +1111,6 @@ async function flashSplash(){
   try{var d=await (await fetch('/api/splash_set',{method:'POST',body:fd})).json();toast(d.message,d.success?'ok':'er');if(d.success)loadSplashInfo();}
   catch(e){toast('失败','er');}
 }
-async function loadResList(){
-  var el=document.getElementById('resList');if(!el)return;
-  try{var d=await (await fetch('/api/resource/list')).json();
-    if(!d.files||!d.files.length){el.innerHTML='未部署备用工具（浏览器生成已足够，无需下载）';return;}
-    el.innerHTML=d.files.map(function(f){return '<a class="upd-link" href="/api/resource/'+encodeURIComponent(f.name)+'" style="margin-right:14px">⬇ '+esc(f.name)+' ('+(f.size/1048576).toFixed(1)+' MB)</a>';}).join('');
-  }catch(e){el.textContent='加载失败';}
-}
-
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
 // === 在线更新 ===

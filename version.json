@@ -1,6 +1,6 @@
 {
-  "version": "1.0.16",
-  "tag": "v1.0.16",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.16/release/c3_toolbox.tar.gz",
-  "changelog": "新增 frogpilot（青蛙领航，fp）分支支持：\n- 分支自动识别新增 frogpilot 匹配（读 GitBranch 参数或 .git 信息，含 FrogAi/FrogPilot、FrogPilot:devel 等命名）；\n- 内置 fp 常见自定义参数中文说明库与布尔判定（FrogTrafficLight / FrogStandState / FrogSNG / FrogConditionalExperimental / FrogSpeedLimitController 等显示中文名、说明与开关类型）；\n- 工具箱现已覆盖 openpilot 原版 / carrot / dragonpilot(dp) / sunnypilot(sp) / frogpilot(fp) 五类分支自动识别与参数说明；\n- README「支持的分支」章节补充 frogpilot；说明库基于社区常见参数整理，发现遗漏可在反馈后补充。"
+  "version": "1.0.17",
+  "tag": "v1.0.17",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.17/release/c3_toolbox.tar.gz",
+  "changelog": "移除「备用工具下载」入口（浏览器内已可直接生成 splash_new.bin，原 Windows 工具下载区无用，已删除前端区块、调用、JS 函数及后端 /api/resource 路由）。"
 }

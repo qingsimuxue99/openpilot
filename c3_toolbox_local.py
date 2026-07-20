@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.16"
+VERSION = "1.0.17"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1254,34 +1254,6 @@ def api_splash_set():
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return jsonify({'success': False, 'message': f'刷入失败: {e}'})
-
-
-# ============= 备用资源下载（Windows 工具 / 模板，可选部署到 /data/c3_toolbox/res/）=============
-RES_DIR = '/data/c3_toolbox/res'
-
-
-@app.route('/api/resource/list', methods=['GET'])
-def api_resource_list():
-    try:
-        if not os.path.isdir(RES_DIR):
-            return jsonify({'files': []})
-        files = []
-        for fn in sorted(os.listdir(RES_DIR)):
-            fp = os.path.join(RES_DIR, fn)
-            if os.path.isfile(fp):
-                files.append({'name': fn, 'size': os.path.getsize(fp)})
-        return jsonify({'files': files})
-    except Exception as e:
-        return jsonify({'files': [], 'error': str(e)})
-
-
-@app.route('/api/resource/<path:name>', methods=['GET'])
-def api_resource_get(name):
-    safe = os.path.basename(name)
-    fp = os.path.join(RES_DIR, safe)
-    if os.path.isfile(fp):
-        return send_from_directory(RES_DIR, safe, as_attachment=True)
-    return jsonify({'success': False, 'message': '资源不存在'}), 404
 
 
 if __name__ == '__main__':
