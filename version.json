@@ -1,6 +1,6 @@
 {
-  "version": "1.0.12",
-  "tag": "v1.0.12",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.12/release/c3_toolbox.tar.gz",
-  "changelog": "在线更新发现机制升级 + 界面对齐：\n- 发现最新版本改为优先直连 GitHub API（实时，推送 tag 后立即可见），jsdelivr 数据 API 仅作回退；彻底根治之前“发布后点更新仍显示已是最新（jsdelivr 索引滞后）”的问题，以后发版秒级可更新；\n- 参数控制卡片保持固定列宽 Grid 布局，中间「当前 / 待存 / 默认」三列与右侧控件垂直对齐。"
+  "version": "1.0.13",
+  "tag": "v1.0.13",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.13/release/c3_toolbox.tar.gz",
+  "changelog": "完整备份/恢复进度可视化 + 开机屏定制：\n- 完整备份与恢复改为 Python tarfile 流式打包/解压，实时回传进度百分比，前端显示进度条（备份/恢复卡片均有可视化进度，不再黑盒等待）；\n- 新增「开机屏定制」功能：第二屏启动背景图（上传 jpg/png 一键刷入 /usr/comma/bg.jpg，自动备份原图）与 第一屏开机 Logo（上传 splash_new.bin 一键 dd 刷入 splash 分区，含大小校验与原分区备份），工具箱内联操作说明。"
 }

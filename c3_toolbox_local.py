@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.12"
+VERSION = "1.0.13"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -704,23 +704,43 @@ def api_op_backup():
     OP_TASKS[task_id] = {'status': 'running', 'message': '正在打包 /data/openpilot ...', 'done': False}
     def run():
         try:
-            # 用列表参数调用，避免中文文件名在 shell 中被转义出错
-            proc = subprocess.run(['tar', '-zcvf', out_path, '/data/openpilot'],
-                                  capture_output=True, text=True, timeout=1800)
-            if proc.returncode == 0 and os.path.isfile(out_path):
+            import tarfile
+            # 先统计总大小与文件清单，用于实时进度
+            file_list = []
+            total = 0
+            for root, dirs, files in os.walk('/data/openpilot'):
+                for fn in files:
+                    p = os.path.join(root, fn)
+                    file_list.append(p)
+                    try:
+                        total += os.path.getsize(p)
+                    except Exception:
+                        pass
+            done = 0
+            OP_TASKS[task_id] = {'status': 'running', 'message': '正在打包 /data/openpilot ...', 'done': False, 'progress': 0}
+            with tarfile.open(out_path, 'w:gz') as tar:
+                for p in file_list:
+                    try:
+                        tar.add(p, arcname=p)
+                    except Exception:
+                        pass
+                    try:
+                        done += os.path.getsize(p)
+                    except Exception:
+                        pass
+                    if total > 0:
+                        OP_TASKS[task_id]['progress'] = min(99, int(done * 100 / total))
+            if os.path.isfile(out_path):
                 sz = os.path.getsize(out_path)
                 OP_TASKS[task_id] = {
-                    'status': 'done', 'done': True,
+                    'status': 'done', 'done': True, 'progress': 100,
                     'message': f'备份完成: {fname} ({sz/1024/1024:.0f} MB)',
                     'filename': fname, 'size': sz,
                 }
             else:
-                err = (proc.stderr or '未知错误')[-600:]
-                OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'备份失败: {err}'}
-        except subprocess.TimeoutExpired:
-            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': '备份超时（>30 分钟）'}
+                OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': '备份失败：未生成文件'}
         except Exception as e:
-            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'备份异常: {e}'}
+            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': f'备份异常: {e}'}
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'success': True, 'task_id': task_id})
 
@@ -766,34 +786,55 @@ def api_op_backup_download(filename):
 def _restore_package(pkg_path, reboot_after, task_id):
     """实际的恢复逻辑：停 openpilot → 解包到 / → 可选重启。在后台线程执行。"""
     try:
+        import tarfile
         # 先停 openpilot，避免运行中文件被覆盖导致不一致（不影响工具箱本身）
         subprocess.run("pkill -f manager.py", shell=True, timeout=5)
         time.sleep(2)
-        proc = subprocess.run(['tar', '-zxvf', pkg_path, '-C', '/'],
-                              capture_output=True, text=True, timeout=1800)
+        # 统计总大小
+        total = 0
+        members = []
+        with tarfile.open(pkg_path, 'r:*') as tar:
+            try:
+                tar.extraction_filter = (lambda m, path: m)
+            except Exception:
+                pass
+            members = tar.getmembers()
+            for m in members:
+                total += m.size
+        done = 0
+        OP_TASKS[task_id] = {'status': 'running', 'message': '正在解压恢复 /data/openpilot ...', 'done': False, 'progress': 0}
+        with tarfile.open(pkg_path, 'r:*') as tar:
+            try:
+                tar.extraction_filter = (lambda m, path: m)
+            except Exception:
+                pass
+            for m in members:
+                try:
+                    tar.extract(m, '/')
+                except Exception:
+                    pass
+                done += m.size
+                if total > 0:
+                    OP_TASKS[task_id]['progress'] = min(99, int(done * 100 / total))
         try:
             os.remove(pkg_path)  # 上传的临时包用完后清理
         except Exception:
             pass
-        if proc.returncode == 0:
-            msg = '恢复完成: ' + os.path.basename(pkg_path)
-            if reboot_after:
-                msg += '，设备即将重启...'
-                OP_TASKS[task_id] = {'status': 'done', 'done': True, 'message': msg}
-                time.sleep(1)
-                subprocess.Popen(["sudo", "reboot"])
-            else:
-                OP_TASKS[task_id] = {
-                    'status': 'done', 'done': True,
-                    'message': msg + '（建议手动重启设备使 openpilot 重新加载）',
-                }
+        msg = '恢复完成: ' + os.path.basename(pkg_path)
+        if reboot_after:
+            msg += '，设备即将重启...'
+            OP_TASKS[task_id] = {'status': 'done', 'done': True, 'progress': 100, 'message': msg}
+            time.sleep(1)
+            subprocess.Popen(["sudo", "reboot"])
         else:
-            err = (proc.stderr or '未知错误')[-600:]
-            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'恢复失败: {err}'}
+            OP_TASKS[task_id] = {
+                'status': 'done', 'done': True, 'progress': 100,
+                'message': msg + '（建议手动重启设备使 openpilot 重新加载）',
+            }
     except subprocess.TimeoutExpired:
-        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': '恢复超时（>30 分钟）'}
+        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': '恢复超时（>30 分钟）'}
     except Exception as e:
-        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'message': f'恢复异常: {e}'}
+        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': f'恢复异常: {e}'}
 
 
 @app.route('/api/op_restore', methods=['POST'])
@@ -831,6 +872,151 @@ def api_op_restore_upload():
     OP_TASKS[task_id] = {'status': 'running', 'message': '正在从上传的备份包恢复...', 'done': False}
     threading.Thread(target=_restore_package, args=(tmp, reboot_after, task_id), daemon=True).start()
     return jsonify({'success': True, 'task_id': task_id})
+
+
+# ============= 开机屏定制（第一屏 splash / 第二屏背景图）=============
+
+BG_PATH = '/usr/comma/bg.jpg'
+SPLASH_BACKUP = '/data/splash_backup.bin'
+
+def _find_splash():
+    """探测 splash 分区设备路径（不同设备名可能不同，优先教程固定路径）"""
+    cand = '/dev/block/bootdevice/by-name/splash'
+    if os.path.exists(cand):
+        return cand
+    try:
+        out = subprocess.run(['ls', '/dev/block/bootdevice/by-name/'],
+                             capture_output=True, text=True, timeout=5)
+        for line in out.stdout.split():
+            if 'splash' in line:
+                return '/dev/block/bootdevice/by-name/' + line
+    except Exception:
+        pass
+    return None
+
+
+@app.route('/api/bg_info', methods=['GET'])
+def api_bg_info():
+    """查询当前 Weston 背景图信息（第二屏）"""
+    try:
+        if os.path.isfile(BG_PATH):
+            st = os.stat(BG_PATH)
+            return jsonify({'exists': True, 'size': st.st_size,
+                            'time': time.strftime('%Y-%m-%d %H:%M', time.localtime(st.st_mtime))})
+        return jsonify({'exists': False})
+    except Exception as e:
+        return jsonify({'exists': False, 'error': str(e)})
+
+
+@app.route('/api/bg_backup', methods=['GET'])
+def api_bg_backup():
+    """下载当前背景图到电脑留存"""
+    if os.path.isfile(BG_PATH):
+        return send_from_directory('/usr/comma', 'bg.jpg', as_attachment=True)
+    return jsonify({'success': False, 'message': '当前没有 bg.jpg'}), 404
+
+
+@app.route('/api/bg_set', methods=['POST'])
+def api_bg_set():
+    """上传自定义背景图（jpg/png），remount rw 后写入 /usr/comma/bg.jpg 再 ro"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': '未收到图片'})
+    f = request.files['file']
+    if not (f.filename.endswith('.jpg') or f.filename.endswith('.jpeg') or f.filename.endswith('.png')):
+        return jsonify({'success': False, 'message': '仅支持 .jpg / .jpeg / .png'})
+    tmp = '/tmp/bg_upload_' + str(int(time.time() * 1000)) + os.path.splitext(f.filename)[1]
+    try:
+        f.save(tmp)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'保存失败: {e}'})
+    reboot_after = request.form.get('reboot', 'false') in ('1', 'true', 'True')
+    try:
+        if os.path.isfile(BG_PATH):
+            subprocess.run(['sudo', 'cp', BG_PATH, BG_PATH + '.bak'], timeout=10, check=False)
+        subprocess.run(['sudo', 'mount', '-o', 'remount,rw', '/'], timeout=15, check=False)
+        subprocess.run(['sudo', 'cp', tmp, BG_PATH], timeout=15, check=False)
+        subprocess.run(['sudo', 'mount', '-o', 'remount,ro', '/'], timeout=15, check=False)
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        msg = '背景图已替换，重启后生效'
+        if reboot_after:
+            msg += '，设备即将重启...'
+            threading.Thread(target=lambda: (time.sleep(1), subprocess.Popen(['sudo', 'reboot'])), daemon=True).start()
+        return jsonify({'success': True, 'message': msg})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'替换失败: {e}'})
+
+
+@app.route('/api/splash_info', methods=['GET'])
+def api_splash_info():
+    """查询 splash 分区信息（第一屏）"""
+    sp = _find_splash()
+    if not sp:
+        return jsonify({'exists': False, 'error': '未找到 splash 分区'})
+    try:
+        sz = os.path.getsize(sp)
+    except Exception:
+        sz = 0
+    return jsonify({'exists': True, 'path': sp, 'size': sz, 'has_backup': os.path.isfile(SPLASH_BACKUP)})
+
+
+@app.route('/api/splash_backup', methods=['GET'])
+def api_splash_backup():
+    """下载已备份的 splash 分区 bin"""
+    if os.path.isfile(SPLASH_BACKUP):
+        return send_from_directory('/data', 'splash_backup.bin', as_attachment=True)
+    return jsonify({'success': False, 'message': '尚未备份 splash 分区'}), 404
+
+
+@app.route('/api/splash_set', methods=['POST'])
+def api_splash_set():
+    """上传 splash_new.bin，先备份原分区再 dd 写入 splash 分区（第一屏）"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': '未收到 bin 文件'})
+    f = request.files['file']
+    if not f.filename.endswith('.bin'):
+        return jsonify({'success': False, 'message': '仅支持 .bin（splash_new.bin）'})
+    sp = _find_splash()
+    if not sp:
+        return jsonify({'success': False, 'message': '未找到 splash 分区'})
+    try:
+        part_size = os.path.getsize(sp)
+    except Exception:
+        part_size = 0
+    tmp = '/tmp/splash_upload_' + str(int(time.time() * 1000)) + '.bin'
+    try:
+        f.save(tmp)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'保存失败: {e}'})
+    # 大小校验：bin 必须与原 splash 分区大小一致，避免写坏分区
+    try:
+        bin_size = os.path.getsize(tmp)
+    except Exception:
+        bin_size = 0
+    if part_size and bin_size and bin_size != part_size:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        return jsonify({'success': False, 'message': f'bin 大小({bin_size}) 与 splash 分区大小({part_size}) 不符，请用正确工具生成的 splash_new.bin'})
+    reboot_after = request.form.get('reboot', 'false') in ('1', 'true', 'True')
+    try:
+        subprocess.run(['sudo', 'dd', 'if=' + sp, 'of=' + SPLASH_BACKUP, 'bs=1M'], timeout=120, check=False)
+        subprocess.run(['sudo', 'dd', 'if=' + tmp, 'of=' + sp, 'bs=1M'], timeout=120, check=False)
+        subprocess.run(['sudo', 'sync'], timeout=30, check=False)
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        msg = '开机第一屏已刷入，重启后生效'
+        if reboot_after:
+            msg += '，设备即将重启...'
+            threading.Thread(target=lambda: (time.sleep(1), subprocess.Popen(['sudo', 'reboot'])), daemon=True).start()
+        return jsonify({'success': True, 'message': msg})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'刷入失败: {e}'})
 
 
 if __name__ == '__main__':
