@@ -1,6 +1,6 @@
 {
-  "version": "1.0.21",
-  "tag": "v1.0.21",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.21/release/c3_toolbox.tar.gz",
-  "changelog": "投屏新增「横屏/竖屏」一键切换（设备屏为竖屏 1080x2160，可旋转 90° 横持观看）；帧缓冲检测兼容 /dev/fb1；无 fb0 时提示发送 DRM 诊断以便后续加 kmsgrab 适配。"
+  "version": "1.0.22",
+  "tag": "v1.0.22",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.22/release/c3_toolbox.tar.gz",
+  "changelog": "投屏自动支持 DRM 抓取（kmsgrab），适配无 /dev/fb* 帧缓冲的设备；保留 fbdev 自动回退；安装 ffmpeg 后自动重新探测投屏源。"
 }

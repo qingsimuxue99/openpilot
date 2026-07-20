@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.21"
+VERSION = "1.0.22"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1325,44 +1325,82 @@ def api_dashy_status():
 # 无需前端轮询等待，局域网延迟可降到 ~100ms 级（远比轮询取图低）。
 SCREEN_MJPEG_BOUNDARY = 'c3frame'
 
+_capture_source_cache = None
+
 
 def _ffmpeg_path():
     return shutil.which('ffmpeg') or '/usr/bin/ffmpeg'
 
 
-def _fb_input_args():
-    """返回 ffmpeg 帧缓冲输入参数；优先 /dev/fb0，其次 /dev/fb1。均无则返回 None。"""
+def _list_capture_sources():
+    """枚举候选投屏源：fbdev -> kmsgrab(DRM)，仅实际存在者加入。"""
+    ff = _ffmpeg_path()
+    sources = []
     for fb in ('/dev/fb0', '/dev/fb1'):
         if os.path.exists(fb):
-            return ['-f', 'fbdev', '-framerate', '15', '-i', fb]
+            test = [ff, '-hide_banner', '-loglevel', 'error', '-f', 'fbdev', '-i', fb,
+                    '-vf', 'scale=540:-1', '-frames:v', '1', '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
+            stream = [ff, '-hide_banner', '-loglevel', 'error', '-f', 'fbdev', '-i', fb,
+                      '-vf', 'scale=540:-1', '-f', 'image2pipe', '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
+            sources.append(('fbdev:' + fb, test, stream))
+    for card in ('/dev/dri/card0', '/dev/dri/card1'):
+        if os.path.exists(card):
+            # kmsgrab: 先尝试硬件下载为 bgr0（QCOM 常见显示格式），失败由 probe 自动排除
+            test = [ff, '-hide_banner', '-loglevel', 'error', '-device', card, '-f', 'kmsgrab', '-i', '-',
+                    '-vf', 'hwdownload,format=bgr0,scale=540:-1', '-frames:v', '1',
+                    '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
+            stream = [ff, '-hide_banner', '-loglevel', 'error', '-device', card, '-f', 'kmsgrab', '-i', '-',
+                      '-vf', 'hwdownload,format=bgr0,scale=540:-1', '-f', 'image2pipe',
+                      '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
+            sources.append(('kmsgrab:' + card, test, stream))
+    return sources
+
+
+def _probe_capture_source(force=False):
+    """探测可用的投屏源，并缓存。force=True 时重新探测（如刚装完 ffmpeg）。"""
+    global _capture_source_cache
+    if _capture_source_cache and not force:
+        return _capture_source_cache
+    if not os.path.exists(_ffmpeg_path()):
+        _capture_source_cache = None
+        return None
+    for name, test, stream in _list_capture_sources():
+        try:
+            out = subprocess.run(test, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8)
+            if out.returncode == 0 and out.stdout and len(out.stdout) > 1000:
+                _capture_source_cache = (name, test, stream)
+                return _capture_source_cache
+        except Exception:
+            pass
+    _capture_source_cache = None
     return None
 
 
 def detect_fb_source():
-    if os.path.exists('/dev/fb0'):
-        return 'fb0'
-    if os.path.exists('/dev/fb1'):
-        return 'fb1'
-    return None
+    src = _probe_capture_source()
+    return src[0] if src else None
 
 
 def screen_supported():
-    """投屏可用 = 存在帧缓冲(/dev/fb0 或 /dev/fb1) 且 已安装 ffmpeg"""
-    return _fb_input_args() is not None and os.path.exists(_ffmpeg_path())
+    """投屏可用 = ffmpeg 已装 + 能探测到可用源（fbdev 或 kmsgrab）。"""
+    return _probe_capture_source() is not None
 
 
-def _ffmpeg_fb_cmd(extra_out=False):
-    ff = _ffmpeg_path()
-    in_args = _fb_input_args() or ['-f', 'fbdev', '-i', '/dev/fb0']
-    out_args = (['-frames:v', '1', '-f', 'image2'] if extra_out
-                else ['-f', 'image2pipe', '-r', '15'])
-    return [ff, '-hide_banner', '-loglevel', 'error'] + in_args + \
-           ['-vf', 'scale=540:-1', '-c:v', 'mjpeg', '-q:v', '4'] + out_args + ['-']
+def _capture_stream_cmd():
+    src = _probe_capture_source()
+    return src[2] if src else None
+
+
+def _capture_single_cmd():
+    src = _probe_capture_source()
+    return src[1] if src else None
 
 
 def gen_screen_stream():
     """MJPEG 生成器：ffmpeg 输出裸 JPEG 帧（FFD8...FFD9 拼接），按 SOI/EOI 切分后用 multipart 推送。"""
-    cmd = _ffmpeg_fb_cmd()
+    cmd = _capture_stream_cmd()
+    if not cmd:
+        return
     try:
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
     except Exception:
@@ -1409,9 +1447,12 @@ def api_screen_stream():
 
 @app.route('/api/screen/status', methods=['GET'])
 def api_screen_status():
+    src = detect_fb_source()
+    ffmpeg_ok = os.path.exists(_ffmpeg_path())
     return jsonify({'available': screen_supported(),
-                   'source': detect_fb_source(),
-                   'ffmpeg': os.path.exists(_ffmpeg_path())})
+                    'source': src,
+                    'ffmpeg': ffmpeg_ok,
+                    'message': src if src else ('缺少 ffmpeg' if not ffmpeg_ok else '无可用帧缓冲源（fbdev/DRM 均不可访问）')})
 
 
 @app.route('/api/screen/frame', methods=['GET'])
@@ -1420,16 +1461,16 @@ def api_screen_frame():
     if not screen_supported():
         return jsonify({'error': 'unavailable'}), 404
     try:
-        out = subprocess.run(_ffmpeg_fb_cmd(extra_out=True),
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        cmd = _capture_single_cmd()
+        if not cmd:
+            return jsonify({'error': 'no source'}), 404
+        out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
         if out.returncode == 0 and out.stdout:
             return Response(out.stdout, mimetype='image/jpeg')
     except Exception:
         pass
     return jsonify({'error': 'grab failed'}), 500
 
-
-# ============= 环境一键下发：缺失 ffmpeg 时网页内一键安装 =============
 @app.route('/api/env/install', methods=['POST'])
 def api_env_install():
     tid = 'env_install_' + str(int(time.time() * 1000))
@@ -1476,6 +1517,12 @@ def _env_install_worker(task_id):
     ok = os.path.exists(_ffmpeg_path())
     OP_TASKS[task_id].update({'progress': 100, 'done': True, 'success': ok,
                               'message': ('ffmpeg 安装成功 ✓' if ok else '安装失败，请手动执行 apt-get install -y ffmpeg')})
+    if ok:
+        # 重新探测投屏源，让前端立即能检测到新环境
+        try:
+            _probe_capture_source(force=True)
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':

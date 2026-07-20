@@ -951,7 +951,7 @@ function checkScreenEnv(){
   fetch('/api/screen/status').then(r=>r.json()).then(function(s){
     var st=document.getElementById('dashyStat'), env=document.getElementById('dashyEnv');
     if(s.available){
-      if(st)st.textContent='投屏中（低延迟 MJPEG 流）';
+      if(st)st.textContent='投屏中（'+(s.source||'未知')+'）';
       if(env)env.style.display='none';
     }else{
       if(st)st.textContent='投屏不可用';
@@ -960,7 +960,7 @@ function checkScreenEnv(){
         if(!s.ffmpeg){
           env.innerHTML='<span style="color:#ff6b6b">缺少 ffmpeg</span> · <button class="upd-btn" onclick="installFfmpeg()">一键安装 ffmpeg</button>';
         }else{
-          env.innerHTML='本设备未检测到 <code>/dev/fb0</code> 帧缓冲（UI 可能走 DRM）。请把设备执行 <code style="font-size:10px">ls -l /dev/fb* /dev/dri 2&gt;/dev/null; which ffmpeg</code> 的结果发我，我加 DRM 抓取适配。';
+          env.innerHTML='<span style="color:#ff6b6b">无可用帧缓冲源</span> · ffmpeg 已装，但 fbdev/DRM 均无法抓取。<br>可能是 <code>/dev/dri/card0</code> 权限不足（需 root 或在 <code>video</code> 组）。<br>临时解决：在设备执行 <code>sudo chmod 666 /dev/dri/card0</code> 后刷新本页。<br>或把 <code>ls -l /dev/dri/card0; groups</code> 结果发我，我加自动提权。';
         }
       }
     }
