@@ -1,6 +1,6 @@
 {
-  "version": "1.0.47",
-  "changelog": "主题切换改为独立「主题 🎨」标签页（从设置中移出）；重新绘制 6 套皮肤：① 当前默认背景 ② 黑色 ③ 薄荷绿渐变 ④ 奶油绿渐变 ⑤ 红蓝渐变 ⑥ 清新绿。渐变/深色皮肤通过 --bg-grad 与 --hdr 变量驱动，仅改变工具箱界面配色，不影响设备显示；选择仍 localStorage 持久化。",
-  "tag": "v1.0.47",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.47/release/c3_toolbox.tar.gz"
+  "version": "1.0.48",
+  "changelog": "① 界面标签栏重绘（两处）：设备信息面板小标签改为 flex 紧凑 pill 标签条；参数控制「当前/待存/默认」数值列改为横向紧凑 pill 段，消除居中留白。② 皮肤主题重绘扩展为 12 套：保留「当前默认背景」与「红蓝渐变」，按这两个风格家族重绘并新增——家族A 浅色扁平风（极简白/雾蓝/暖砂/浅薰/樱粉），家族B 粉彩渐变风（紫粉/橙青/薄荷天青/玫瑰金/夕阳橙紫），全部互不相同，分组展示。",
+  "tag": "v1.0.48",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.48/release/c3_toolbox.tar.gz"
 }

@@ -14,34 +14,49 @@
   --rule:#e8e4dd;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
   --hdr:rgba(255,255,255,.85);
 }
-/* === 皮肤主题（data-theme 切换，default = 当前默认背景） === */
-:root[data-theme="black"]{
-  --bg:#161618;--bg2:#1c1c1f;--bg3:#202024;--bg4:#26262b;
-  --ink:#ededed;--muted:#9a9a9a;--dim:#3a3a3f;
-  --accent:#2dd4bf;--accent2:#f472b6;--accent3:#60a5fa;
-  --accent-rgb:45,212,191;
-  --rule:#2a2a2f;--glow:rgba(var(--accent-rgb),.12);--radius:12px;
-  --hdr:rgba(15,15,17,.85);
-  --bg-grad:linear-gradient(160deg,#0b0b0c 0%,#16161a 100%);
+/* === 皮肤主题（data-theme 切换；default=当前默认背景 在 :root，redblue=红蓝渐变；两大家族：浅色扁平风 / 粉彩渐变风） === */
+/* —— 家族A：当前默认风（浅色扁平，无渐变） —— */
+:root[data-theme="cleanwhite"]{
+  --bg:#f7f8fa;--bg2:#ffffff;--bg3:#f1f3f6;--bg4:#e7eaef;
+  --ink:#222831;--muted:#7c8595;--dim:#c7cdd6;
+  --accent:#3b82f6;--accent2:#f97316;--accent3:#8b5cf6;
+  --accent-rgb:59,130,246;
+  --rule:#e4e8ee;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+  --hdr:rgba(255,255,255,.9);
 }
-:root[data-theme="mint"]{
-  --bg:#ffffff;--bg2:#ffffff;--bg3:#f0fdf9;--bg4:#d1fae5;
-  --ink:#0f3d2e;--muted:#4f9e85;--dim:#9fd9c4;
-  --accent:#10b981;--accent2:#f59e0b;--accent3:#0ea5e9;
-  --accent-rgb:16,185,129;
-  --rule:#cdeede;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
-  --hdr:rgba(255,255,255,.82);
-  --bg-grad:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 55%,#ecfdf5 100%);
+:root[data-theme="mistblue"]{
+  --bg:#eef3f8;--bg2:#ffffff;--bg3:#e7eef6;--bg4:#dbe6f0;
+  --ink:#22303f;--muted:#6b7e92;--dim:#bcd0e0;
+  --accent:#2f80ed;--accent2:#eb5757;--accent3:#27ae60;
+  --accent-rgb:47,128,237;
+  --rule:#d8e3ee;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+  --hdr:rgba(255,255,255,.88);
 }
-:root[data-theme="cream"]{
-  --bg:#fefdf7;--bg2:#ffffff;--bg3:#f6f9ef;--bg4:#eef2dd;
-  --ink:#3a3a24;--muted:#8a8a5e;--dim:#c9cba6;
-  --accent:#84cc16;--accent2:#f97316;--accent3:#22c55e;
-  --accent-rgb:132,204,22;
-  --rule:#e3e8cf;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
-  --hdr:rgba(255,255,255,.84);
-  --bg-grad:linear-gradient(135deg,#fdf6e3 0%,#eef7df 50%,#fbfaf0 100%);
+:root[data-theme="warmamber"]{
+  --bg:#f6f1ea;--bg2:#ffffff;--bg3:#f2ece3;--bg4:#ebe2d5;
+  --ink:#3a3027;--muted:#8c7a66;--dim:#d8c9b6;
+  --accent:#e08a2b;--accent2:#d64545;--accent3:#5b8c5a;
+  --accent-rgb:224,138,43;
+  --rule:#e7dccd;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+  --hdr:rgba(255,255,255,.88);
 }
+:root[data-theme="lavender"]{
+  --bg:#f3eef8;--bg2:#ffffff;--bg3:#efe8f6;--bg4:#e6dbee;
+  --ink:#33293f;--muted:#836f95;--dim:#cbb9db;
+  --accent:#8b5cf6;--accent2:#ec4899;--accent3:#0ea5e9;
+  --accent-rgb:139,92,246;
+  --rule:#e2d6ee;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+  --hdr:rgba(255,255,255,.88);
+}
+:root[data-theme="sakura"]{
+  --bg:#fdf2f6;--bg2:#ffffff;--bg3:#fce7ef;--bg4:#fbcfe0;
+  --ink:#3d2a33;--muted:#9a7484;--dim:#eccfd9;
+  --accent:#ec4899;--accent2:#f97316;--accent3:#8b5cf6;
+  --accent-rgb:236,72,153;
+  --rule:#f6dbe5;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
+  --hdr:rgba(255,255,255,.88);
+}
+/* —— 家族B：红蓝渐变风（粉彩渐变背景） —— */
 :root[data-theme="redblue"]{
   --bg:#ffffff;--bg2:#ffffff;--bg3:#f5f7ff;--bg4:#fecaca;
   --ink:#1e293b;--muted:#64748b;--dim:#cbd5e1;
@@ -51,14 +66,50 @@
   --hdr:rgba(255,255,255,.84);
   --bg-grad:linear-gradient(135deg,#fee2e2 0%,#dbeafe 50%,#e0e7ff 100%);
 }
-:root[data-theme="fresh"]{
-  --bg:#ffffff;--bg2:#ffffff;--bg3:#f0fdf4;--bg4:#dcfce7;
-  --ink:#14532d;--muted:#4f9d6b;--dim:#a7d8bd;
-  --accent:#16a34a;--accent2:#f59e0b;--accent3:#0ea5e9;
-  --accent-rgb:22,163,74;
-  --rule:#c8ebd4;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
-  --hdr:rgba(255,255,255,.8);
-  --bg-grad:linear-gradient(135deg,#e8f8ee 0%,#f4fcf6 60%,#eafaf0 100%);
+:root[data-theme="purplepink"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#faf5ff;--bg4:#fbcfe8;
+  --ink:#3b2a4d;--muted:#8b6aa3;--dim:#e3d2ef;
+  --accent:#a855f7;--accent2:#ec4899;--accent3:#6366f1;
+  --accent-rgb:168,85,247;
+  --rule:#ecdcf7;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#fce7f3 0%,#f3e8ff 50%,#e9d5ff 100%);
+}
+:root[data-theme="orangecyan"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#fff7ed;--bg4:#cffafe;
+  --ink:#3a2e22;--muted:#9a7b5e;--dim:#f0d9bf;
+  --accent:#f97316;--accent2:#06b6d4;--accent3:#f43f5e;
+  --accent-rgb:249,115,22;
+  --rule:#f6e2cf;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#ffedd5 0%,#ffe4e6 50%,#cffafe 100%);
+}
+:root[data-theme="mintsky"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#f0fdf9;--bg4:#bae6fd;
+  --ink:#1f3a40;--muted:#5a8a93;--dim:#c2e4ec;
+  --accent:#14b8a6;--accent2:#0ea5e9;--accent3:#22c55e;
+  --accent-rgb:20,184,166;
+  --rule:#cdeae4;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#d1fae5 0%,#e0f2fe 50%,#ccfbf1 100%);
+}
+:root[data-theme="rosegold"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#fff5f7;--bg4:#fde68a;
+  --ink:#3d2a2e;--muted:#9a6b73;--dim:#f1d4d9;
+  --accent:#f43f5e;--accent2:#f59e0b;--accent3:#ec4899;
+  --accent-rgb:244,63,94;
+  --rule:#f6dde2;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#ffe4e6 0%,#fef3c7 50%,#fce7f3 100%);
+}
+:root[data-theme="sunset"]{
+  --bg:#ffffff;--bg2:#ffffff;--bg3:#fff7ed;--bg4:#ddd6fe;
+  --ink:#3a2e3d;--muted:#8a6f8e;--dim:#ecd9e4;
+  --accent:#f59e0b;--accent2:#a855f7;--accent3:#ef4444;
+  --accent-rgb:245,158,11;
+  --rule:#f3e2d6;--glow:rgba(var(--accent-rgb),.10);--radius:12px;
+  --hdr:rgba(255,255,255,.84);
+  --bg-grad:linear-gradient(135deg,#fed7aa 0%,#fbcfe8 50%,#e9d5ff 100%);
 }
 html,body{height:100%}
 body{font-family:'PingFang SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;background:var(--bg-grad,var(--bg));color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden}
@@ -116,13 +167,18 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .ct{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px}
 .ct::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:2px}
 
-/* === Info Grid === */
-.ig{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-bottom:20px}
-.ii{background:var(--bg3);border:1px solid var(--rule);border-radius:6px;padding:8px 10px;position:relative;overflow:hidden}
-.ii::after{content:'';position:absolute;top:0;left:0;width:2px;height:100%;border-radius:0 2px 2px 0}
-.ii.g::after{background:var(--accent)}.ii.b::after{background:var(--accent3)}.ii.o::after{background:var(--accent2)}
-.ii .lb{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;padding-left:6px}
-.ii .vl{font-size:11px;font-weight:600;padding-left:6px;word-break:break-word;line-height:1.3}
+/* === Info Grid（设备信息 · 紧凑标签条） === */
+.ig{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.ii{display:inline-flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--rule);
+    border-radius:10px;padding:8px 12px;font-size:12px;
+    transition:background .15s,transform .15s,box-shadow .15s}
+.ii:hover{background:var(--bg4);transform:translateY(-1px);box-shadow:0 2px 10px var(--glow)}
+.ii::before{content:'';width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.ii.g::before{background:var(--accent);color:var(--accent)}
+.ii.b::before{background:var(--accent3);color:var(--accent3)}
+.ii.o::before{background:var(--accent2);color:var(--accent2)}
+.ii .lb{font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap;letter-spacing:.2px}
+.ii .vl{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
 
 /* === Quick Actions === */
 .qa{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
@@ -321,9 +377,11 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .param-card .ptitle{font-size:13px;font-weight:600;color:var(--ink);line-height:1.3}
 .param-card .pdesc{font-size:11px;color:var(--muted);margin-top:1px}
 .param-values{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-items:center;margin:0}
-.val-box{background:var(--bg);border-radius:8px;padding:6px 8px;text-align:center;min-width:0;width:100%}
-.val-box .vlabel{font-size:10px;color:var(--muted);margin-bottom:2px}
-.val-box .vval{font-size:14px;font-weight:700;color:var(--ink);font-family:'Cascadia Code','Fira Code',monospace}
+/* 参数数值列：当前/待存/默认 三个值框横向紧凑排列，消除居中留白 */
+.param-values{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;min-width:0}
+.val-box{flex:1 1 64px;min-width:0;background:var(--bg3);border:1px solid var(--rule);border-radius:8px;padding:6px 10px;display:flex;flex-direction:column;justify-content:center}
+.val-box .vlabel{font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600;letter-spacing:.2px}
+.val-box .vval{font-size:14px;font-weight:700;color:var(--ink);font-family:'Cascadia Code','Fira Code',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .val-box .vval.pending{color:var(--accent2)}
 .pc-ctrl{display:flex;align-items:center;gap:8px;flex-shrink:0;justify-content:flex-start}
 .pc-ctrl input[type=text],.pc-ctrl input[type=number]{width:100px;padding:5px 8px;background:var(--bg);border:1px solid var(--rule);color:var(--ink);border-radius:6px;font-size:13px;font-family:monospace;outline:none;text-align:center}
@@ -342,7 +400,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 @media(max-width:640px){
   .param-card{padding:8px 10px;margin-bottom:5px;display:flex;flex-wrap:wrap;gap:6px}
   .param-card .pc-left{min-width:0;max-width:100%;flex:0 0 100%}
-  .param-values{grid-template-columns:repeat(3,1fr);margin-left:0;width:100%}
+  .param-values{width:100%;flex-wrap:wrap}
   .val-box{min-width:0;flex:1}
   .val-box .vval{font-size:13px}
   .pc-ctrl input[type=text],.pc-ctrl input[type=number]{width:100%}
@@ -661,17 +719,26 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
     <div class="pnl" id="p-theme">
       <div class="ph"><h2>主题皮肤 🎨</h2><p>一键切换整体配色风格，选择会被记住</p></div>
       <div class="cd">
-        <div class="ct">选择皮肤</div>
+        <div class="ct">浅色扁平风（当前默认风格）</div>
         <div class="theme-row" id="themeRow">
           <button class="theme-dot on" data-theme="default" style="--d:linear-gradient(135deg,#f5f2ec,#1aab8a)" onclick="setTheme('default')" title="当前默认背景"></button>
-          <button class="theme-dot" data-theme="black" style="--d:linear-gradient(160deg,#0b0b0c,#16161a)" onclick="setTheme('black')" title="黑色"></button>
-          <button class="theme-dot" data-theme="mint" style="--d:linear-gradient(135deg,#d1fae5,#a7f3d0,#10b981)" onclick="setTheme('mint')" title="薄荷绿渐变"></button>
-          <button class="theme-dot" data-theme="cream" style="--d:linear-gradient(135deg,#fdf6e3,#eef7df,#84cc16)" onclick="setTheme('cream')" title="奶油绿渐变"></button>
-          <button class="theme-dot" data-theme="redblue" style="--d:linear-gradient(135deg,#ef4444,#3b82f6)" onclick="setTheme('redblue')" title="红蓝渐变"></button>
-          <button class="theme-dot" data-theme="fresh" style="--d:linear-gradient(135deg,#22c55e,#e8f8ee)" onclick="setTheme('fresh')" title="清新绿"></button>
+          <button class="theme-dot" data-theme="cleanwhite" style="--d:linear-gradient(135deg,#f7f8fa,#3b82f6)" onclick="setTheme('cleanwhite')" title="极简白"></button>
+          <button class="theme-dot" data-theme="mistblue" style="--d:linear-gradient(135deg,#eef3f8,#2f80ed)" onclick="setTheme('mistblue')" title="雾蓝"></button>
+          <button class="theme-dot" data-theme="warmamber" style="--d:linear-gradient(135deg,#f6f1ea,#e08a2b)" onclick="setTheme('warmamber')" title="暖砂"></button>
+          <button class="theme-dot" data-theme="lavender" style="--d:linear-gradient(135deg,#f3eef8,#8b5cf6)" onclick="setTheme('lavender')" title="浅薰"></button>
+          <button class="theme-dot" data-theme="sakura" style="--d:linear-gradient(135deg,#fdf2f6,#ec4899)" onclick="setTheme('sakura')" title="樱粉"></button>
+        </div>
+        <div class="ct" style="margin-top:16px">粉彩渐变风（红蓝渐变风格）</div>
+        <div class="theme-row">
+          <button class="theme-dot" data-theme="redblue" style="--d:linear-gradient(135deg,#fee2e2,#dbeafe,#e0e7ff)" onclick="setTheme('redblue')" title="红蓝渐变"></button>
+          <button class="theme-dot" data-theme="purplepink" style="--d:linear-gradient(135deg,#fce7f3,#f3e8ff,#e9d5ff)" onclick="setTheme('purplepink')" title="紫粉渐变"></button>
+          <button class="theme-dot" data-theme="orangecyan" style="--d:linear-gradient(135deg,#ffedd5,#ffe4e6,#cffafe)" onclick="setTheme('orangecyan')" title="橙青渐变"></button>
+          <button class="theme-dot" data-theme="mintsky" style="--d:linear-gradient(135deg,#d1fae5,#e0f2fe,#ccfbf1)" onclick="setTheme('mintsky')" title="薄荷天青渐变"></button>
+          <button class="theme-dot" data-theme="rosegold" style="--d:linear-gradient(135deg,#ffe4e6,#fef3c7,#fce7f3)" onclick="setTheme('rosegold')" title="玫瑰金渐变"></button>
+          <button class="theme-dot" data-theme="sunset" style="--d:linear-gradient(135deg,#fed7aa,#fbcfe8,#e9d5ff)" onclick="setTheme('sunset')" title="夕阳橙紫渐变"></button>
         </div>
         <div class="bs-info" id="themeName">当前：当前默认背景</div>
-        <div class="bs-note">说明：深色 / 渐变皮肤只改变工具箱界面配色，不会影响设备本身的显示。选择会保存到本地浏览器。</div>
+        <div class="bs-note">说明：渐变皮肤只改变工具箱界面配色，不会影响设备本身的显示。选择会保存到本地浏览器。</div>
       </div>
     </div>
 
@@ -1007,7 +1074,7 @@ function onTabSwitch(id){
 
 
 // === 外观主题（赛博皮肤切换） ===
-var THEME_NAMES={'default':'当前默认背景','black':'黑色','mint':'薄荷绿渐变','cream':'奶油绿渐变','redblue':'红蓝渐变','fresh':'清新绿'};
+var THEME_NAMES={'default':'当前默认背景','cleanwhite':'极简白','mistblue':'雾蓝','warmamber':'暖砂','lavender':'浅薰','sakura':'樱粉','redblue':'红蓝渐变','purplepink':'紫粉渐变','orangecyan':'橙青渐变','mintsky':'薄荷天青渐变','rosegold':'玫瑰金渐变','sunset':'夕阳橙紫渐变'};
 function setTheme(t){
   if(t==='default'){document.documentElement.removeAttribute('data-theme');}
   else{document.documentElement.setAttribute('data-theme',t);}
