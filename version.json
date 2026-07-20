@@ -1,6 +1,6 @@
 {
-  "version": "1.0.44",
-  "changelog": "移除驾驶报告功能：删除主工具箱左侧/底部菜单的「驾驶报告」入口、/hud 报告页与 iframe；后端移除 /hud、/vendor 路由及整段 HUD 实时数据逻辑（含 html2canvas 依赖）；hud.html 与 vendor 目录一并移除。工具箱回归为参数控制/终端/备份/开机动画等核心功能。",
-  "tag": "v1.0.44",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.44/release/c3_toolbox.tar.gz"
+  "version": "1.0.45",
+  "changelog": "修复「参数控制 → 恢复默认」后保存按钮变灰、默认数值无法保存上传到设备的问题：恢复默认时若设备当前值≠默认值，则正确登记为待保存改动并点亮保存按钮；同步升级版本号。",
+  "tag": "v1.0.45",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.45/release/c3_toolbox.tar.gz"
 }

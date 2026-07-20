@@ -855,11 +855,22 @@ function setToggle(k,v){
 function resetDefault(k){
   var defVal=PD[k];
   if(defVal===undefined||defVal==='—'){toast('无默认数值','er');return;}
-  delete CP[k];
+  var cur=AP[k]||'';
   var inp=document.getElementById('inp-'+k);
   if(inp)inp.value=defVal;
-  var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=defVal;pv.classList.remove('pending');}
-  var sv=document.getElementById('sv-'+k);if(sv)sv.classList.remove('ready');
+  var pv=document.getElementById('pv-'+k);
+  var sv=document.getElementById('sv-'+k);
+  if(String(defVal)===String(cur)){
+    // 设备当前已是默认值：无需改动
+    delete CP[k];
+    if(pv){pv.textContent=defVal;pv.classList.remove('pending');}
+    if(sv)sv.classList.remove('ready');
+  }else{
+    // 恢复默认 = 把待存值设为默认, 需要点保存才能写回设备
+    CP[k]=defVal;
+    if(pv){pv.textContent=defVal;pv.classList.add('pending');}
+    if(sv)sv.classList.add('ready');
+  }
   if(isBoolParam(k)){
     var offBtn=document.getElementById('tg-off-'+k);var onBtn=document.getElementById('tg-on-'+k);
     if(offBtn)offBtn.classList.toggle('on',defVal!=='1');
