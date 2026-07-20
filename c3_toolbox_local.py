@@ -8,7 +8,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re, shutil
 
 try:
-    from flask import Flask, request, jsonify, send_file, send_from_directory
+    from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 except ImportError:
     print("[!] 需要安装 flask: pip install flask")
     sys.exit(1)
@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.19"
+VERSION = "1.0.20"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1319,11 +1319,15 @@ def api_dashy_status():
     return jsonify({'collector': bool(ok and fresh), 'stateFile': ok})
 
 
-# ============= 屏幕镜像（投屏）：捕获设备显示帧缓冲，ffmpeg 转 JPEG =============
+# ============= 屏幕镜像（投屏）：捕获设备显示帧缓冲，MJPEG 低延迟流式推送 =============
 # 把设备"屏幕上显示的内容"原样镜像到浏览器（不连摄像头，纯显示像素）。
-# 用 ffmpeg 持续把 /dev/fb0 帧缓冲写成 JPEG，前端轮询读取即投屏。
-SCREEN_JPG = '/tmp/screen.jpg'
-screen_avail = False
+# 低延迟方案：ffmpeg 抓一帧即作为 MJPEG 分片推给浏览器，浏览器边到边显示，
+# 无需前端轮询等待，局域网延迟可降到 ~100ms 级（远比轮询取图低）。
+SCREEN_MJPEG_BOUNDARY = 'c3frame'
+
+
+def _ffmpeg_path():
+    return shutil.which('ffmpeg') or '/usr/bin/ffmpeg'
 
 
 def detect_fb_source():
@@ -1332,44 +1336,139 @@ def detect_fb_source():
     return None
 
 
-def _start_screen_capture():
-    global screen_avail
-    src = detect_fb_source()
-    ff = shutil.which('ffmpeg') or '/usr/bin/ffmpeg'
-    if not src or not os.path.exists(ff):
-        screen_avail = False
-        return False
+def screen_supported():
+    """投屏可用 = 存在 /dev/fb0 帧缓冲 且 已安装 ffmpeg"""
+    return os.path.exists('/dev/fb0') and os.path.exists(_ffmpeg_path())
+
+
+def _ffmpeg_fb_cmd(extra_out=None):
+    ff = _ffmpeg_path()
+    cmd = [ff, '-hide_banner', '-loglevel', 'error',
+           '-f', 'fbdev', '-framerate', '15', '-i', '/dev/fb0',
+           '-vf', 'scale=540:-1', '-f', 'image2pipe', '-c:v', 'mjpeg', '-q:v', '4', '-r', '15', '-']
+    if extra_out:
+        cmd = [ff, '-hide_banner', '-loglevel', 'error',
+               '-f', 'fbdev', '-i', '/dev/fb0',
+               '-vf', 'scale=540:-1', '-frames:v', '1', '-f', 'image2', '-c:v', 'mjpeg', '-q:v', '4', '-']
+    return cmd
+
+
+def gen_screen_stream():
+    """MJPEG 生成器：ffmpeg 输出裸 JPEG 帧（FFD8...FFD9 拼接），按 SOI/EOI 切分后用 multipart 推送。"""
+    cmd = _ffmpeg_fb_cmd()
     try:
-        subprocess.run("pkill -f 'image2 -update 1 %s'" % SCREEN_JPG, shell=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
     except Exception:
-        pass
+        return
+    soi, eoi = b'\xff\xd8', b'\xff\xd9'
+    buf = b''
     try:
-        subprocess.Popen([ff, '-f', 'fbdev', '-i', '/dev/fb0',
-                          '-vf', 'fps=8,scale=480:-1', '-f', 'image2',
-                          '-update', '1', SCREEN_JPG],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
-                         start_new_session=True)
-        screen_avail = True
-        return True
-    except Exception:
-        screen_avail = False
-        return False
+        while True:
+            chunk = p.stdout.read(65536)
+            if not chunk:
+                break
+            buf += chunk
+            while True:
+                i = buf.find(soi)
+                if i < 0:
+                    buf = b''
+                    break
+                j = buf.find(eoi, i + 2)
+                if j < 0:
+                    buf = buf[i:]
+                    break
+                frame = buf[i:j + 2]
+                buf = buf[j + 2:]
+                yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    finally:
+        try:
+            p.terminate()
+            try:
+                p.wait(timeout=2)
+            except Exception:
+                p.kill()
+        except Exception:
+            pass
+
+
+@app.route('/api/screen/stream')
+def api_screen_stream():
+    if not screen_supported():
+        return jsonify({'error': 'unavailable'}), 404
+    return Response(gen_screen_stream(),
+                    mimetype='multipart/x-mixed-replace; boundary=' + SCREEN_MJPEG_BOUNDARY)
 
 
 @app.route('/api/screen/status', methods=['GET'])
 def api_screen_status():
-    return jsonify({'available': screen_avail, 'source': detect_fb_source()})
+    return jsonify({'available': screen_supported(),
+                   'source': detect_fb_source(),
+                   'ffmpeg': os.path.exists(_ffmpeg_path())})
 
 
 @app.route('/api/screen/frame', methods=['GET'])
 def api_screen_frame():
-    if not screen_avail or not os.path.exists(SCREEN_JPG):
+    """单帧快照（用于环境自检/静态预览），非流式。"""
+    if not screen_supported():
         return jsonify({'error': 'unavailable'}), 404
     try:
-        return send_file(SCREEN_JPG, mimetype='image/jpeg')
+        out = subprocess.run(_ffmpeg_fb_cmd(extra_out=True),
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        if out.returncode == 0 and out.stdout:
+            return Response(out.stdout, mimetype='image/jpeg')
     except Exception:
-        return jsonify({'error': 'read failed'}), 500
+        pass
+    return jsonify({'error': 'grab failed'}), 500
+
+
+# ============= 环境一键下发：缺失 ffmpeg 时网页内一键安装 =============
+@app.route('/api/env/install', methods=['POST'])
+def api_env_install():
+    tid = 'env_install_' + str(int(time.time() * 1000))
+    t = threading.Thread(target=_env_install_worker, args=(tid,), daemon=True)
+    t.start()
+    return jsonify({'task_id': tid})
+
+
+@app.route('/api/env/install/status', methods=['GET'])
+def api_env_install_status():
+    tid = request.args.get('task_id', '')
+    st = OP_TASKS.get(tid)
+    if not st:
+        return jsonify({'done': False, 'message': '无此任务'})
+    return jsonify(st)
+
+
+def _env_install_worker(task_id):
+    OP_TASKS[task_id] = {'progress': 0, 'done': False, 'success': False, 'message': '准备安装…', 'log': ''}
+    ff = _ffmpeg_path()
+    if os.path.exists(ff):
+        OP_TASKS[task_id].update({'progress': 100, 'done': True, 'success': True, 'message': 'ffmpeg 已安装'})
+        return
+    steps = [
+        (['apt-get', 'update'], 25, '更新软件源 (apt-get update)'),
+        (['apt-get', 'install', '-y', 'ffmpeg'], 80, '安装 ffmpeg (apt-get install)'),
+    ]
+    for cmd, prog, label in steps:
+        OP_TASKS[task_id].update({'progress': max(OP_TASKS[task_id]['progress'], prog - 25), 'message': label + ' …'})
+        try:
+            r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=300)
+            OP_TASKS[task_id]['log'] += r.stdout.decode('utf-8', 'ignore')[-2000:]
+        except Exception as e:
+            OP_TASKS[task_id]['log'] += ('\n[error] ' + str(e))
+        OP_TASKS[task_id]['progress'] = prog
+    if not os.path.exists(_ffmpeg_path()):
+        # 回退：entware 的 opkg
+        OP_TASKS[task_id].update({'message': '尝试 opkg 安装 …'})
+        try:
+            r = subprocess.run(['opkg', 'install', 'ffmpeg'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=300)
+            OP_TASKS[task_id]['log'] += r.stdout.decode('utf-8', 'ignore')[-2000:]
+        except Exception:
+            pass
+    ok = os.path.exists(_ffmpeg_path())
+    OP_TASKS[task_id].update({'progress': 100, 'done': True, 'success': ok,
+                              'message': ('ffmpeg 安装成功 ✓' if ok else '安装失败，请手动执行 apt-get install -y ffmpeg')})
 
 
 if __name__ == '__main__':
@@ -1407,12 +1506,12 @@ if __name__ == '__main__':
             print("  [!] 未找到可用 python 加载 cereal，实时画面功能将不可用")
     except Exception as e:
         print(f"  [!] 启动实时数据收集器失败: {e}")
-    # 启动屏幕镜像（投屏）：失败不影响其它功能
+    # 屏幕镜像（投屏）：按需 MJPEG 流式，无需常驻进程；仅做环境探测打印
     try:
-        if _start_screen_capture():
-            print("  [✓] 屏幕镜像（投屏）已启动")
+        if screen_supported():
+            print("  [✓] 屏幕镜像（投屏）可用（MJPEG 低延迟流式）")
         else:
-            print("  [!] 屏幕镜像不可用（无 /dev/fb0 帧缓冲或缺少 ffmpeg）")
+            print("  [!] 屏幕镜像不可用：%s" % ("缺少 ffmpeg（可网页一键安装）" if os.path.exists('/dev/fb0') else "无 /dev/fb0 帧缓冲"))
     except Exception as e:
-        print(f"  [!] 启动屏幕镜像失败: {e}")
+        print(f"  [!] 屏幕镜像探测失败: {e}")
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

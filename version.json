@@ -1,6 +1,6 @@
 {
-  "version": "1.0.19",
-  "tag": "v1.0.19",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.19/release/c3_toolbox.tar.gz",
-  "changelog": "「实时画面」标签新增「投屏（屏幕镜像）」源：用 ffmpeg 持续捕获设备 /dev/fb0 帧缓冲并转 JPEG，前端轮询实时镜像设备屏幕显示的内容（纯屏幕像素，不连摄像头），实现\"设备上屏幕显示什么就投屏什么\"。与「数据 HUD」（Dashy 风格纯数据）可一键切换；投屏不可用时（无 fb0/缺 ffmpeg）自动降级并提示。"
+  "version": "1.0.20",
+  "tag": "v1.0.20",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.20/release/c3_toolbox.tar.gz",
+  "changelog": "投屏改为低延迟 MJPEG 流式推送（ffmpeg 抓一帧即推，浏览器边到边显示，延迟降到 ~100ms 级，取代旧轮询取图）；新增「一键安装 ffmpeg」：网页内后台安装并显示进度，无需手动 ssh。投屏环境自检与安装按钮集成在「实时画面」标签。"
 }
