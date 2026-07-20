@@ -8,7 +8,7 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re
 
 try:
-    from flask import Flask, request, jsonify, send_file, send_from_directory
+    from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 except ImportError:
     print("[!] 需要安装 flask: pip install flask")
     sys.exit(1)
@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.39"
+VERSION = "1.0.40"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -857,6 +857,16 @@ def api_param_meta():
     })
 
 
+def ensure_tmux_log():
+    """设备端创建一个 tmux 会话 c3logs 持续 tail 工具箱日志，方便在设备 shell 执行 `tmux a -t c3logs` 实时查看。"""
+    try:
+        log_path = os.path.join(SCRIPT_DIR, 'server.log')
+        cmd = "tmux has-session -t c3logs 2>/dev/null || tmux new-session -d -s c3logs 'tail -F %s'" % log_path
+        subprocess.run(cmd, shell=True, timeout=5)
+    except Exception:
+        pass
+
+
 @app.route('/api/command', methods=['POST'])
 def api_command():
     data = request.json
@@ -874,6 +884,36 @@ def api_command():
         return jsonify({'success': False, 'result': '命令执行超时(60秒)'})
     except Exception as e:
         return jsonify({'success': False, 'result': str(e)})
+
+
+@app.route('/api/logstream')
+def api_logstream():
+    """实时日志流 (SSE)：网页终端执行 `tmux a` 时改用此接口持续推送 server.log 新内容。"""
+    log_path = os.path.join(SCRIPT_DIR, 'server.log')
+
+    def gen():
+        yield "data: ┌── 实时日志 (tmux a) 已连接 ──┐\n\n"
+        try:
+            with open(log_path, 'r', errors='replace') as f:
+                lines = f.readlines()
+                tail = lines[-30:] if len(lines) > 30 else lines
+                for ln in tail:
+                    yield "data: " + ln.rstrip('\n') + "\n\n"
+                f.seek(0, 2)
+                while True:
+                    line = f.readline()
+                    if line:
+                        yield "data: " + line.rstrip('\n') + "\n\n"
+                    else:
+                        time.sleep(0.25)
+        except GeneratorExit:
+            pass
+        except Exception as e:
+            yield "data: [日志读取错误: %s]\n\n" % str(e)
+
+    return Response(gen(), mimetype='text/event-stream',
+                   headers={'Cache-Control': 'no-cache, no-transform',
+                            'X-Accel-Buffering': 'no', 'Connection': 'keep-alive'})
 
 
 @app.route('/api/backup', methods=['POST'])
@@ -1400,4 +1440,5 @@ if __name__ == '__main__':
     print("  ╚══════════════════════════════════════╝")
     print(f"  自动备份文件: {AUTO_BACKUP_FILE}")
     print()
+    ensure_tmux_log()
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

@@ -465,6 +465,8 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
         <span class="qcmd" onclick="qc('hostname -I')">IP地址</span>
         <span class="qcmd" onclick="qc('tr -d &quot;\\0&quot; < /sys/firmware/devicetree/base/model')">设备型号</span>
         <span class="qcmd" onclick="qc('tail -20 /data/c3_toolbox/server.log 2>/dev/null')">工具箱日志</span>
+        <span class="qcmd" onclick="openLogStream()" style="border-color:var(--accent);color:var(--accent)">📜 tmux a 实时日志</span>
+        <span class="qcmd" onclick="closeLogStream()">⏹ 停止日志</span>
       </div>
     </div>
 
@@ -905,6 +907,7 @@ var PD={'AdjustCurveOffset':'25','AdjustLaneOffset':'0','AutoCruiseControl':'0',
 
 // === Terminal ===
 async function execCmd(){var inp=document.getElementById('tIn'),cmd=inp.value.trim();if(!cmd)return;inp.value='';
+  if(/^tmux\s+a\b|^tmux\s+attach/i.test(cmd)){openLogStream();return;}
   appendT('$ '+cmd+'\n','var(--accent)');
   try{var r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})});var d=await r.json();
   if(d.success){var res=d.result;if(res.stdout)appendT(res.stdout);if(res.stderr)appendT(res.stderr,'var(--warn)');if(res.exit_code!==0)appendT('[退出码 '+res.exit_code+']\n','var(--accent2)')}
@@ -912,6 +915,17 @@ async function execCmd(){var inp=document.getElementById('tIn'),cmd=inp.value.tr
 
 function qc(c){document.getElementById('tIn').value=c;execCmd()}
 function appendT(t,c){var o=document.getElementById('tOut'),s=document.createElement('span');s.style.color=c||'#c9d1d9';s.textContent=t;o.appendChild(s);o.scrollTop=o.scrollHeight}
+var logES=null;
+function openLogStream(){
+  closeLogStream();
+  appendT('\n--- 实时日志 (tmux a) 连接中... ---\n','var(--accent)');
+  try{
+    logES=new EventSource('/api/logstream');
+    logES.onmessage=function(e){appendT(e.data+'\n')};
+    logES.onerror=function(){appendT('[日志连接中断，将自动重连；点「停止日志」可关闭]\n','var(--accent2)')};
+  }catch(e){appendT('实时日志不支持: '+e+'\n','var(--accent2)')}
+}
+function closeLogStream(){if(logES){logES.close();logES=null;appendT('--- 实时日志已停止 ---\n','var(--muted)')}}
 
 // === Actions ===
 async function doRestartOp(){try{var r=await fetch('/api/restart_op',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er')}catch(e){toast('失败','er')}}
