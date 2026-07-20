@@ -15,6 +15,7 @@ OPENPILOT_DIR = "/data/openpilot"
 STATE = "/tmp/dashy_state.json"
 TMP = "/tmp/dashy_state.tmp.json"
 LOG = "/tmp/dashy_state.log"
+SCREEN_JPG = "/tmp/screen.jpg"  # 屏幕帧（来自 cereal uiDebug.frame，JPEG），供投屏使用
 
 
 def safe(fn, default=None):
@@ -48,14 +49,45 @@ def downsample_pts(pts, n=17):
     return out
 
 
+def screen_loop():
+    """独立线程：订阅 cereal uiDebug，把屏幕帧(JPEG)写到 /tmp/screen.jpg，供投屏使用。
+
+    与数据 HUD 主循环完全隔离：本分支若没有 uiDebug（或 frame 非 JPEG），
+    只是此线程不写文件，绝不影响 HUD。仅读取，不写参数。
+    """
+    try:
+        from cereal.messaging import SubMaster
+        sm = SubMaster(["uiDebug"])
+    except Exception:
+        return
+    while True:
+        try:
+            sm.update(200)
+            f = sm["uiDebug"].frame
+            # 仅当是有效 JPEG（SOI 标记）且足够大时才写，避免写入空/损坏帧
+            if f and f[:2] == b'\xff\xd8' and len(f) > 1000:
+                with open(SCREEN_JPG, "wb") as fh:
+                    fh.write(f)
+        except Exception:
+            pass
+        time.sleep(0.1)
+
+
 def main():
     if OPENPILOT_DIR not in sys.path:
         sys.path.insert(0, OPENPILOT_DIR)
     from cereal.messaging import SubMaster
+    import threading
 
     TOPICS = ["carState", "modelV2", "radarState", "liveCalibration",
               "deviceState", "selfdriveState", "liveMapData", "controlsState"]
     sm = SubMaster(TOPICS)
+
+    # 启动屏幕帧收集线程（独立，失败不影响 HUD）
+    try:
+        threading.Thread(target=screen_loop, daemon=True).start()
+    except Exception:
+        pass
 
     def build_default():
         return {"offroad": True, "engaged": False, "noData": False,

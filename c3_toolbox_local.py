@@ -43,7 +43,7 @@ LOG_FILE = os.path.join(BASE_DIR, "server.log")
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.23"
+VERSION = "1.0.24"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1324,6 +1324,7 @@ def api_dashy_status():
 # 低延迟方案：ffmpeg 抓一帧即作为 MJPEG 分片推给浏览器，浏览器边到边显示，
 # 无需前端轮询等待，局域网延迟可降到 ~100ms 级（远比轮询取图低）。
 SCREEN_MJPEG_BOUNDARY = 'c3frame'
+SCREEN_JPG = '/tmp/screen.jpg'  # dashy_collector 维护的屏幕帧（cereal uiDebug.frame, JPEG）
 
 _capture_source_cache = None
 
@@ -1377,14 +1378,96 @@ def _probe_capture_source(force=False):
     return None
 
 
-def detect_fb_source():
+# ===== 三源投屏：cereal uiDebug.frame -> /dev/shm 共享内存 -> ffmpeg(fbdev/kmsgrab) =====
+def _dashy_screen_jpeg():
+    """读取 dashy_collector 维护的屏幕帧 /tmp/screen.jpg（来自 cereal uiDebug.frame）。
+    要求文件存在且是有效 JPEG，且近期(4s 内)有更新，避免显示陈旧帧。"""
+    try:
+        if not os.path.exists(SCREEN_JPG):
+            return None
+        if time.time() - os.path.getmtime(SCREEN_JPG) > 4:
+            return None
+        with open(SCREEN_JPG, 'rb') as f:
+            data = f.read()
+        if data[:2] == b'\xff\xd8' and len(data) > 1000:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _discover_ui_shm():
+    """扫描 /dev/shm，找包含有效 JPEG 帧的共享内存文件（openpilot UI 把屏幕帧写到这，comma connect 看屏同款机制）。
+    不依赖确切文件名/header 格式，靠 JPEG 标记(FFD8..FFD9)识别。返回路径或 None。"""
+    shm_dir = '/dev/shm'
+    if not os.path.isdir(shm_dir):
+        return None
+    try:
+        for fn in os.listdir(shm_dir):
+            p = os.path.join(shm_dir, fn)
+            if not os.path.isfile(p):
+                continue
+            try:
+                sz = min(os.path.getsize(p), 4 * 1024 * 1024)
+                with open(p, 'rb') as f:
+                    data = f.read(sz)
+            except Exception:
+                continue
+            soi = data.find(b'\xff\xd8')
+            if soi < 0:
+                continue
+            eoi = data.rfind(b'\xff\xd9', soi)
+            if eoi > soi + 1000:
+                return p
+    except Exception:
+        return None
+    return None
+
+
+_UI_SHM_CACHE = None
+def _ui_shm_path():
+    global _UI_SHM_CACHE
+    if _UI_SHM_CACHE and os.path.exists(_UI_SHM_CACHE):
+        return _UI_SHM_CACHE
+    _UI_SHM_CACHE = _discover_ui_shm()
+    return _UI_SHM_CACHE
+
+
+def _read_ui_shm_jpeg():
+    p = _ui_shm_path()
+    if not p:
+        return None
+    try:
+        with open(p, 'rb') as f:
+            data = f.read()
+        soi = data.find(b'\xff\xd8')
+        if soi < 0:
+            return None
+        eoi = data.rfind(b'\xff\xd9', soi)
+        if eoi <= soi + 1000:
+            return None
+        return data[soi:eoi + 2]
+    except Exception:
+        return None
+
+
+def _current_screen_source():
+    """返回当前可用的投屏源名（优先级：cereal uiDebug -> /dev/shm -> ffmpeg）。"""
+    if _dashy_screen_jpeg():
+        return 'uiDebug:/tmp/screen.jpg'
+    if _read_ui_shm_jpeg():
+        return 'shm:' + _ui_shm_path()
     src = _probe_capture_source()
     return src[0] if src else None
 
 
+def detect_fb_source():
+    return _current_screen_source()
+
+
 def screen_supported():
-    """投屏可用 = ffmpeg 已装 + 能探测到可用源（fbdev 或 kmsgrab）。"""
-    return _probe_capture_source() is not None
+    """投屏可用 = 任一源可达：cereal uiDebug.frame / /dev/shm 共享内存 / ffmpeg(fbdev|kmsgrab)。"""
+    return _current_screen_source() is not None
 
 
 def _capture_stream_cmd():
@@ -1398,7 +1481,32 @@ def _capture_single_cmd():
 
 
 def gen_screen_stream():
-    """MJPEG 生成器：ffmpeg 输出裸 JPEG 帧（FFD8...FFD9 拼接），按 SOI/EOI 切分后用 multipart 推送。"""
+    """MJPEG 生成器：三源优先级 cereal uiDebug -> /dev/shm -> ffmpeg。"""
+    # 源1：cereal uiDebug.frame（dashy_collector 写到 /tmp/screen.jpg）
+    if _dashy_screen_jpeg():
+        try:
+            while True:
+                jpg = _dashy_screen_jpeg()
+                if jpg:
+                    yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
+                time.sleep(0.05)
+        except GeneratorExit:
+            pass
+        return
+    # 源2：/dev/shm 共享内存扫描
+    if _read_ui_shm_jpeg():
+        try:
+            while True:
+                jpg = _read_ui_shm_jpeg()
+                if jpg:
+                    yield (b'--' + SCREEN_MJPEG_BOUNDARY.encode() + b'\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
+                time.sleep(0.05)
+        except GeneratorExit:
+            pass
+        return
+    # 源3：ffmpeg（fbdev / kmsgrab），已知多数设备不可用，作为保底
     cmd = _capture_stream_cmd()
     if not cmd:
         return
@@ -1448,26 +1556,34 @@ def api_screen_stream():
 
 @app.route('/api/screen/status', methods=['GET'])
 def api_screen_status():
-    src = detect_fb_source()
+    src = _current_screen_source()
     ffmpeg_ok = os.path.exists(_ffmpeg_path())
     return jsonify({'available': screen_supported(),
                     'source': src,
                     'ffmpeg': ffmpeg_ok,
-                    'message': src if src else ('缺少 ffmpeg' if not ffmpeg_ok else '无可用帧缓冲源（fbdev/DRM 均不可访问）')})
+                    'message': src if src else ('缺少 ffmpeg' if not ffmpeg_ok else '无可用投屏源（cereal/uiDebug、/dev/shm、ffmpeg 均不可访问）')})
 
 
 @app.route('/api/screen/frame', methods=['GET'])
 def api_screen_frame():
-    """单帧快照（用于环境自检/静态预览），非流式。"""
+    """单帧快照（用于环境自检/静态预览），非流式。三源优先级同 gen_screen_stream。"""
     if not screen_supported():
         return jsonify({'error': 'unavailable'}), 404
+    # 源1：cereal uiDebug.frame（dashy_collector 维护）
+    jpg = _dashy_screen_jpeg()
+    if jpg:
+        return Response(jpg, mimetype='image/jpeg')
+    # 源2：/dev/shm 共享内存
+    jpg = _read_ui_shm_jpeg()
+    if jpg:
+        return Response(jpg, mimetype='image/jpeg')
+    # 源3：ffmpeg
     try:
         cmd = _capture_single_cmd()
-        if not cmd:
-            return jsonify({'error': 'no source'}), 404
-        out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
-        if out.returncode == 0 and out.stdout:
-            return Response(out.stdout, mimetype='image/jpeg')
+        if cmd:
+            out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            if out.returncode == 0 and out.stdout:
+                return Response(out.stdout, mimetype='image/jpeg')
     except Exception:
         pass
     return jsonify({'error': 'grab failed'}), 500

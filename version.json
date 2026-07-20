@@ -1,6 +1,6 @@
 {
-  "version": "1.0.23",
-  "tag": "v1.0.23",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.23/release/c3_toolbox.tar.gz",
-  "changelog": "投屏 kmsgrab(DRM) 抓取新增多格式自动回退（bgr0/rgb0/nv12/yuv420p），兼容不同 GPU/驱动，并缩短探测超时避免卡顿。comma 用户已在 gpu 组，权限已满足。"
+  "version": "1.0.24",
+  "changelog": "投屏改用三源兜底：cereal uiDebug.frame(/tmp/screen.jpg) → /dev/shm 共享内存扫描 → ffmpeg 回退；绕开 ffmpeg 无 kmsgrab 限制",
+  "tag": "v1.0.24",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.24/release/c3_toolbox.tar.gz"
 }
