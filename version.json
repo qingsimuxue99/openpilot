@@ -1,6 +1,6 @@
 {
-  "version": "1.0.54",
-  "changelog": "设备信息去除「系统负载」标签及其格式化死代码；检查更新机制自动化：打开页面即查、切换任意标签即静默复查、每 5 分钟后台定时复检，无需再手动点击「检查更新」。",
-  "tag": "v1.0.54",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.54/release/c3_toolbox.tar.gz"
+  "version": "1.0.55",
+  "changelog": "新增三项实用功能：①参数极速搜索（跨全部分类按中文名/英文key/说明实时过滤+高亮）；②常改参数收藏夹（每个参数卡片左侧 ★ 收藏，独立「收藏」标签页集中管理，localStorage 持久化）；③设备信息一键截图分享卡（canvas 合成赛博风 PNG 直接下载）。",
+  "tag": "v1.0.55",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.55/release/c3_toolbox.tar.gz"
 }
