@@ -56,7 +56,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.64"
+VERSION = "1.0.65"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1632,6 +1632,27 @@ VOICE_TEXT = {
 def api_car_events():
     with EVENT_LOCK:
         return jsonify(EVENT_DATA)
+
+
+@app.route('/api/voice/test_event', methods=['POST'])
+def api_voice_test_event():
+    """注入一个测试事件（绕过实车 cereal 信号），用于在设备 shell 用 curl 模拟转向/ACC
+    动作，验证前端轮询→播放链路是否通畅。用法：
+      curl -X POST http://localhost:5588/api/voice/test_event?type=turn_left
+    type 取值：turn_left / turn_right / acc_on / acc_off
+    """
+    t = request.form.get('type') or request.args.get('type')
+    valid = sorted(VALID_VOICE)
+    if t not in VALID_VOICE:
+        return jsonify({'success': False, 'message': '未知事件类型，可选: %s' % ','.join(valid)})
+    global EVENT_DATA
+    with EVENT_LOCK:
+        d = dict(EVENT_DATA)
+        cur_seq = (d.get('last_event') or {}).get('seq', 0) + 1
+        d['last_event'] = {'type': t, 'seq': cur_seq, 'ts': time.time(), 'test': True}
+        EVENT_DATA = d
+    return jsonify({'success': True, 'type': t, 'seq': cur_seq,
+                    'message': '已注入测试事件，前端将在 ~800ms 内轮询到并播报（需语音开关已开、浏览器在前台且音频已解锁）'})
 
 
 @app.route('/api/voice/list')
