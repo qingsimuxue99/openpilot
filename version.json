@@ -1,6 +1,6 @@
 {
-  "version": "1.0.71",
-  "changelog": "语音「零手动激活」大修：① 用合成语音队列+看门狗彻底修复「响一次后静音、后续不播报」；② 去掉强制「点击启用」浮条，改为首次任意交互自动解锁；③ 新增 PWA（可添加到主屏幕当独立 APP），独立模式下加载即自动播报、无需任何点击。",
-  "tag": "v1.0.71",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.71/release/c3_toolbox.tar.gz"
+  "version": "1.0.72",
+  "changelog": "网页端语音互动 UI（侧边栏入口、底部导航、语音面板、合成语音队列及上传试听播放逻辑）已全部移除，仅保留后端 /api/car_events、/api/voice/* 接口供 C3XL语音助手 App 调用；网页端不再播放播报，由独立安卓 App 接管语音互动。",
+  "tag": "v1.0.72",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.72/release/c3_toolbox.tar.gz"
 }

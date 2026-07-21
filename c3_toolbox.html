@@ -472,35 +472,6 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .pc-star:hover{border-color:var(--accent);color:var(--accent)}
 .pc-star.on{background:rgba(var(--accent-rgb),.12);border-color:var(--accent);color:var(--accent)}
 
-/* === 语音互动 === */
-.vrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:4px 0 10px}
-.vinfo{display:flex;align-items:center;gap:8px}
-.pill{width:10px;height:10px;border-radius:50%;background:var(--dim);display:inline-block}
-.pill.ok{background:#28c76f;box-shadow:0 0 8px #28c76f}
-.pill.bad{background:#ff5c5c;box-shadow:0 0 8px #ff5c5c}
-.sw{position:relative;display:inline-block;width:46px;height:24px;cursor:pointer}
-.sw input{opacity:0;width:0;height:0}
-.sw .slider{position:absolute;inset:0;border-radius:24px;background:var(--bg4);border:1px solid var(--rule);transition:.2s}
-.sw .slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:2px;border-radius:50%;background:#fff;transition:.2s}
-.sw input:checked+.slider{background:var(--accent)}
-.sw input:checked+.slider::before{transform:translateX(22px)}
-.vnow{margin:6px 0 2px;padding:10px 14px;border-radius:12px;background:rgba(var(--accent-rgb),.08);border:1px solid var(--rule);font-size:15px;font-weight:600;color:var(--accent);transition:opacity .3s}
-.vdbg{margin-top:8px;padding:7px 10px;border-radius:8px;font-size:11px;line-height:1.6;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border:1px solid var(--rule);color:var(--dim)}
-#voiceEnableBar{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:60;display:none;padding:13px 22px;border-radius:999px;background:linear-gradient(135deg,var(--accent),#ff6a3d);color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px;box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer;animation:pulseBar 1.6s ease-in-out infinite;user-select:none;-webkit-tap-highlight-color:transparent}
-@keyframes pulseBar{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.06)}}
-.vdbg.ok{border-color:rgba(80,200,120,.5);color:#5fd08a}
-.vdbg.bad{border-color:rgba(230,120,90,.5);color:#e8916a}
-.vlights{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
-.vlight{padding:8px 14px;border-radius:20px;background:var(--bg2);border:1px solid var(--rule);color:var(--dim);font-size:13px;font-weight:600;transition:all .15s;opacity:.5}
-.vlight.on{opacity:1;background:rgba(var(--accent-rgb),.15);border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px rgba(var(--accent-rgb),.3)}
-.vslot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin:8px 0;border-radius:14px;background:var(--bg2);border:1px solid var(--rule)}
-.vslot-t{font-size:14px;font-weight:600;color:var(--ink)}
-.vslot-d{font-size:12px;color:var(--dim);margin-top:2px}
-.vslot-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.vup{position:relative}
-.vtag{font-size:11px;padding:3px 9px;border-radius:14px;background:var(--bg4);color:var(--muted);font-weight:600;white-space:nowrap}
-.vshare{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
-.vshare .btn{font-size:13px;padding:9px 16px}
 </style>
 </head>
 <body>
@@ -545,7 +516,6 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="cat-card" data-p="fav" onclick="go('fav')"><span class="cname">收藏 ⭐</span><span class="cbadge" id="bc-fav">0</span></div>
     <div class="cat-card" data-p="search" onclick="go('search')"><span class="cname">搜索 🔍</span><span class="cbadge" id="bc-search">—</span></div>
     <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">工具 🛠️</div>
-    <div class="cat-card" data-p="voice" onclick="go('voice')"><span class="cname">语音互动 🔊</span><span class="cbadge" id="bc-voice">—</span></div>
     <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端 💻</span><span class="cbadge" id="bc-terminal">—</span></div>
     <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份 💾</span><span class="cbadge" id="bc-backup">—</span></div>
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
@@ -855,42 +825,6 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
       </div>
     </div>
 
-    <!-- 语音互动 -->
-    <div class="pnl" id="p-voice">
-      <div class="ph"><h2>语音互动 🔊</h2><p>连接 C3 原车动作，实时语音播报（默认台湾腔女声合成）</p></div>
-      <div class="cd">
-        <div class="vrow">
-          <div class="vinfo">
-            <span class="pill" id="voiceConn"></span>
-            <span id="voiceConnTxt">检测中…</span>
-          </div>
-          <label class="sw"><input type="checkbox" id="voiceSw" onchange="setVoiceEnabled(this.checked)"><span class="slider"></span></label>
-          <span id="voiceStat" class="bs-info">—</span>
-        </div>
-        <div class="bs-note">开关控制是否实时播报。连接状态显示是否接入 openpilot 原车信号；未启动 openpilot 时不播报。语音默认由浏览器台湾腔女声合成，可上传自定义音频逐个替换。</div>
-        <div class="vdbg" id="voiceDebug">诊断：检测中…</div>
-        <div class="vnow" id="voiceNow" style="opacity:.35">待命中…</div>
-
-        <div class="ct" style="margin-top:16px">实时状态</div>
-        <div class="vlights">
-          <div class="vlight" id="l-turn-l">◀ 左转向</div>
-          <div class="vlight" id="l-turn-r">右转向 ▶</div>
-          <div class="vlight" id="l-acc">ACC 激活</div>
-          <div class="vlight" id="l-acc-off">ACC 退出</div>
-        </div>
-
-        <div class="ct" style="margin-top:16px">语音提示与替换</div>
-        <div id="voiceSlots"></div>
-
-        <div class="ct" style="margin-top:18px">语音包分享（方便备份与分享给朋友）</div>
-        <div class="vshare">
-          <button class="btn bs" id="btnPlayAll" onclick="playAllVoices()">全部试听 🎧</button>
-          <button class="btn bs" onclick="exportVoicePack()">导出语音包 📦</button>
-          <label class="btn bs vup">导入语音包 📥<input type="file" id="vpImport" accept=".zip" onchange="importVoicePack()" hidden></label>
-        </div>
-        <div class="bs-note">「全部试听」按顺序播报全部 4 句语音（再点一次可停止）；「导出语音包」把已上传替换的语音打包成 zip 下载；「导入语音包」可一键应用朋友分享的语音包（同名覆盖，仅接受 4 类合法语音）。</div>
-      </div>
-    </div>
 
   </div>
 </div>
@@ -909,7 +843,6 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="mn" data-p="info" onclick="go('info')"><span class="mi">📦</span><span class="mt">其他</span></div>
     <div class="mn" data-p="fav" onclick="go('fav')"><span class="mi">⭐</span><span class="mt">收藏</span></div>
     <div class="mn" data-p="search" onclick="go('search')"><span class="mi">🔍</span><span class="mt">搜索</span></div>
-    <div class="mn" data-p="voice" onclick="go('voice')"><span class="mi">🔊</span><span class="mt">语音</span></div>
     <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
     <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
@@ -1346,7 +1279,6 @@ function onTabSwitch(id){
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id==='theme'){}
-  else if(id==='voice'){initVoice();}
   else if(id==='fav'){renderFav();}
   else if(id==='search'){focusSearch();}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
@@ -1849,281 +1781,12 @@ document.addEventListener('click',function(e){
   if(p&&p.style.display==='block'&&!p.contains(e.target)&&!(e.target.classList&&e.target.classList.contains('upd-link'))){p.style.display='none';}
 });
 
-// === 语音互动（连接原车动作，实时语音提示）===
-var VOICE_TYPES=[
-  {k:'turn_left',  label:'左转向',   text:'正在左转向'},
-  {k:'turn_right', label:'右转向',   text:'正在右转向'},
-  {k:'acc_on',     label:'激活ACC',  text:'OP智能驾驶已激活'},
-  {k:'acc_off',    label:'退出ACC',  text:'退出智能驾驶'}
-];
-var _voiceOn=false, _voiceSeq=0, _voiceTimer=null, _voiceRepl={}, _voiceSynced=false;
-var VOICE_ON_KEY='c3_voice_on';
-
-function voiceEnabled(){try{return localStorage.getItem(VOICE_ON_KEY)!=='0';}catch(e){return true;}}
-function setVoiceEnabled(v){
-  _voiceOn=v;
-  try{localStorage.setItem(VOICE_ON_KEY, v?'1':'0');}catch(e){}
-  var s=document.getElementById('voiceSw'); if(s)s.checked=v;
-  var st=document.getElementById('voiceStat'); if(st)st.textContent=v?'已开启':'已暂停';
-  if(v && isStandalone()){ unlockAudio(); }   // 主屏 APP 模式：加载即解锁，无需任何动作
-}
-function loadVoicesTW(){
-  if(!('speechSynthesis' in window))return;
-  window.__twVoices=speechSynthesis.getVoices()||[];
-  speechSynthesis.onvoiceschanged=function(){window.__twVoices=speechSynthesis.getVoices()||[];};
-}
-function pickTWVoice(){
-  var vs=window.__twVoices||[];
-  var tw=vs.filter(function(v){return /zh[-_]?TW/i.test(v.lang);});
-  var fem=tw.filter(function(v){return /female|女|mei|ting|hsiao|angela|sin|yue|taiwan|Google 台/i.test(v.name);});
-  return fem[0]||tw[0]||null;
-}
-// 语音合成队列：修掉「响一次后静音」——iOS Safari 在定时器里连续 speak() 会被卡死，
-// 改成语音队列 + onend 串行 + 看门狗兜底，确保每次动作都播报且不会卡死。
-var _ttsQueue=[], _ttsBusy=false;
-function speakTW(text){
-  if(!('speechSynthesis' in window))return;
-  _ttsQueue.push(text);
-  _pumpTTS();
-}
-function _pumpTTS(){
-  if(_ttsBusy) return;
-  if(!_ttsQueue.length) return;
-  _ttsBusy=true;
-  var text=_ttsQueue.shift();
-  try{
-    if(speechSynthesis.paused) speechSynthesis.resume();
-    var u=new SpeechSynthesisUtterance(text);
-    u.lang='zh-TW';
-    var v=pickTWVoice(); if(v)u.voice=v;
-    u.pitch=1.15; u.rate=1.0;   // 略偏高亮，贴近少妇声线
-    var done=false;
-    function finish(){ if(done)return; done=true; _ttsBusy=false; clearTimeout(wd); setTimeout(_pumpTTS,30); }
-    u.onstart=function(){ _audioUnlocked=true; hideVoiceEnableBar(); };
-    u.onend=finish;
-    u.onerror=finish;
-    speechSynthesis.speak(u);
-    // 看门狗：若 onend 因浏览器异常永不触发，6s 后强制放行下一句，避免永久静音
-    var wd=setTimeout(finish, 6000);
-  }catch(e){ _ttsBusy=false; setTimeout(_pumpTTS,30); }
-}
-function playEventAudio(k, text){
-  ensureAudioCtx();   // 解锁音频上下文，确保文件语音也能稳定播放
-  if(_voiceRepl[k]){
-    // 用 fetch 取完整文件再以 Blob URL 播放，彻底绕开服务器必须支持 HTTP Range 的限制（iOS Safari 强要求）
-    fetch('/api/voice/'+k+'?t='+Date.now())
-      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); })
-      .then(function(blob){
-        var url=URL.createObjectURL(blob);
-        var a=new Audio(url);
-        a.onended=function(){ try{URL.revokeObjectURL(url);}catch(e){} };
-        a.onerror=function(){ try{URL.revokeObjectURL(url);}catch(e){} speakTW(text); }; // 文件损坏 → 兜底念文案
-        var p=a.play();
-        if(p&&p.catch)p.catch(function(){ speakTW(text); });
-      })
-      .catch(function(e){ console.warn('[语音] 文件加载失败，改用合成语音：', e); speakTW(text); });
-  }else{
-    speakTW(text);
-  }
-}
-// 浏览器自动播放策略：定时器触发的播放可能被拦截，需在首次用户手势时解锁音频。
-// 设计为「零手动激活」：① 任意页面点击/触摸即自动解锁整个会话（不要求点特定按钮）；
-// ② 若以主屏 APP（PWA 独立模式）打开，加载即自动解锁，无需任何动作。
-var _audioUnlocked=false, _unlockBound=false, _audioCtx=null;
-function ensureAudioCtx(){
-  try{
-    if(!_audioCtx){ var AC=window.AudioContext||window.webkitAudioContext; if(AC)_audioCtx=new AC(); }
-    if(_audioCtx && _audioCtx.state==='suspended'){ _audioCtx.resume().catch(function(){}); }
-  }catch(e){}
-}
-function hideVoiceEnableBar(){ var b=document.getElementById('voiceEnableBar'); if(b)b.style.display='none'; }
-function unlockAudio(){
-  if(_audioUnlocked)return;
-  _audioUnlocked=true;
-  ensureAudioCtx();
-  try{
-    var s=new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAD//w==');
-    var p=s.play(); if(p&&p.catch)p.catch(function(){});
-  }catch(e){}
-  try{ if('speechSynthesis' in window){ speechSynthesis.cancel(); var u0=new SpeechSynthesisUtterance(' '); u0.volume=0; speechSynthesis.speak(u0); } }catch(e){}
-}
-function bindVoiceUnlock(){
-  if(_unlockBound)return; _unlockBound=true;
-  document.addEventListener('pointerdown', unlockAudio, false);
-  document.addEventListener('touchstart', unlockAudio, false);
-  document.addEventListener('keydown', unlockAudio, false);
-}
-// 是否以主屏 APP（PWA 独立模式）运行：此模式下浏览器允许自动播放，无需用户手势
-function isStandalone(){
-  try{ if(window.navigator.standalone) return true; }catch(e){}
-  try{ if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true; }catch(e){}
-  return false;
-}
-function setVoiceLight(id,on){var e=document.getElementById(id); if(e)e.className='vlight'+(on?' on':'');}
-function flashVoice(label){
-  var el=document.getElementById('voiceNow'); if(!el)return;
-  el.textContent='🔊 '+label; el.style.opacity='1';
-  clearTimeout(el._t); el._t=setTimeout(function(){el.style.opacity='.35';},2500);
-}
-function pollCarEvents(){
-  fetch('/api/car_events').then(function(r){return r.json();}).then(function(d){
-    var conn=!!d.available;
-    var badge=document.getElementById('voiceConn'); if(badge)badge.className='pill '+(conn?'ok':'bad');
-    var ct=document.getElementById('voiceConnTxt'); if(ct)ct.textContent=conn?'已连接原车':'未连接（请启动 openpilot）';
-    setVoiceLight('l-turn-l', d.left_blinker);
-    setVoiceLight('l-turn-r', d.right_blinker);
-    setVoiceLight('l-acc', d.acc_enabled);
-    setVoiceLight('l-acc-off', !d.acc_enabled);
-    // —— 诊断信息（无需上车即可观察采集线程健康度）——
-    var dbg=document.getElementById('voiceDebug');
-    if(dbg){
-      var alive=d.collector_alive||0;
-      var age=alive?Math.max(0,Math.round(Date.now()/1000-alive)):null;
-      var st=d.last_st||{};
-      dbg.innerHTML='诊断：连接='+(conn?'是':'否')+' ｜ 线程存活='+(age===null?'未启动':age+'秒前')+
-        ' ｜ 累计边沿='+(d.total_edges||0)+
-        ' ｜ 最近状态 L='+(st.left_blinker?1:0)+' R='+(st.right_blinker?1:0)+' ACC='+(st.acc_enabled?1:0);
-      dbg.className='vdbg '+(conn&&age!==null&&age<10?'ok':'bad');
-    }
-    // —— 播放：首次轮询仅同步序号，不误播历史事件；测试事件不受「连接」门控 ——
-    if(d.last_event){
-      if(!_voiceSynced){ _voiceSeq=d.last_event.seq; _voiceSynced=true; }
-      else {
-        var ev=d.last_event, evSeq=ev.seq||0, isTest=(ev.test===true);
-        // 真实事件需连接原车(conn)；测试事件(test_event注入)绕过连接门控，用于诊断采集线程
-        if(_voiceOn && evSeq>_voiceSeq && (conn || isTest)){
-          _voiceSeq=evSeq;
-          var item=VOICE_TYPES.filter(function(x){return x.k===ev.type;})[0];
-          if(item){ playEventAudio(item.k, item.text); flashVoice(item.label); }
-        } else { _voiceSeq=evSeq; }
-      }
-    }
-  }).catch(function(){});
-}
-function startVoice(){
-  loadVoicesTW();
-  if(!_voiceTimer){ _voiceTimer=setInterval(pollCarEvents, 800); }
-  pollCarEvents();
-}
-function initVoice(){
-  loadVoicesTW();
-  setVoiceEnabled(voiceEnabled());   // 内部会在 PWA 独立模式下加载即解锁
-  renderVoiceSlots();
-  refreshVoiceRepl();
-  startVoice();   // 全局监听，不依赖打开面板即可实时互动
-  bindVoiceUnlock();   // 注册首次手势解锁音频（普通标签页首次任意点击即解锁）
-}
-function refreshVoiceRepl(){
-  fetch('/api/voice/list').then(function(r){return r.json();}).then(function(d){
-    _voiceRepl=d||{};
-    VOICE_TYPES.forEach(function(x){
-      var tag=document.getElementById('vr-'+x.k);
-      if(tag)tag.textContent=_voiceRepl[x.k]?'已替换':'默认合成';
-    });
-  }).catch(function(){});
-}
-function renderVoiceSlots(){
-  var box=document.getElementById('voiceSlots'); if(!box)return;
-  box.innerHTML=VOICE_TYPES.map(function(x){
-    return ''+
-    '<div class="vslot">'+
-      '<div class="vslot-l"><div class="vslot-t">'+x.label+'</div><div class="vslot-d">'+x.text+'</div></div>'+
-      '<div class="vslot-r">'+
-        '<button class="btn bs" onclick="testVoice(\''+x.k+'\')">试听</button>'+
-        '<label class="btn bs vup">上传替换<input type="file" id="vf-'+x.k+'" accept="audio/*" onchange="uploadVoice(\''+x.k+'\')" hidden></label>'+
-        '<button class="btn bs" onclick="resetVoice(\''+x.k+'\')">恢复</button>'+
-        '<a class="btn bs" href="/api/voice/'+x.k+'" download>下载</a>'+
-        '<span class="vtag" id="vr-'+x.k+'">默认合成</span>'+
-      '</div>'+
-    '</div>';
-  }).join('');
-}
-function uploadVoice(k){
-  var inp=document.getElementById('vf-'+k);
-  if(!inp||!inp.files||!inp.files[0]){toast('请先选择音频文件','er');return;}
-  var fd=new FormData(); fd.append('type',k); fd.append('file',inp.files[0]);
-  fetch('/api/voice/upload',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
-    if(d.success){toast('已替换语音','ok'); refreshVoiceRepl();} else toast(d.message||'替换失败','er');
-  }).catch(function(){toast('上传失败','er');});
-}
-function resetVoice(k){
-  fetch('/api/voice/reset',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'type='+k}).then(function(r){return r.json();}).then(function(d){
-    if(d.success){toast('已恢复默认语音','ok'); refreshVoiceRepl();} else toast(d.message||'恢复失败','er');
-  }).catch(function(){toast('恢复失败','er');});
-}
-function testVoice(k){
-  unlockAudio(); // 确保音频已解锁（首次手势内调用，满足浏览器自动播放策略）
-  var item=VOICE_TYPES.filter(function(x){return x.k===k;})[0];
-  if(item)playEventAudio(k,item.text);
-}
-
-// 全部试听：顺序播报 4 句；再点一次停止
-var _playAllIdx=-1, _playAllTimer=null;
-function playAllVoices(){
-  var b=document.getElementById('btnPlayAll');
-  if(_playAllIdx>=0){ // 正在播放 -> 停止
-    _playAllIdx=-1;
-    if(_playAllTimer){clearTimeout(_playAllTimer);_playAllTimer=null;}
-    if('speechSynthesis' in window)speechSynthesis.cancel();
-    if(b)b.textContent='全部试听 🎧';
-    toast('已停止试听','ok');
-    return;
-  }
-  _playAllIdx=0;
-  if(b)b.textContent='停止 ■';
-  _playOne();
-}
-function _playOne(){
-  if(_playAllIdx<0)return;
-  if(_playAllIdx>=VOICE_TYPES.length){
-    _playAllIdx=-1;
-    var b=document.getElementById('btnPlayAll'); if(b)b.textContent='全部试听 🎧';
-    toast('已全部试听','ok');
-    return;
-  }
-  var item=VOICE_TYPES[_playAllIdx];
-  flashVoice('试听：'+item.label);
-  playEventAudio(item.k, item.text);
-  _playAllIdx++;
-  _playAllTimer=setTimeout(_playOne, 2700); // 间隔，等待上一句播完
-}
-
-// 导出语音包：打包已替换的语音 + manifest 成 zip 下载
-function exportVoicePack(){
-  toast('正在打包语音包…','ok');
-  fetch('/api/voice/export').then(function(r){
-    if(!r.ok){toast('导出失败','er');return null;}
-    return r.blob();
-  }).then(function(blob){
-    if(!blob)return;
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement('a'); a.href=url; a.download='c3_voice_pack.zip';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){URL.revokeObjectURL(url);},3000);
-    toast('语音包已导出','ok');
-  }).catch(function(){toast('导出失败','er');});
-}
-
-// 导入语音包：把 zip 内 4 类合法语音一键应用
-function importVoicePack(){
-  var inp=document.getElementById('vpImport');
-  if(!inp||!inp.files||!inp.files[0]){toast('请先选择语音包 zip','er');return;}
-  var fd=new FormData(); fd.append('file',inp.files[0]);
-  toast('正在导入语音包…','ok');
-  fetch('/api/voice/import',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
-    if(d.success){toast('已导入 '+d.imported+' 条语音','ok'); refreshVoiceRepl();} else toast(d.message||'导入失败','er');
-    if(inp)inp.value='';
-  }).catch(function(){toast('导入失败','er'); if(inp)inp.value='';});
-}
-
 // === Init ===
 (function(){loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate()})();
 // Load backup list on init
 setTimeout(function(){loadBkList()},2000);
 // 应用保存的皮肤主题
 initTheme();
-// 初始化语音互动（加载浏览器台湾腔语音引擎 + 启动原车事件轮询）
-initVoice();
 // 自动检查更新：打开页面即查（上方 init 已调用），切标签即查（onTabSwitch 内已调用），
 // 并每 5 分钟后台静默复检一次，全程无需手动点击「检查更新」按钮。
 setInterval(function(){try{checkUpdate()}catch(e){}},5*60*1000);
