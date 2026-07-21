@@ -478,6 +478,8 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .sw input:checked+.slider::before{transform:translateX(22px)}
 .vnow{margin:6px 0 2px;padding:10px 14px;border-radius:12px;background:rgba(var(--accent-rgb),.08);border:1px solid var(--rule);font-size:15px;font-weight:600;color:var(--accent);transition:opacity .3s}
 .vdbg{margin-top:8px;padding:7px 10px;border-radius:8px;font-size:11px;line-height:1.6;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border:1px solid var(--rule);color:var(--dim)}
+#voiceEnableBar{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:60;display:none;padding:13px 22px;border-radius:999px;background:linear-gradient(135deg,var(--accent),#ff6a3d);color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px;box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer;animation:pulseBar 1.6s ease-in-out infinite;user-select:none;-webkit-tap-highlight-color:transparent}
+@keyframes pulseBar{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.06)}}
 .vdbg.ok{border-color:rgba(80,200,120,.5);color:#5fd08a}
 .vdbg.bad{border-color:rgba(230,120,90,.5);color:#e8916a}
 .vlights{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
@@ -1855,6 +1857,7 @@ function setVoiceEnabled(v){
   try{localStorage.setItem(VOICE_ON_KEY, v?'1':'0');}catch(e){}
   var s=document.getElementById('voiceSw'); if(s)s.checked=v;
   var st=document.getElementById('voiceStat'); if(st)st.textContent=v?'已开启':'已暂停';
+  refreshVoiceEnableBar();   // 开启后若尚未解锁音频，显示启用浮条
 }
 function loadVoicesTW(){
   if(!('speechSynthesis' in window))return;
@@ -1870,15 +1873,19 @@ function pickTWVoice(){
 function speakTW(text){
   if(!('speechSynthesis' in window))return;
   try{
-    speechSynthesis.cancel();
+    // 移动端（尤其 iOS Safari）首次播报后 speechSynthesis 会进入 paused 状态，
+    // 后续非手势触发直接被卡死 → 必须先 resume() 才能继续播放
+    if(speechSynthesis.paused) speechSynthesis.resume();
     var u=new SpeechSynthesisUtterance(text);
     u.lang='zh-TW';
     var v=pickTWVoice(); if(v)u.voice=v;
     u.pitch=1.15; u.rate=1.0;   // 略偏高亮，贴近少妇声线
+    u.onstart=function(){ _audioUnlocked=true; hideVoiceEnableBar(); };
     speechSynthesis.speak(u);
   }catch(e){}
 }
 function playEventAudio(k, text){
+  ensureAudioCtx();   // 解锁音频上下文，确保文件语音也能稳定播放
   if(_voiceRepl[k]){
     // 用 fetch 取完整文件再以 Blob URL 播放，彻底绕开服务器必须支持 HTTP Range 的限制（iOS Safari 强要求）
     fetch('/api/voice/'+k+'?t='+Date.now())
@@ -1896,22 +1903,47 @@ function playEventAudio(k, text){
     speakTW(text);
   }
 }
-// 浏览器自动播放策略：定时器触发的播放可能被拦截，需在首次用户手势时解锁音频
-var _audioUnlocked=false, _unlockBound=false;
+// 浏览器自动播放策略：定时器触发的播放可能被拦截，需在首次用户手势时解锁音频。
+// 提供「点击启用语音播报」浮条，一次点击解锁整个会话；同时任意页面点击也会解锁。
+var _audioUnlocked=false, _unlockBound=false, _audioCtx=null;
+function ensureAudioCtx(){
+  try{
+    if(!_audioCtx){ var AC=window.AudioContext||window.webkitAudioContext; if(AC)_audioCtx=new AC(); }
+    if(_audioCtx && _audioCtx.state==='suspended'){ _audioCtx.resume().catch(function(){}); }
+  }catch(e){}
+}
+function hideVoiceEnableBar(){ var b=document.getElementById('voiceEnableBar'); if(b)b.style.display='none'; }
 function unlockAudio(){
   if(_audioUnlocked)return;
   _audioUnlocked=true;
+  ensureAudioCtx();
   try{
     var s=new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAD//w==');
-    s.play().catch(function(){});
+    var p=s.play(); if(p&&p.catch)p.catch(function(){});
   }catch(e){}
-  try{ if('speechSynthesis' in window){ speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } }catch(e){}
+  try{ if('speechSynthesis' in window){ speechSynthesis.cancel(); var u0=new SpeechSynthesisUtterance(' '); u0.volume=0; speechSynthesis.speak(u0); } }catch(e){}
+  hideVoiceEnableBar();
 }
 function bindVoiceUnlock(){
   if(_unlockBound)return; _unlockBound=true;
   document.addEventListener('pointerdown', unlockAudio, false);
   document.addEventListener('touchstart', unlockAudio, false);
   document.addEventListener('keydown', unlockAudio, false);
+}
+// 「点击启用语音播报」浮条：可见即代表尚未解锁，一次点击解锁整个会话
+function ensureVoiceEnableBar(){
+  var bar=document.getElementById('voiceEnableBar');
+  if(bar)return bar;
+  bar=document.createElement('div');
+  bar.id='voiceEnableBar';
+  bar.innerHTML='🔊 点击启用语音播报';
+  bar.onclick=function(){ unlockAudio(); };
+  document.body.appendChild(bar);
+  return bar;
+}
+function refreshVoiceEnableBar(){
+  var bar=ensureVoiceEnableBar();
+  if(_voiceOn && !_audioUnlocked){ bar.style.display='block'; } else { bar.style.display='none'; }
 }
 function setVoiceLight(id,on){var e=document.getElementById(id); if(e)e.className='vlight'+(on?' on':'');}
 function flashVoice(label){
@@ -1962,6 +1994,7 @@ function startVoice(){
 function initVoice(){
   loadVoicesTW();
   setVoiceEnabled(voiceEnabled());
+  refreshVoiceEnableBar();   // 页面加载即决定浮条是否显示（未解锁则提示一次点击）
   renderVoiceSlots();
   refreshVoiceRepl();
   startVoice();   // 全局监听，不依赖打开面板即可实时互动

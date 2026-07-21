@@ -1,6 +1,6 @@
 {
-  "version": "1.0.69",
-  "changelog": "修复语音测试命令(test_event)在采集线程未连接时被误拦截：测试事件注入不再受「连接原车」门控，手机/平板无需上车即可听到模拟转向/ACC语音；用于诊断采集线程是否存活。",
-  "tag": "v1.0.69",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.69/release/c3_toolbox.tar.gz"
+  "version": "1.0.70",
+  "changelog": "修复语音互动必须点试听才响、且只响一次的体验问题：①新增全屏「🔊 点击启用语音播报」浮条，一次点击解锁整个会话（不必打开语音面板、不必挨个试听）；②speakTW 播报前先 speechSynthesis.resume()，修好移动端首次播完后静音的 bug；③保留任意点击自动解锁。轮询本就在页面加载时启动，无需打开面板。",
+  "tag": "v1.0.70",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.70/release/c3_toolbox.tar.gz"
 }
