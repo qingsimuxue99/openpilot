@@ -1,6 +1,6 @@
 {
-  "version": "1.0.67",
+  "version": "1.0.68",
   "changelog": "语音面板新增「诊断行」：实时显示采集线程是否存活、累计触发边沿数、最近一次解析到的原车状态（L/R/ACC），无需上车即可判断问题在采集端还是播放端；边沿事件写入 /data/c3_toolbox/event_debug.log。修复页面加载时误播上一次历史事件的副作用。发布流程改用 git hash-object 直接读文件，避免二进制包在 Windows 管道下被截断。",
-  "tag": "v1.0.67",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.67/release/c3_toolbox.tar.gz"
+  "tag": "v1.0.68",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.68/release/c3_toolbox.tar.gz"
 }
