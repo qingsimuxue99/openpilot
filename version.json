@@ -1,6 +1,6 @@
 {
-  "version": "1.0.65",
-  "changelog": "新增语音联动诊断接口 POST /api/voice/test_event?type=xxx，可在设备 shell 用 curl 模拟转向/ACC 事件，验证前端轮询→播放链路。用于排查「灯亮但不播报」问题。",
-  "tag": "v1.0.65",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.65/release/c3_toolbox.tar.gz"
+  "version": "1.0.66",
+  "changelog": "语音面板新增「诊断行」：实时显示采集线程是否存活、累计触发边沿数、最近一次解析到的原车状态（L/R/ACC），无需上车即可判断问题在采集端还是播放端；边沿事件写入 /data/c3_toolbox/event_debug.log。修复页面加载时误播上一次历史事件的副作用。",
+  "tag": "v1.0.66",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.66/release/c3_toolbox.tar.gz"
 }

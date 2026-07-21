@@ -477,6 +477,9 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .sw input:checked+.slider{background:var(--accent)}
 .sw input:checked+.slider::before{transform:translateX(22px)}
 .vnow{margin:6px 0 2px;padding:10px 14px;border-radius:12px;background:rgba(var(--accent-rgb),.08);border:1px solid var(--rule);font-size:15px;font-weight:600;color:var(--accent);transition:opacity .3s}
+.vdbg{margin-top:8px;padding:7px 10px;border-radius:8px;font-size:11px;line-height:1.6;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border:1px solid var(--rule);color:var(--dim)}
+.vdbg.ok{border-color:rgba(80,200,120,.5);color:#5fd08a}
+.vdbg.bad{border-color:rgba(230,120,90,.5);color:#e8916a}
 .vlights{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
 .vlight{padding:8px 14px;border-radius:20px;background:var(--bg2);border:1px solid var(--rule);color:var(--dim);font-size:13px;font-weight:600;transition:all .15s;opacity:.5}
 .vlight.on{opacity:1;background:rgba(var(--accent-rgb),.15);border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px rgba(var(--accent-rgb),.3)}
@@ -855,6 +858,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
           <span id="voiceStat" class="bs-info">—</span>
         </div>
         <div class="bs-note">开关控制是否实时播报。连接状态显示是否接入 openpilot 原车信号；未启动 openpilot 时不播报。语音默认由浏览器台湾腔女声合成，可上传自定义音频逐个替换。</div>
+        <div class="vdbg" id="voiceDebug">诊断：检测中…</div>
         <div class="vnow" id="voiceNow" style="opacity:.35">待命中…</div>
 
         <div class="ct" style="margin-top:16px">实时状态</div>
@@ -1842,7 +1846,7 @@ var VOICE_TYPES=[
   {k:'acc_on',     label:'激活ACC',  text:'OP智能驾驶已激活'},
   {k:'acc_off',    label:'退出ACC',  text:'退出智能驾驶'}
 ];
-var _voiceOn=false, _voiceSeq=0, _voiceTimer=null, _voiceRepl={};
+var _voiceOn=false, _voiceSeq=0, _voiceTimer=null, _voiceRepl={}, _voiceSynced=false;
 var VOICE_ON_KEY='c3_voice_on';
 
 function voiceEnabled(){try{return localStorage.getItem(VOICE_ON_KEY)!=='0';}catch(e){return true;}}
@@ -1924,11 +1928,26 @@ function pollCarEvents(){
     setVoiceLight('l-turn-r', d.right_blinker);
     setVoiceLight('l-acc', d.acc_enabled);
     setVoiceLight('l-acc-off', !d.acc_enabled);
-    if(_voiceOn && conn && d.last_event && d.last_event.seq>_voiceSeq){
-      _voiceSeq=d.last_event.seq;
-      var item=VOICE_TYPES.filter(function(x){return x.k===d.last_event.type;})[0];
-      if(item){ playEventAudio(item.k, item.text); flashVoice(item.label); }
-    }else if(d.last_event){ _voiceSeq=d.last_event.seq; }
+    // —— 诊断信息（无需上车即可观察采集线程健康度）——
+    var dbg=document.getElementById('voiceDebug');
+    if(dbg){
+      var alive=d.collector_alive||0;
+      var age=alive?Math.max(0,Math.round(Date.now()/1000-alive)):null;
+      var st=d.last_st||{};
+      dbg.innerHTML='诊断：连接='+(conn?'是':'否')+' ｜ 线程存活='+(age===null?'未启动':age+'秒前')+
+        ' ｜ 累计边沿='+(d.total_edges||0)+
+        ' ｜ 最近状态 L='+(st.left_blinker?1:0)+' R='+(st.right_blinker?1:0)+' ACC='+(st.acc_enabled?1:0);
+      dbg.className='vdbg '+(conn&&age!==null&&age<10?'ok':'bad');
+    }
+    // —— 播放：首次轮询仅同步序号，不误播历史事件 ——
+    if(d.last_event){
+      if(!_voiceSynced){ _voiceSeq=d.last_event.seq; _voiceSynced=true; }
+      else if(_voiceOn && conn && d.last_event.seq>_voiceSeq){
+        _voiceSeq=d.last_event.seq;
+        var item=VOICE_TYPES.filter(function(x){return x.k===d.last_event.type;})[0];
+        if(item){ playEventAudio(item.k, item.text); flashVoice(item.label); }
+      }else{ _voiceSeq=d.last_event.seq; }
+    }
   }).catch(function(){});
 }
 function startVoice(){
