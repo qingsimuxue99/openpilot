@@ -1,6 +1,6 @@
 {
-  "version": "1.0.70",
-  "changelog": "修复语音互动必须点试听才响、且只响一次的体验问题：①新增全屏「🔊 点击启用语音播报」浮条，一次点击解锁整个会话（不必打开语音面板、不必挨个试听）；②speakTW 播报前先 speechSynthesis.resume()，修好移动端首次播完后静音的 bug；③保留任意点击自动解锁。轮询本就在页面加载时启动，无需打开面板。",
-  "tag": "v1.0.70",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.70/release/c3_toolbox.tar.gz"
+  "version": "1.0.71",
+  "changelog": "语音「零手动激活」大修：① 用合成语音队列+看门狗彻底修复「响一次后静音、后续不播报」；② 去掉强制「点击启用」浮条，改为首次任意交互自动解锁；③ 新增 PWA（可添加到主屏幕当独立 APP），独立模式下加载即自动播报、无需任何点击。",
+  "tag": "v1.0.71",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.71/release/c3_toolbox.tar.gz"
 }

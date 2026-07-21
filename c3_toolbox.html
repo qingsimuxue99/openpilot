@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>晚風的OP工具箱</title>
+<!-- PWA：可「添加到主屏幕」当作独立 APP 打开，独立模式下浏览器允许自动播放（无需点击即可播报） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="C3工具箱">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" href="/icon.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -1857,7 +1865,7 @@ function setVoiceEnabled(v){
   try{localStorage.setItem(VOICE_ON_KEY, v?'1':'0');}catch(e){}
   var s=document.getElementById('voiceSw'); if(s)s.checked=v;
   var st=document.getElementById('voiceStat'); if(st)st.textContent=v?'已开启':'已暂停';
-  refreshVoiceEnableBar();   // 开启后若尚未解锁音频，显示启用浮条
+  if(v && isStandalone()){ unlockAudio(); }   // 主屏 APP 模式：加载即解锁，无需任何动作
 }
 function loadVoicesTW(){
   if(!('speechSynthesis' in window))return;
@@ -1870,19 +1878,34 @@ function pickTWVoice(){
   var fem=tw.filter(function(v){return /female|女|mei|ting|hsiao|angela|sin|yue|taiwan|Google 台/i.test(v.name);});
   return fem[0]||tw[0]||null;
 }
+// 语音合成队列：修掉「响一次后静音」——iOS Safari 在定时器里连续 speak() 会被卡死，
+// 改成语音队列 + onend 串行 + 看门狗兜底，确保每次动作都播报且不会卡死。
+var _ttsQueue=[], _ttsBusy=false;
 function speakTW(text){
   if(!('speechSynthesis' in window))return;
+  _ttsQueue.push(text);
+  _pumpTTS();
+}
+function _pumpTTS(){
+  if(_ttsBusy) return;
+  if(!_ttsQueue.length) return;
+  _ttsBusy=true;
+  var text=_ttsQueue.shift();
   try{
-    // 移动端（尤其 iOS Safari）首次播报后 speechSynthesis 会进入 paused 状态，
-    // 后续非手势触发直接被卡死 → 必须先 resume() 才能继续播放
     if(speechSynthesis.paused) speechSynthesis.resume();
     var u=new SpeechSynthesisUtterance(text);
     u.lang='zh-TW';
     var v=pickTWVoice(); if(v)u.voice=v;
     u.pitch=1.15; u.rate=1.0;   // 略偏高亮，贴近少妇声线
+    var done=false;
+    function finish(){ if(done)return; done=true; _ttsBusy=false; clearTimeout(wd); setTimeout(_pumpTTS,30); }
     u.onstart=function(){ _audioUnlocked=true; hideVoiceEnableBar(); };
+    u.onend=finish;
+    u.onerror=finish;
     speechSynthesis.speak(u);
-  }catch(e){}
+    // 看门狗：若 onend 因浏览器异常永不触发，6s 后强制放行下一句，避免永久静音
+    var wd=setTimeout(finish, 6000);
+  }catch(e){ _ttsBusy=false; setTimeout(_pumpTTS,30); }
 }
 function playEventAudio(k, text){
   ensureAudioCtx();   // 解锁音频上下文，确保文件语音也能稳定播放
@@ -1904,7 +1927,8 @@ function playEventAudio(k, text){
   }
 }
 // 浏览器自动播放策略：定时器触发的播放可能被拦截，需在首次用户手势时解锁音频。
-// 提供「点击启用语音播报」浮条，一次点击解锁整个会话；同时任意页面点击也会解锁。
+// 设计为「零手动激活」：① 任意页面点击/触摸即自动解锁整个会话（不要求点特定按钮）；
+// ② 若以主屏 APP（PWA 独立模式）打开，加载即自动解锁，无需任何动作。
 var _audioUnlocked=false, _unlockBound=false, _audioCtx=null;
 function ensureAudioCtx(){
   try{
@@ -1922,7 +1946,6 @@ function unlockAudio(){
     var p=s.play(); if(p&&p.catch)p.catch(function(){});
   }catch(e){}
   try{ if('speechSynthesis' in window){ speechSynthesis.cancel(); var u0=new SpeechSynthesisUtterance(' '); u0.volume=0; speechSynthesis.speak(u0); } }catch(e){}
-  hideVoiceEnableBar();
 }
 function bindVoiceUnlock(){
   if(_unlockBound)return; _unlockBound=true;
@@ -1930,20 +1953,11 @@ function bindVoiceUnlock(){
   document.addEventListener('touchstart', unlockAudio, false);
   document.addEventListener('keydown', unlockAudio, false);
 }
-// 「点击启用语音播报」浮条：可见即代表尚未解锁，一次点击解锁整个会话
-function ensureVoiceEnableBar(){
-  var bar=document.getElementById('voiceEnableBar');
-  if(bar)return bar;
-  bar=document.createElement('div');
-  bar.id='voiceEnableBar';
-  bar.innerHTML='🔊 点击启用语音播报';
-  bar.onclick=function(){ unlockAudio(); };
-  document.body.appendChild(bar);
-  return bar;
-}
-function refreshVoiceEnableBar(){
-  var bar=ensureVoiceEnableBar();
-  if(_voiceOn && !_audioUnlocked){ bar.style.display='block'; } else { bar.style.display='none'; }
+// 是否以主屏 APP（PWA 独立模式）运行：此模式下浏览器允许自动播放，无需用户手势
+function isStandalone(){
+  try{ if(window.navigator.standalone) return true; }catch(e){}
+  try{ if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true; }catch(e){}
+  return false;
 }
 function setVoiceLight(id,on){var e=document.getElementById(id); if(e)e.className='vlight'+(on?' on':'');}
 function flashVoice(label){
@@ -1993,12 +2007,11 @@ function startVoice(){
 }
 function initVoice(){
   loadVoicesTW();
-  setVoiceEnabled(voiceEnabled());
-  refreshVoiceEnableBar();   // 页面加载即决定浮条是否显示（未解锁则提示一次点击）
+  setVoiceEnabled(voiceEnabled());   // 内部会在 PWA 独立模式下加载即解锁
   renderVoiceSlots();
   refreshVoiceRepl();
   startVoice();   // 全局监听，不依赖打开面板即可实时互动
-  bindVoiceUnlock();   // 注册首次手势解锁音频（解决定时器触发被自动播放拦截）
+  bindVoiceUnlock();   // 注册首次手势解锁音频（普通标签页首次任意点击即解锁）
 }
 function refreshVoiceRepl(){
   fetch('/api/voice/list').then(function(r){return r.json();}).then(function(d){
