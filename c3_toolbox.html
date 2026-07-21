@@ -1939,14 +1939,18 @@ function pollCarEvents(){
         ' ｜ 最近状态 L='+(st.left_blinker?1:0)+' R='+(st.right_blinker?1:0)+' ACC='+(st.acc_enabled?1:0);
       dbg.className='vdbg '+(conn&&age!==null&&age<10?'ok':'bad');
     }
-    // —— 播放：首次轮询仅同步序号，不误播历史事件 ——
+    // —— 播放：首次轮询仅同步序号，不误播历史事件；测试事件不受「连接」门控 ——
     if(d.last_event){
       if(!_voiceSynced){ _voiceSeq=d.last_event.seq; _voiceSynced=true; }
-      else if(_voiceOn && conn && d.last_event.seq>_voiceSeq){
-        _voiceSeq=d.last_event.seq;
-        var item=VOICE_TYPES.filter(function(x){return x.k===d.last_event.type;})[0];
-        if(item){ playEventAudio(item.k, item.text); flashVoice(item.label); }
-      }else{ _voiceSeq=d.last_event.seq; }
+      else {
+        var ev=d.last_event, evSeq=ev.seq||0, isTest=(ev.test===true);
+        // 真实事件需连接原车(conn)；测试事件(test_event注入)绕过连接门控，用于诊断采集线程
+        if(_voiceOn && evSeq>_voiceSeq && (conn || isTest)){
+          _voiceSeq=evSeq;
+          var item=VOICE_TYPES.filter(function(x){return x.k===ev.type;})[0];
+          if(item){ playEventAudio(item.k, item.text); flashVoice(item.label); }
+        } else { _voiceSeq=evSeq; }
+      }
     }
   }).catch(function(){});
 }
