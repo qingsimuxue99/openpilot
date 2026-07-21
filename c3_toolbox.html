@@ -521,6 +521,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
     <div class="cat-card" data-p="perception" onclick="go('perception')"><span class="cname">感知 🧊</span><span class="cbadge" id="bc-perception">—</span></div>
     <div class="cat-card" data-p="theme" onclick="go('theme')"><span class="cname">主题 🎨</span><span class="cbadge" id="bc-theme">—</span></div>
+    <div class="cat-card" data-p="lan" onclick="go('lan')"><span class="cname">局域网扫描 📡</span><span class="cbadge" id="bc-lan">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -825,6 +826,35 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
       </div>
     </div>
 
+    <!-- 局域网扫描 / 设备发现 -->
+    <div class="pnl" id="p-lan">
+      <div class="ph"><h2>局域网扫描 📡</h2><p>自动发现同网段设备，确认 C3 当前地址、排查平板是否在线</p></div>
+
+      <div class="cyber-card">
+        <div class="cc-head">
+          <div>
+            <div class="cc-title">C3 当前地址</div>
+            <div class="cc-sub" id="lanOwn">检测中…</div>
+          </div>
+          <button class="btn bp" onclick="loadLan()" style="font-size:12px;padding:7px 14px;flex-shrink:0">🔄 刷新</button>
+        </div>
+        <div class="cc-sec">
+          <div class="ct">本机 IP 与扫描网段</div>
+          <div class="ig" id="lanInfo"></div>
+        </div>
+        <div class="bs-note">每次开机 C3 的 IP 都会变。本页自动读出当前地址；点「扫描网段」可列出同网段所有在线设备，帮你确认平板/手机是否在同一网、端口是否可达——不用再手动猜 IP。</div>
+      </div>
+
+      <div class="cd">
+        <div class="ct">网段设备扫描</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <button class="btn bp" id="lanScanBtn" onclick="doScanLan()">🔍 扫描网段</button>
+          <span class="bs-info" id="lanScanStatus">未扫描</span>
+        </div>
+        <div id="lanDevices"></div>
+      </div>
+    </div>
+
 
   </div>
 </div>
@@ -848,6 +878,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
     <div class="mn" data-p="perception" onclick="go('perception')"><span class="mi">🧊</span><span class="mt">感知</span></div>
     <div class="mn" data-p="theme" onclick="go('theme')"><span class="mi">🎨</span><span class="mt">主题</span></div>
+    <div class="mn" data-p="lan" onclick="go('lan')"><span class="mi">📡</span><span class="mt">扫描</span></div>
   </div>
 </nav>
 
@@ -1279,11 +1310,74 @@ function onTabSwitch(id){
   else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id==='theme'){}
+  else if(id==='lan'){loadLan()}
   else if(id==='fav'){renderFav();}
   else if(id==='search'){focusSearch();}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
   // 每次切换标签都静默检查更新（无需手动点击）
   checkUpdate();
+}
+
+// === 局域网扫描 / 设备发现 ===
+function loadLan(){
+  fetch('/api/lan_info').then(function(r){return r.json()}).then(function(d){
+    var own=document.getElementById('lanOwn');
+    var info=document.getElementById('lanInfo');
+    if(d.ips&&d.ips.length){
+      own.innerHTML='<b>'+esc(d.ips.join(' , '))+'</b>';
+      var rows='';
+      d.ips.forEach(function(ip){
+        rows+='<div class="ii b"><div class="lb">IP</div><div class="vl">'+esc(ip)+'</div></div>';
+      });
+      (d.subnets||[]).forEach(function(s){
+        rows+='<div class="ii g"><div class="lb">扫描网段</div><div class="vl">'+esc(s+'.0/24')+'</div></div>';
+      });
+      info.innerHTML=rows;
+    }else{
+      own.textContent='未检测到 IP（请确认 C3 已连 Wi-Fi）';
+      info.innerHTML='';
+    }
+  }).catch(function(e){
+    var own=document.getElementById('lanOwn');if(own)own.textContent='读取失败';
+  });
+}
+
+function renderLanDevices(devices){
+  var box=document.getElementById('lanDevices');
+  if(!devices||!devices.length){box.innerHTML='<div class="bs-note">未发现其他在线设备（可能路由器开了 AP 隔离，或网段内只有 C3 自己）。</div>';return;}
+  var html='<div style="display:flex;font-size:12px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--rule)"><div style="flex:1.2">IP 地址</div><div style="flex:1.4">开放端口</div><div style="flex:1.2">识别</div></div>';
+  devices.forEach(function(d){
+    var tag=[];
+    if(d.is_self)tag.push('<span style="background:#1aab8a;color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">本机 C3</span>');
+    if(d.ports.indexOf(5588)>=0)tag.push('<span style="background:#3b82f6;color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">工具箱</span>');
+    if(d.ports.indexOf(5555)>=0||d.ports.indexOf(5037)>=0)tag.push('<span style="background:#8b5cf6;color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">安卓/ADB</span>');
+    if(d.ports.indexOf(80)>=0||d.ports.indexOf(8080)>=0)tag.push('<span style="background:#e08a2b;color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">Web</span>');
+    if(!tag.length)tag.push('<span style="background:#64748b;color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">在线</span>');
+    html+='<div style="display:flex;align-items:center;padding:8px;border-bottom:1px solid var(--rule);font-size:13px">'
+        +'<div style="flex:1.2;font-family:monospace">'+esc(d.ip)+'</div>'
+        +'<div style="flex:1.4;font-family:monospace;color:var(--muted)">'+(d.ports.join(', ')||'-')+'</div>'
+        +'<div style="flex:1.2;display:flex;gap:4px;flex-wrap:wrap">'+tag.join(' ')+'</div>'
+        +'</div>';
+  });
+  box.innerHTML=html;
+}
+
+function doScanLan(){
+  var btn=document.getElementById('lanScanBtn');
+  var st=document.getElementById('lanScanStatus');
+  var box=document.getElementById('lanDevices');
+  if(btn)btn.disabled=true;
+  if(st)st.textContent='扫描中…（约数秒）';
+  if(box)box.innerHTML='';
+  fetch('/api/scan_lan').then(function(r){return r.json()}).then(function(d){
+    if(btn)btn.disabled=false;
+    if(!d.success){if(st)st.textContent='扫描失败：'+(d.message||'');return;}
+    if(st)st.textContent='共发现 '+d.count+' 个在线设备（网段：'+(d.subnets||[]).join(', ')+'）';
+    renderLanDevices(d.devices);
+  }).catch(function(e){
+    if(btn)btn.disabled=false;
+    if(st)st.textContent='扫描异常：'+e;
+  });
 }
 
 

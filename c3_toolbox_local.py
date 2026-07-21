@@ -57,7 +57,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.72"
+VERSION = "1.0.73"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -1804,6 +1804,142 @@ def api_voice_import():
     except Exception as e:
         return jsonify({'success': False, 'message': '导入失败：%s' % e})
     return jsonify({'success': True, 'imported': imported, 'message': '已导入 %d 条语音' % imported})
+
+# ============= 局域网扫描 / 设备发现 =============
+# 纯 Python socket 扫描，不依赖 nmap；并发 + 整体超时，避免长时间阻塞请求线程。
+import socket as _lsocket
+
+SCAN_PORTS = [5588, 5555, 5037, 80, 22, 5050, 8080, 8000, 5000, 8888, 9000, 9090]
+
+
+def _get_own_ips():
+    """返回设备自身所有 IPv4 私网地址列表（优先 hostname -I，回退 ip addr）。"""
+    out = []
+    try:
+        raw = run_cmd("hostname -I 2>/dev/null")
+        for p in raw.split():
+            p = p.strip()
+            if re.match(r'^\d+\.\d+\.\d+\.\d+$', p):
+                out.append(p)
+    except Exception:
+        pass
+    if not out:
+        try:
+            raw = run_cmd("ip -4 addr show 2>/dev/null | grep -oP 'inet \\K[\\d.]+'")
+            for p in raw.split():
+                if p != '127.0.0.1' and re.match(r'^\d+\.\d+\.\d+\.\d+$', p):
+                    out.append(p)
+        except Exception:
+            pass
+    return out
+
+
+def _is_private(ip):
+    if ip.startswith('192.168.'):
+        return True
+    if ip.startswith('10.'):
+        return True
+    if ip.startswith('172.'):
+        b = ip.split('.')[1] if len(ip.split('.')) > 1 else '0'
+        try:
+            return 16 <= int(b) <= 31
+        except ValueError:
+            return False
+    return False
+
+
+def _own_subnets():
+    """返回本机私网地址对应的 /24 网段前缀列表，如 ['192.168.5']（去重保序）。"""
+    subs = []
+    seen = set()
+    for ip in _get_own_ips():
+        if _is_private(ip):
+            parts = ip.split('.')
+            if len(parts) == 4:
+                s = '.'.join(parts[:3])
+                if s not in seen:
+                    seen.add(s)
+                    subs.append(s)
+    return subs
+
+
+def _scan_lan(subnets, ports=None, per_host_timeout=0.15, overall_timeout=15):
+    """并发扫描给定网段下所有主机的开放端口，返回设备列表 [{ip,ports,is_self}]。"""
+    if ports is None:
+        ports = SCAN_PORTS
+    hosts = []
+    for s in subnets:
+        for i in range(1, 255):
+            hosts.append('%s.%d' % (s, i))
+    found = []
+    found_lock = threading.Lock()
+    stop = threading.Event()
+    deadline = time.time() + overall_timeout
+    own = set(_get_own_ips())
+
+    def worker(ip):
+        if stop.is_set():
+            return
+        open_ports = []
+        for pt in ports:
+            if stop.is_set():
+                break
+            try:
+                sk = _lsocket.socket(_lsocket.AF_INET, _lsocket.SOCK_STREAM)
+                sk.settimeout(per_host_timeout)
+                if sk.connect_ex((ip, pt)) == 0:
+                    open_ports.append(pt)
+                sk.close()
+            except Exception:
+                pass
+        if open_ports:
+            with found_lock:
+                found.append({'ip': ip, 'ports': sorted(open_ports)})
+
+    threads = []
+    for ip in hosts:
+        if time.time() > deadline:
+            stop.set()
+            break
+        t = threading.Thread(target=worker, args=(ip,))
+        t.daemon = True
+        t.start()
+        threads.append(t)
+        if len(threads) >= 80:
+            for tt in threads:
+                tt.join()
+            threads = []
+    for tt in threads:
+        tt.join()
+    for f in found:
+        f['is_self'] = f['ip'] in own
+    # 本机优先，其余按 IP 升序
+    found.sort(key=lambda x: (not x['is_self'], x['ip']))
+    return found
+
+
+@app.route('/api/lan_info')
+def api_lan_info():
+    """返回本机 IP 与可扫描网段，便于前端展示「C3 当前地址」并作为扫描依据。"""
+    ips = _get_own_ips()
+    subnets = _own_subnets()
+    return jsonify({'success': True, 'ips': ips, 'subnets': subnets, 'scan_ports': SCAN_PORTS})
+
+
+@app.route('/api/scan_lan', methods=['GET', 'POST'])
+def api_scan_lan():
+    """扫描本机所在私网网段，列出在线设备（IP + 开放端口）。
+    用途：①确认 C3 自身当前 IP（每次开机都变）；②排查平板/手机是否在同一网段、端口是否可达，
+    无需手动猜 IP。纯 Python socket 扫描，不依赖 nmap；并发 + 整体超时，避免长时间阻塞。"""
+    subnets = _own_subnets()
+    if not subnets:
+        return jsonify({'success': False, 'message': '未检测到私网地址（C3 可能未连接 Wi-Fi）', 'devices': [], 'subnets': []})
+    try:
+        devices = _scan_lan(subnets)
+        return jsonify({'success': True, 'subnets': subnets, 'count': len(devices), 'devices': devices})
+    except Exception as e:
+        return jsonify({'success': False, 'message': '扫描失败: %s' % e, 'devices': [], 'subnets': subnets})
+
 
 
 if __name__ == '__main__':

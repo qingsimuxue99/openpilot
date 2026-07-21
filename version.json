@@ -1,6 +1,6 @@
 {
-  "version": "1.0.72",
-  "changelog": "网页端语音互动 UI（侧边栏入口、底部导航、语音面板、合成语音队列及上传试听播放逻辑）已全部移除，仅保留后端 /api/car_events、/api/voice/* 接口供 C3XL语音助手 App 调用；网页端不再播放播报，由独立安卓 App 接管语音互动。",
-  "tag": "v1.0.72",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.72/release/c3_toolbox.tar.gz"
+  "version": "1.0.73",
+  "changelog": "工具箱新增「局域网扫描 / 设备发现」功能：自动读出 C3 当前 IP 与网段，一键扫描同网段在线设备（IP+开放端口）并标记本机/工具箱/安卓，帮你在开机 IP 变动后快速确认地址、排查平板是否同一网，无需手动猜 IP。",
+  "tag": "v1.0.73",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.73/release/c3_toolbox.tar.gz"
 }
