@@ -1,19 +1,19 @@
 {
   "app": "C3XL语音助手",
-  "version": "1.0.89",
-  "versionCode": 89,
-  "apk": "c3xl_app_v1.0.89.apk",
+  "version": "1.0.90",
+  "versionCode": 90,
+  "apk": "c3xl_app_v1.0.90.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "修复「点立即更新立马报错」崩溃（下载线程在 Activity 销毁后回调 UI 触发 IllegalStateException，加 isFinishing/isDestroyed guard + try-catch 兜底）；主页「启动播报/停止播报/悬浮工具箱」三个全宽按钮改为统一横向 3 列小卡片（图标+标题+副标题，赛博青绿主题）。含 v1.0.88 全部修复（悬浮窗修复+安装权限+图标+检测提速+mirror fallback）。",
+  "note": "主页排版优化：设置入口从底部挪到顶栏最右侧（文案改「设置」）；诊断信息+连接测试合并为左右两列单卡，删除底部冗余设置按钮，标题/状态点/padding 全部收紧，整体不再发挤。含 v1.0.89 全部修复（更新崩溃修复+3功能小卡片+悬浮窗+安装权限+图标+mirror fallback）。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.89/c3xl_app_v1.0.89.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.89/c3xl_app_v1.0.89.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.89.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.90/c3xl_app_v1.0.90.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.90/c3xl_app_v1.0.90.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.90.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.89/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.90/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
