@@ -1,9 +1,20 @@
 {
   "app": "C3XL语音助手",
-  "version": "1.0.86",
-  "versionCode": 86,
-  "apk": "c3xl_app_v1.0.86.apk",
+  "version": "1.0.87",
+  "versionCode": 87,
+  "apk": "c3xl_app_v1.0.87.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "修复「已给安装未知应用权限仍提示没权限」:Manifest补声明REQUEST_INSTALL_PACKAGES(Android8+不声明则系统开关对本App无效);安装前用canRequestPackageInstalls校验,未授权自动跳转本App设置页引导开启;两处安装入口(确认弹窗/设置页)的失败Dialog改为显示真实原因,「打开文件夹/文件管理器」路径也加权限校验。含v1.0.85检测提速。更换App图标为用户提供的赛博蓝方向盘+工具箱图(5套密度PNG:ic_launcher方形+ic_launcher_round圆形遮罩)"
+  "note": "修复悬浮窗启动崩溃(Binary XML file line #52):Service context无AppCompat主题,floating_window.xml里的?attr/selectableItemBackgroundBorderless(第49行)与app:tint(第31/52/61/70/93行)解析失败;改为@drawable/bg_float_btn_borderless(纯selector,无外方框ripple)与android:tint,彻底不依赖任何主题属性;Manifest同时给FloatingWindowService加android:theme双保险。新增mirror fallback:c3xl_version.json schema增mirrors字段(AppUpdater按序尝试jsdelivr→gh-proxy.com→Gitee等多个下载源,失败自动切下一个);gh-proxy.com是国内代理GitHub raw的镜像(实测HTTP 200),可解决jsdelivr对.apk不缓存301回墙问题;Gitee镜像https://gitee.com/qingsimuxue/c3toolbox/raw/v1.0.87/c3xl_app_v1.0.87.apk作为额外兜底,需先在Gitee绑定GitHub同步。含v1.0.86安装权限修复+图标+检测提速。",
+  "mirrors": {
+    "apk": [
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.87/c3xl_app_v1.0.87.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.87/c3xl_app_v1.0.87.apk",
+      "https://gitee.com/qingsimuxue/c3toolbox/raw/v1.0.87/c3xl_app_v1.0.87.apk"
+    ],
+    "manifest": [
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.87/c3xl_version.json",
+      "https://gitee.com/qingsimuxue/c3toolbox/raw/v1.0.87/c3xl_version.json"
+    ]
+  }
 }
