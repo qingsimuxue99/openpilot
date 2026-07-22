@@ -1,20 +1,20 @@
 {
   "app": "C3XL语音助手",
-  "version": "1.0.87",
-  "versionCode": 87,
-  "apk": "c3xl_app_v1.0.87.apk",
+  "version": "1.0.88",
+  "versionCode": 88,
+  "apk": "c3xl_app_v1.0.88.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "修复悬浮窗启动崩溃(Binary XML file line #52):Service context无AppCompat主题,floating_window.xml里的?attr/selectableItemBackgroundBorderless(第49行)与app:tint(第31/52/61/70/93行)解析失败;改为@drawable/bg_float_btn_borderless(纯selector,无外方框ripple)与android:tint,彻底不依赖任何主题属性;Manifest同时给FloatingWindowService加android:theme双保险。新增mirror fallback:c3xl_version.json schema增mirrors字段(AppUpdater按序尝试jsdelivr→gh-proxy.com→Gitee等多个下载源,失败自动切下一个);gh-proxy.com是国内代理GitHub raw的镜像(实测HTTP 200),可解决jsdelivr对.apk不缓存301回墙问题;Gitee镜像https://gitee.com/qingsimuxue/c3toolbox/raw/v1.0.87/c3xl_app_v1.0.87.apk作为额外兜底,需先在Gitee绑定GitHub同步。含v1.0.86安装权限修复+图标+检测提速。",
+  "note": "仅修正国内镜像地址:Gitee镜像账号由误写的qingsimuxue修正为正确的wyc-qsmx(c3xl_version.json的mirrors字段第3项改为https://gitee.com/wyc-qsmx/c3toolbox/raw/master/),App第3下载源(Gitee)现在对所有已装用户生效;APK功能与v1.0.87完全一致(悬浮窗修复+安装权限修复+图标+检测提速+mirror fallback框架)。含v1.0.87全部修复。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.87/c3xl_app_v1.0.87.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.87/c3xl_app_v1.0.87.apk",
-      "https://gitee.com/qingsimuxue/c3toolbox/raw/v1.0.87/c3xl_app_v1.0.87.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.88/c3xl_app_v1.0.88.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.88/c3xl_app_v1.0.88.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.88.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.87/c3xl_version.json",
-      "https://gitee.com/qingsimuxue/c3toolbox/raw/v1.0.87/c3xl_version.json"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.88/c3xl_version.json",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
 }
