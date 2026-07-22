@@ -1,19 +1,19 @@
 {
-  "app": "C3XL语音助手",
-  "version": "1.0.90",
-  "versionCode": 90,
-  "apk": "c3xl_app_v1.0.90.apk",
+  "app": "晚風的OP工具箱",
+  "version": "1.0.91",
+  "versionCode": 91,
+  "apk": "c3xl_app_v1.0.91.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "主页排版优化：设置入口从底部挪到顶栏最右侧（文案改「设置」）；诊断信息+连接测试合并为左右两列单卡，删除底部冗余设置按钮，标题/状态点/padding 全部收紧，整体不再发挤。含 v1.0.89 全部修复（更新崩溃修复+3功能小卡片+悬浮窗+安装权限+图标+mirror fallback）。",
+  "note": "全量统一软件内名称：所有用户可见的「C3XL语音助手 / C3XL诊断报告 / C3XL语音播报」改为「晚風的OP工具箱」（共11处：MainActivity 8处驻后台弹窗+剪贴板标签、VoiceService 3处通知栏+channel）。含 v1.0.90 全部优化（主页排版+设置入口挪顶栏+诊断/测试两列合并）。ssh 私钥一键部署在 install_c3_toolbox.sh 脚本中可用（--ssh=user@host --key=路径）。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.90/c3xl_app_v1.0.90.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.90/c3xl_app_v1.0.90.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.90.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.91/c3xl_app_v1.0.91.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.91/c3xl_app_v1.0.91.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.91.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.90/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.91/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
