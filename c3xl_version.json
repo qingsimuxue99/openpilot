@@ -1,19 +1,19 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.0.91",
-  "versionCode": 91,
-  "apk": "c3xl_app_v1.0.91.apk",
+  "version": "1.0.92",
+  "versionCode": 92,
+  "apk": "c3xl_app_v1.0.92.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "全量统一软件内名称：所有用户可见的「C3XL语音助手 / C3XL诊断报告 / C3XL语音播报」改为「晚風的OP工具箱」（共11处：MainActivity 8处驻后台弹窗+剪贴板标签、VoiceService 3处通知栏+channel）。含 v1.0.90 全部优化（主页排版+设置入口挪顶栏+诊断/测试两列合并）。ssh 私钥一键部署在 install_c3_toolbox.sh 脚本中可用（--ssh=user@host --key=路径）。",
+  "note": "新增 App 内「一键部署(SSH)」可视化页面：本地文件选择器选私钥、填 C3 的 host/用户、测试连接显状态、一键部署流式回显脚本5步进度+步骤进度条。配置持久化。ssh 私钥部署能力从纯脚本升级到 App 内可视化。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.91/c3xl_app_v1.0.91.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.91/c3xl_app_v1.0.91.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.91.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.92/c3xl_app_v1.0.92.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.92/c3xl_app_v1.0.92.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.92.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.91/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.92/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
