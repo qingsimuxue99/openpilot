@@ -1,9 +1,9 @@
 {
   "app": "C3XL语音助手",
-  "version": "1.0.84",
-  "versionCode": 84,
-  "apk": "c3xl_app_v1.0.84.apk",
+  "version": "1.0.86",
+  "versionCode": 86,
+  "apk": "c3xl_app_v1.0.86.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "修复 Android 14 上悬浮窗启动崩溃(MissingForegroundServiceTypeException):startForeground 改用 API 分支(API>=34 带 SPECIAL_USE 类型,API<34 老签名);onCreate+addView 全链路 try-catch 优雅停止不崩进程;windowManager 改可空防 onDestroy NPE"
+  "note": "修复「已给安装未知应用权限仍提示没权限」:Manifest补声明REQUEST_INSTALL_PACKAGES(Android8+不声明则系统开关对本App无效);安装前用canRequestPackageInstalls校验,未授权自动跳转本App设置页引导开启;两处安装入口(确认弹窗/设置页)的失败Dialog改为显示真实原因,「打开文件夹/文件管理器」路径也加权限校验。含v1.0.85检测提速。更换App图标为用户提供的赛博蓝方向盘+工具箱图(5套密度PNG:ic_launcher方形+ic_launcher_round圆形遮罩)"
 }
