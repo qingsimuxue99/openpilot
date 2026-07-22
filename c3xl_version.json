@@ -1,6 +1,6 @@
 {
-  "version": "1.0.77",
-  "versionCode": 77,
-  "apk": "c3xl_app_v1.0.77.apk",
-  "notes": "App v1.0.77：双坑修复——①下载完弹不出安装器（Android 11+ 包可见性：Manifest <queries> 补 application/vnd.android.package-archive + installApk 强绑系统安装器 + 新增 InstallLaunched/InstallFailed 状态机，不再卡死）；②在线更新拉到旧版（jsdelivr @latest 元数据延迟：改用 KNOWN_APP_TAGS 逐 tag 直查 manifest 取最新 versionCode，推上去即生效）"
+  "version": "1.0.78",
+  "versionCode": 78,
+  "apk": "c3xl_app_v1.0.78.apk",
+  "notes": "App v1.0.78：新增「蓝牙上车自动启动」——连上车机蓝牙自动拉起语音播报前台服务；设置页可开/关、按车机蓝牙名称过滤、断开时可选自动停止。Android 12+ 需授予「蓝牙」权限方可接收系统蓝牙广播。"
 }
