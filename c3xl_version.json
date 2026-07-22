@@ -1,6 +1,6 @@
 {
-  "version": "1.0.76",
-  "versionCode": 76,
-  "apk": "c3xl_app_v1.0.76.apk",
-  "notes": "App v1.0.76：修复竖屏主界面 cardOpenWeb（晚風的OP工具箱大卡片）覆盖 cardDiag（诊断信息）和 5 按钮的 ConstraintLayout 同源约束撞车 bug——将 cardDiag 的 constraintTop 从 @id/eventGrid 改为 @id/cardOpenWeb，使整个链条 eventGrid → cardOpenWeb → cardDiag → cardTest → btnStart → btnStop → rowActions → btnBattery 按预期垂直串联"
+  "version": "1.0.77",
+  "versionCode": 77,
+  "apk": "c3xl_app_v1.0.77.apk",
+  "notes": "App v1.0.77：双坑修复——①下载完弹不出安装器（Android 11+ 包可见性：Manifest <queries> 补 application/vnd.android.package-archive + installApk 强绑系统安装器 + 新增 InstallLaunched/InstallFailed 状态机，不再卡死）；②在线更新拉到旧版（jsdelivr @latest 元数据延迟：改用 KNOWN_APP_TAGS 逐 tag 直查 manifest 取最新 versionCode，推上去即生效）"
 }
