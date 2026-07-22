@@ -1,6 +1,6 @@
 {
-  "version": "1.0.82",
-  "versionCode": 82,
-  "apk": "c3xl_app_v1.0.82.apk",
-  "desc": "C3XL 晚風的OP工具箱 安卓语音助手：悬浮窗工具箱改为前台服务，划掉 App 后窗口持续驻留（常驻通知）；手动安装覆盖旧版即可"
+  "version": "1.0.83",
+  "versionCode": 83,
+  "apk": "c3xl_app_v1.0.83.apk",
+  "notes": "修复「下载完系统安装器不弹」：AppUpdater 拆分下载与安装两步，下载完成先弹『是否立即安装』二次确认 Dialog，用户点『立即安装』才调系统安装器；新增透明 InstallConfirmActivity 兜底无 callback 入口；安装失败时弹『打开文件管理器手动装』二级 Dialog；设置页同步改造"
 }
