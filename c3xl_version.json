@@ -1,19 +1,19 @@
 {
   "app": "C3XL语音助手",
-  "version": "1.0.88",
-  "versionCode": 88,
-  "apk": "c3xl_app_v1.0.88.apk",
+  "version": "1.0.89",
+  "versionCode": 89,
+  "apk": "c3xl_app_v1.0.89.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "仅修正国内镜像地址:Gitee镜像账号由误写的qingsimuxue修正为正确的wyc-qsmx(c3xl_version.json的mirrors字段第3项改为https://gitee.com/wyc-qsmx/c3toolbox/raw/master/),App第3下载源(Gitee)现在对所有已装用户生效;APK功能与v1.0.87完全一致(悬浮窗修复+安装权限修复+图标+检测提速+mirror fallback框架)。含v1.0.87全部修复。",
+  "note": "修复「点立即更新立马报错」崩溃（下载线程在 Activity 销毁后回调 UI 触发 IllegalStateException，加 isFinishing/isDestroyed guard + try-catch 兜底）；主页「启动播报/停止播报/悬浮工具箱」三个全宽按钮改为统一横向 3 列小卡片（图标+标题+副标题，赛博青绿主题）。含 v1.0.88 全部修复（悬浮窗修复+安装权限+图标+检测提速+mirror fallback）。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.88/c3xl_app_v1.0.88.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.88/c3xl_app_v1.0.88.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.88.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.89/c3xl_app_v1.0.89.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.89/c3xl_app_v1.0.89.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.89.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.88/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.89/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
