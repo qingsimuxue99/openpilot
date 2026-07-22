@@ -1,6 +1,9 @@
 {
-  "version": "1.0.83",
-  "versionCode": 83,
-  "apk": "c3xl_app_v1.0.83.apk",
-  "notes": "修复「下载完系统安装器不弹」：AppUpdater 拆分下载与安装两步，下载完成先弹『是否立即安装』二次确认 Dialog，用户点『立即安装』才调系统安装器；新增透明 InstallConfirmActivity 兜底无 callback 入口；安装失败时弹『打开文件管理器手动装』二级 Dialog；设置页同步改造"
+  "app": "C3XL语音助手",
+  "version": "1.0.84",
+  "versionCode": 84,
+  "apk": "c3xl_app_v1.0.84.apk",
+  "minSdk": 24,
+  "targetSdk": 34,
+  "note": "修复 Android 14 上悬浮窗启动崩溃(MissingForegroundServiceTypeException):startForeground 改用 API 分支(API>=34 带 SPECIAL_USE 类型,API<34 老签名);onCreate+addView 全链路 try-catch 优雅停止不崩进程;windowManager 改可空防 onDestroy NPE"
 }
