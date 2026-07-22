@@ -1,19 +1,19 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.0.93",
-  "versionCode": 93,
-  "apk": "c3xl_app_v1.0.93.apk",
+  "version": "1.0.94",
+  "versionCode": 94,
+  "apk": "c3xl_app_v1.0.94.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "悬浮窗升级为双层架构：第一层 App 面板（状态灯/启动播报/停止播报/打开网页版/设置/关闭），点击「晚風的OP工具箱」切换第二层网页版悬浮窗（WebView 自适应分辨率，支持返回/刷新/自适应缩放/关闭）。两层共用拖拽标题栏与右下角缩放手柄，尺寸持久化。",
+  "note": "悬浮窗第一层改为完整 App 主页（不再精简：事件卡片/诊断测试/一键播报/打开网页版/电池优化/设置全部保留，自适应显示）。主页顶部栏「设置」左侧新增「部署」按钮，一键直达 SSH 一键部署（私钥登录 comma C3，可视化 5 步部署）；主页与悬浮窗均可直接打开。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.93/c3xl_app_v1.0.93.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.93/c3xl_app_v1.0.93.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.93.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.94/c3xl_app_v1.0.94.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.94/c3xl_app_v1.0.94.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.94.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.93/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.94/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
