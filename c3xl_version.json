@@ -1,6 +1,6 @@
 {
-  "version": "1.0.79",
-  "versionCode": 79,
-  "apk": "c3xl_app_v1.0.79.apk",
-  "notes": "App v1.0.79：修复「在线更新检测」致命 bug——原逻辑主路径一拿到 @latest 返回的陈旧清单(长期停在1.0.74)就直接 return，导致 KNOWN_APP_TAGS 兜底(且漏了v1.0.78)成了死代码，旧版 App 永远判定「已是最新、无更新」。现改为 @latest + KNOWN_APP_TAGS 全部取候选、挑 versionCode 最大者；并发版铁律：每次必须把新 tag 追加进 KNOWN_APP_TAGS，否则该版本对旧 App 不可见。"
+  "version": "1.0.80",
+  "versionCode": 80,
+  "apk": "c3xl_app_v1.0.80.apk",
+  "notes": "App v1.0.80：在线更新检测改为「@latest + KNOWN_APP_TAGS 全取候选挑最大versionCode」，并新增「顺序探测自愈」——从当前最大版本号往后顺藤摸 v1.0.(n+1~3)，即便发版漏写 KNOWN_APP_TAGS 也能自动找到最新版，彻底杜绝「新版本对旧App不可见」。修复此前旧版永远判定「已是最新/无更新」的致命bug。"
 }
