@@ -1,0 +1,6 @@
+{
+  "version": "1.0.74",
+  "versionCode": 74,
+  "apk": "c3xl_app_v1.0.74.apk",
+  "notes": "自适应布局（竖屏单栏 / 横屏双栏）+ 在线更新改用 jsdelivr 国内镜像（不再依赖墙外的 GitHub API）+ 网页入口大卡片（晚風的OP工具箱）"
+}
