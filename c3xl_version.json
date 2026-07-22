@@ -1,6 +1,6 @@
 {
-  "version": "1.0.78",
-  "versionCode": 78,
-  "apk": "c3xl_app_v1.0.78.apk",
-  "notes": "App v1.0.78：新增「蓝牙上车自动启动」——连上车机蓝牙自动拉起语音播报前台服务；设置页可开/关、按车机蓝牙名称过滤、断开时可选自动停止。Android 12+ 需授予「蓝牙」权限方可接收系统蓝牙广播。"
+  "version": "1.0.79",
+  "versionCode": 79,
+  "apk": "c3xl_app_v1.0.79.apk",
+  "notes": "App v1.0.79：修复「在线更新检测」致命 bug——原逻辑主路径一拿到 @latest 返回的陈旧清单(长期停在1.0.74)就直接 return，导致 KNOWN_APP_TAGS 兜底(且漏了v1.0.78)成了死代码，旧版 App 永远判定「已是最新、无更新」。现改为 @latest + KNOWN_APP_TAGS 全部取候选、挑 versionCode 最大者；并发版铁律：每次必须把新 tag 追加进 KNOWN_APP_TAGS，否则该版本对旧 App 不可见。"
 }
