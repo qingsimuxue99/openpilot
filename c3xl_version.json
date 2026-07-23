@@ -1,19 +1,19 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.0.99",
-  "versionCode": 99,
-  "apk": "c3xl_app_v1.0.99.apk",
+  "version": "1.0.100",
+  "versionCode": 100,
+  "apk": "c3xl_app_v1.0.100.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "新增全局崩溃捕获器（CrashHandler + C3Application）：任何线程任何位置的未捕获异常都会写入 Android/data/com.c3toolbox.voiceapp/files/crash/crash_*.log 文件。装这个版本后点「启动语音」若再崩，用户可在文件管理器直接读到完整崩溃栈贴给开发者精确定位。同时保留 v1.0.98 的 onCreate/onInit/speak 三层 try/catch 兜底防御。",
+  "note": "根治「点启动语音闪退」：根因是 MainUiBinder 在子线程里直接调 TextView.setText 触发 CalledFromWrongThreadException。修复：updateStatusUi 函数内部加 runOnUi 自动重定向到主线程；网络诊断 Thread 里的 setTestRow/tvTestConclusion/showDetailedReport 整块用 runOnUi 包。同时保留 v1.0.98 的 onCreate/onInit/speak try/catch 兜底 + v1.0.99 的 CrashHandler 全局崩溃捕获器。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.99/c3xl_app_v1.0.99.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.99/c3xl_app_v1.0.99.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.99.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.100/c3xl_app_v1.0.100.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.100/c3xl_app_v1.0.100.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.100.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.99/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.100/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
