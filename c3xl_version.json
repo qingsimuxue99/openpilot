@@ -1,19 +1,19 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.0.97",
-  "versionCode": 97,
-  "apk": "c3xl_app_v1.0.97.apk",
+  "version": "1.0.98",
+  "versionCode": 98,
+  "apk": "c3xl_app_v1.0.98.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "新增「自定义播报文案 + 系统音色库」：设置页加 4 个文案输入框（左/右转向、ACC开/关，空则用默认文案）+ 音色库卡片（枚举本机 TTS 发音人下拉 + 试听按钮）；选中音色存 tts_voice 字段，运行时通过 ACTION_APPLY_VOICE 广播即时切换（无需重启服务）。VoiceService 关键路径 onCreate/onInit/speak 全部加 try/catch 兜底，registerReceiver 改用 androidx ContextCompat 兼容写法，避免任何初始化异常导致服务起不来。",
+  "note": "回滚 v1.0.97 的 TTS 音色库 + 自定义文案功能（用户决策），代码恢复到 v1.0.96 状态。仅保留 onCreate/onInit/speak 三层 try/catch 兜底防御作为「点启动语音闪退」的修复：任何 prefs/TTS/MediaPlayer 初始化异常都不会再让 VoiceService 起不来。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.97/c3xl_app_v1.0.97.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.97/c3xl_app_v1.0.97.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.97.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.98/c3xl_app_v1.0.98.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.98/c3xl_app_v1.0.98.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.98.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.97/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.98/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
