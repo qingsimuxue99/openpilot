@@ -1,19 +1,19 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.0.96",
-  "versionCode": 96,
-  "apk": "c3xl_app_v1.0.96.apk",
+  "version": "1.0.97",
+  "versionCode": 97,
+  "apk": "c3xl_app_v1.0.97.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "去除设置界面里的「设备一键部署」入口（删除设置页 cardDeploy、btnOpenDeploy 绑定及仅设置页用的 3 个字符串）。部署功能改为只保留在主页顶栏「部署」按钮（直达 SSH 一键部署 DeployActivity），主页与悬浮窗完整主页均可一键打开。SSH 私钥多格式支持（mwiede/jsch 0.2.26：PEM/PKCS#8/OpenSSH新格式/ED25519/ECDSA）保持不变。",
+  "note": "新增「自定义播报文案 + 系统音色库」：设置页加 4 个文案输入框（左/右转向、ACC开/关，空则用默认文案）+ 音色库卡片（枚举本机 TTS 发音人下拉 + 试听按钮）；选中音色存 tts_voice 字段，运行时通过 ACTION_APPLY_VOICE 广播即时切换（无需重启服务）。VoiceService 关键路径 onCreate/onInit/speak 全部加 try/catch 兜底，registerReceiver 改用 androidx ContextCompat 兼容写法，避免任何初始化异常导致服务起不来。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.96/c3xl_app_v1.0.96.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.96/c3xl_app_v1.0.96.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.96.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.97/c3xl_app_v1.0.97.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.97/c3xl_app_v1.0.97.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.97.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.96/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.97/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
