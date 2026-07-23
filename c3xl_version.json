@@ -1,19 +1,19 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.0.95",
-  "versionCode": 95,
-  "apk": "c3xl_app_v1.0.95.apk",
+  "version": "1.0.96",
+  "versionCode": 96,
+  "apk": "c3xl_app_v1.0.96.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "SSH 一键部署支持多种私钥格式：将 JSch 0.1.55 升级为 mwiede/jsch 0.2.26（同包名，代码零改动），现支持 PEM、PKCS#8、OpenSSH 新格式（BEGIN OPENSSH PRIVATE KEY）、ED25519、ECDSA（secp256/384/521）等。此前旧版仅支持传统 RSA/PEM，对现代 ssh-keygen 默认生成的 OpenSSH 新格式与 ed25519 会失败。",
+  "note": "去除设置界面里的「设备一键部署」入口（删除设置页 cardDeploy、btnOpenDeploy 绑定及仅设置页用的 3 个字符串）。部署功能改为只保留在主页顶栏「部署」按钮（直达 SSH 一键部署 DeployActivity），主页与悬浮窗完整主页均可一键打开。SSH 私钥多格式支持（mwiede/jsch 0.2.26：PEM/PKCS#8/OpenSSH新格式/ED25519/ECDSA）保持不变。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.95/c3xl_app_v1.0.95.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.95/c3xl_app_v1.0.95.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.95.apk"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.96/c3xl_app_v1.0.96.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.0.96/c3xl_app_v1.0.96.apk",
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.0.96.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.95/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.96/c3xl_version.json",
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
     ]
   }
