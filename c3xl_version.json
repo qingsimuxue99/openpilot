@@ -1,20 +1,20 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.1.4",
-  "versionCode": 105,
-  "apk": "c3xl_app_v1.1.4.apk",
+  "version": "1.1.5",
+  "versionCode": 106,
+  "apk": "c3xl_app_v1.1.5.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "完整备份与恢复、SSH 终端从网页工具箱迁移到 App：SSH 私钥登录 C3，备份停 openpilot 后 tar 打包 + md5 校验、SFTP 下载到手机，全程实时日志，根治网页版「备份包损坏缺失、恢复无进度」问题；终端改为 App 内交互式 PTY。网页工具箱仅保留终端与参数管理。",
+  "note": "修复 SSH 私钥连接：部署页选择私钥后立即校验，选中 .pub 公钥文件或无效私钥时直接提示「请选不带 .pub 的私钥」/「私钥无效或密码错误」，不再静默报 invalid privatekey；连接失败（Auth fail / 拒绝连接 / 超时 / 未知主机）改为中文可操作建议。构建 v1.1.5。",
   "mirrors": {
     "apk": [
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.1.4.apk",
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.4/c3xl_app_v1.1.4.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.1.4/c3xl_app_v1.1.4.apk"
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.1.5.apk",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.5/c3xl_app_v1.1.5.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.1.5/c3xl_app_v1.1.5.apk"
     ],
     "manifest": [
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json",
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.4/c3xl_version.json"
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.5/c3xl_version.json"
     ]
   }
 }
