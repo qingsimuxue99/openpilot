@@ -1,20 +1,20 @@
 {
   "app": "晚風的OP工具箱",
-  "version": "1.1.0",
-  "versionCode": 101,
-  "apk": "c3xl_app_v1.1.0.apk",
+  "version": "1.1.4",
+  "versionCode": 105,
+  "apk": "c3xl_app_v1.1.4.apk",
   "minSdk": 24,
   "targetSdk": 34,
-  "note": "根治「点启动语音闪退」（v1.0.100 未完全修好的部分）：根因是 MainUiBinder 在子线程里调 Toast.makeText 触发 Can't toast on a thread without Looper.prepare()。修复：启动语音 Thread 的 Toast + 测试事件 Thread 的 Toast 全部用 runOnUi 包。同时启用新版本号规则：1.Y.Z 格式，Z 逢 10 进位到 Y（1.1.0→1.1.10→1.2.0）。AppUpdater 探测逻辑改成同时支持旧格式 1.0.X 和新格式 1.Y.Z。",
+  "note": "完整备份与恢复、SSH 终端从网页工具箱迁移到 App：SSH 私钥登录 C3，备份停 openpilot 后 tar 打包 + md5 校验、SFTP 下载到手机，全程实时日志，根治网页版「备份包损坏缺失、恢复无进度」问题；终端改为 App 内交互式 PTY。网页工具箱仅保留终端与参数管理。",
   "mirrors": {
     "apk": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.0/c3xl_app_v1.1.0.apk",
-      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.1.0/c3xl_app_v1.1.0.apk",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.1.0.apk"
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v1.1.4.apk",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.4/c3xl_app_v1.1.4.apk",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot/v1.1.4/c3xl_app_v1.1.4.apk"
     ],
     "manifest": [
-      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.0/c3xl_version.json",
-      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json"
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.4/c3xl_version.json"
     ]
   }
 }
