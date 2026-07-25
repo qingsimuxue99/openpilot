@@ -1,8 +1,8 @@
 {
   "version": "1.1.8",
-  "versionCode": 108,
+  "versionCode": 109,
   "apk": "c3xl_app_v1.1.8.apk",
-  "note": "修复完整备份 tar 路径错误，备份/恢复支持 30/20 分钟长超时",
+  "note": "修复完整备份 tar 路径错误，备份/恢复支持 30/20 分钟长超时；修正 versionCode 与 1.1.7 撞号",
   "mirrors": {
     "apk": [
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v{version}.apk",
