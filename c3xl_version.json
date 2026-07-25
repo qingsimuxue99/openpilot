@@ -1,14 +1,18 @@
 {
-  "version": "1.1.7",
+  "version": "1.1.8",
   "versionCode": 108,
-  "apk": "c3xl_app_v1.1.7.apk",
-  "note": "修复备份/恢复命令执行失败：SSH 加保活+并发消费 stderr+等通道关闭再取退出码；备份/恢复/下载/上传均增加阶段进度条与文字",
-  "minVersionCode": 100,
+  "apk": "c3xl_app_v1.1.8.apk",
+  "note": "修复完整备份 tar 路径错误，备份/恢复支持 30/20 分钟长超时",
   "mirrors": {
     "apk": [
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v{version}.apk",
       "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v{version}/c3xl_app_v{version}.apk",
       "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot@v{version}/c3xl_app_v{version}.apk"
+    ],
+    "json": [
+      "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_version.json",
+      "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.8/c3xl_version.json",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/qingsimuxue99/openpilot@v1.1.8/c3xl_version.json"
     ]
   }
 }
