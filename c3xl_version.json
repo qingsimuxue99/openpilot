@@ -1,8 +1,8 @@
 {
-  "version": "1.1.6",
-  "versionCode": 107,
-  "apk": "c3xl_app_v1.1.6.apk",
-  "note": "修复备份/恢复页与终端 SSH 连接不稳定：连接重试+退避、全局忙锁防并发撞车、异常不再静默吞掉并显示真实错误",
+  "version": "1.1.7",
+  "versionCode": 108,
+  "apk": "c3xl_app_v1.1.7.apk",
+  "note": "修复备份/恢复命令执行失败：SSH 加保活+并发消费 stderr+等通道关闭再取退出码；备份/恢复/下载/上传均增加阶段进度条与文字",
   "minVersionCode": 100,
   "mirrors": {
     "apk": [
