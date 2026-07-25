@@ -1,8 +1,8 @@
 {
-  "version": "1.1.10",
-  "versionCode": 111,
-  "apk": "c3xl_app_v1.1.10.apk",
-  "note": "根治备份中途退出码 -1：删除备份命令里的 pkill -f manager.py（comma 设备 kill 主进程会触发看门狗重启/关停热点，瞬间掐断 SSH 会话）；改为在线打包（openpilot 继续运行）；tar 期间每 3 秒回传进度心跳，保证通道持续有数据不被静默掐断；恢复命令的 pkill 移到解压完成后（发出完成信号之后），避免开头断连",
+  "version": "1.1.11",
+  "versionCode": 112,
+  "apk": "c3xl_app_v1.1.11.apk",
+  "note": "新增备份后自动校验（解包比对文件数）：备份完成(md5 之后)用 tar -tzf 列出包内条目统计文件数，并与源目录 find 计数比对，日志明确打印『✓ 校验通过：备份包含 N 个文件，与源目录一致』或『⚠ 文件数不一致…』，一眼确认没缺文件。修复备份列表不刷新问题：此前 loadList() 在 setBusy(false) 之前调用、因 isBusy 提前 return，导致刚创建的备份包不显示、一直提示『暂无备份包』；现已先解除忙碌再刷新列表。",
   "mirrors": {
     "apk": [
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v{version}.apk",
