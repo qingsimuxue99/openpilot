@@ -1,8 +1,8 @@
 {
-  "version": "1.1.9",
-  "versionCode": 110,
-  "apk": "c3xl_app_v1.1.9.apk",
-  "note": "修复备份页连接失败（退出码 -1）：SshClient.getConfig 用户名空值回退与部署页一致（空→comma）；连接/备份失败时弹 Toast 显示真实错误；SSH 保活放宽至 30s×20 防长任务中途断连；备份命令透传 tar 真实退出码（C3XL_RC）便于排查",
+  "version": "1.1.10",
+  "versionCode": 111,
+  "apk": "c3xl_app_v1.1.10.apk",
+  "note": "根治备份中途退出码 -1：删除备份命令里的 pkill -f manager.py（comma 设备 kill 主进程会触发看门狗重启/关停热点，瞬间掐断 SSH 会话）；改为在线打包（openpilot 继续运行）；tar 期间每 3 秒回传进度心跳，保证通道持续有数据不被静默掐断；恢复命令的 pkill 移到解压完成后（发出完成信号之后），避免开头断连",
   "mirrors": {
     "apk": [
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v{version}.apk",
