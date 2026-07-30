@@ -70,6 +70,9 @@ typedef struct UIScene {
   bool map_on_left;
   uint64_t started_frame;
 
+  // DP Rainbow Path
+  bool dp_ui_rainbow = false;
+
   bool carrot_experimental_mode = false;
 
 } UIScene;

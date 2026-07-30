@@ -156,6 +156,8 @@ class UnifiedParams:
             "SideRelDistTime": 10,
             "SidevRelDistTime": 10,
             "SideRadarMinDist": 0,
+            "BlinkerTurnIntent": 0,
+            "BlinkerTurnIntentSpeed": 30,
             "AutoTurnInNotRoadEdge": 1,
             "ContinuousLaneChange": 1,
             "ContinuousLaneChangeCnt": 4,

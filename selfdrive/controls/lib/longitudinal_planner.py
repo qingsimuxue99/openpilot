@@ -285,7 +285,20 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     self.j_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC[:-1], self.mpc.j_solution)
 
     # TODO counter is only needed because radar is glitchy, remove once radar is gone
-    self.fcw = self.mpc.crash_cnt > 2 and not sm['carState'].standstill and not reset_state
+    # --- TTC-based early FCW (carrot VRU tuning) ---
+    # Independent of MPC: warn earlier when closing on any radar/model lead with low TTC.
+    # Catches "seen but reacts too late" cases. Does NOT help if leadOne is fully missing
+    # (model+radar both missed the target) -- that needs the vision VRU layer.
+    ttc_fcw = False
+    lead = sm['radarState'].leadOne
+    v_ego = sm['carState'].vEgo
+    if lead.status and not sm['carState'].standstill:
+      v_closing = -lead.vRel  # >0 means we are approaching the lead
+      if v_closing > 0.5 and v_ego > 3.0:
+        ttc = lead.dRel / v_closing
+        # night: 3.5s; day if too chatty: 2.5~3.0s
+        ttc_fcw = (ttc < 2.0) and (lead.dRel < 80.0)
+    self.fcw = ((self.mpc.crash_cnt > 1) or ttc_fcw) and not sm['carState'].standstill and not reset_state
     if self.fcw:
       cloudlog.info("FCW triggered")
 

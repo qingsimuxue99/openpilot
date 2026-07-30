@@ -245,6 +245,8 @@ class DesireHelper:
     self.driver_lane_change_delay = 0.0
     self.disableBlindSpot = False
     self.atc_bsd = BLINKER_NONE
+    self.blinker_turn_intent = 0
+    self.blinker_turn_intent_speed = 30
     #new
 
   def lane_change_audio(self, enable, turn_type, param=0):
@@ -400,6 +402,8 @@ class DesireHelper:
       self.blinkerMode = self.params.get_int("BlinkerMode")
       self.autoLaneChangeMinSpeed = self.params.get_int("AutoLaneChangeMinSpeed")
       self.disableBlindSpot = self.params.get_bool("DisableBlindSpot")
+      self.blinker_turn_intent = self.params.get_int("BlinkerTurnIntent")
+      self.blinker_turn_intent_speed = self.params.get_int("BlinkerTurnIntentSpeed")
       #new
     self.frame += 1
     lane_change_state = self.lane_change_state
@@ -901,8 +905,10 @@ class DesireHelper:
       self.lane_change_state = LaneChangeState.off
       self.lane_change_direction = LaneChangeDirection.none
       self.turn_direction = TurnDirection.none
-    elif ( (self.blinkerMode == 0 or not driver_desire_enabled or turn_left_right) and
-           desire_enabled and ((below_lane_change_speed and not carstate.standstill and self.enable_turn_desires) or self.turn_desire_state)): #激活转弯控制模式（并不走变道流程）
+    elif ( (self.blinkerMode == 0 or not driver_desire_enabled or turn_left_right
+           or (self.blinker_turn_intent and driver_desire_enabled)) and
+           desire_enabled and ((below_lane_change_speed and not carstate.standstill and self.enable_turn_desires) or self.turn_desire_state
+             or (self.blinker_turn_intent and driver_desire_enabled and v_ego < (self.blinker_turn_intent_speed * CV.KPH_TO_MS) and not carstate.standstill))): #激活转弯控制模式（并不走变道流程）
       if self.lane_change_state != LaneChangeState.off:
         print(f"---[{time.strftime('%H:%M:%S')}]Desire Turning")
         #if atc_desire_enabled and (fork_left_right or atc_left_right):

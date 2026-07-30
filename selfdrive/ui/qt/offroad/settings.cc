@@ -7,6 +7,25 @@
 
 #include <QDebug>
 #include <QProcess>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QDialog>
+#include <QVBoxLayout>
+#include <QPlainTextEdit>
+#include <QScrollBar>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QCheckBox>
+#include <QTouchEvent>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QFrame>
+#include <QMessageBox>
+#include <QFile>
+#include <QDir>
 
 #include "common/watchdog.h"
 #include "common/util.h"
@@ -17,6 +36,257 @@
 #include "selfdrive/ui/qt/widgets/scrollview.h"
 #include "selfdrive/ui/qt/offroad/developer_panel.h"
 #include "selfdrive/ui/qt/offroad/firehose.h"
+
+// ===== 通用触摸滚动: 直接驱动滚动条, 1:1 跟手(带阻尼), 零惯性; 同时接住 c3 的 QTouchEvent 与合成鼠标 =====
+// 用于自动调参记录覆盖层列表(自写滚动, 替代 ScrollView 的 QScroller —— 后者在 c3 eglfs 模态框下会卡死事件循环)。
+// 早期曾用官方 ScrollView(含 QScroller, 有惯性) 与自写 TouchListScroller(外部事件过滤器吞触摸, 会黑屏重启);
+// 现统一用 FollowScrollArea(见下方类定义), 在 viewportEvent 内 1:1 直接驱动滚动条, 稳定不崩。
+
+
+// ===== 自动调参记录: 把"学习记录"(changes.json)本身做成可勾选列表 =====
+// 每条记录后可勾选: 勾选=保留这条学习的新值, 取消勾选=回退到旧值。
+// 入口: featToggles 中的"自动调参记录"按钮(覆盖层 overlay, 非 QDialog, 避免 c3 竖屏崩溃)。
+// 列表滚动用自写 FollowScrollArea: 直接驱动滚动条, 1:1 跟手、零惯性、无 QScroller;
+// 关键: 在 QScrollArea::viewportEvent 内处理触摸(而非外部 installEventFilter 吞事件), c3 eglfs 下不崩。
+
+// 1:1 跟手滚动区: 仅对落在"非交互控件"区域的触摸做 1:1 平移; 落在复选框/按钮上的触摸放行给子控件(可正常点按)。
+class FollowScrollArea : public QScrollArea {
+  QPoint m_last;
+  bool m_drag = false;
+  bool m_pressedInteractive = false;
+public:
+  explicit FollowScrollArea(QWidget *content, QWidget *parent = nullptr) : QScrollArea(parent) {
+    setWidget(content);
+    setWidgetResizable(true);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setFrameShape(QFrame::NoFrame);
+    if (viewport()) viewport()->setStyleSheet("background-color:#141414;");
+    content->setStyleSheet("background-color:#141414;");
+  }
+  bool viewportEvent(QEvent *ev) override {
+    switch (ev->type()) {
+      case QEvent::TouchBegin: {
+        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
+        if (te->touchPoints().isEmpty()) return QScrollArea::viewportEvent(ev);
+        QPointF gp = te->touchPoints().first().screenPos();
+        QWidget *hit = widget() ? widget()->childAt(widget()->mapFromGlobal(gp.toPoint())) : nullptr;
+        m_pressedInteractive = (hit != nullptr && (hit->inherits("QAbstractButton") || hit->inherits("QAbstractSlider")));
+        m_drag = !m_pressedInteractive;
+        m_last = te->touchPoints().first().pos().toPoint();
+        return m_drag ? true : QScrollArea::viewportEvent(ev);
+      }
+      case QEvent::TouchUpdate: {
+        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
+        if (!m_drag || te->touchPoints().isEmpty()) return QScrollArea::viewportEvent(ev);
+        QPoint p = te->touchPoints().first().pos().toPoint();
+        int dy = p.y() - m_last.y();
+        m_last = p;
+        verticalScrollBar()->setValue(verticalScrollBar()->value() - dy);
+        return true;
+      }
+      case QEvent::TouchEnd:
+      case QEvent::TouchCancel:
+        m_drag = false; m_pressedInteractive = false;
+        return QScrollArea::viewportEvent(ev);
+      default:
+        return QScrollArea::viewportEvent(ev);
+    }
+  }
+};
+
+// 构建自动调参记录弹窗的可勾选列表（学习记录本身可勾选应用/撤销）
+// 直接把内容塞进 listW(一个 QWidget), 每次打开都重建以反映最新 json。
+static void rebuildAutoTuneList(QWidget *listW) {
+  // 清空旧内容
+  QLayout *old = listW->layout();
+  if (old) {
+    QLayoutItem *it;
+    while ((it = old->takeAt(0)) != nullptr) {
+      QWidget *w = it->widget();
+      delete it;
+      if (w) w->deleteLater();
+    }
+    delete old;
+  }
+  listW->setStyleSheet("background-color:#141414;");
+  QVBoxLayout *vbox = new QVBoxLayout(listW);
+  vbox->setContentsMargins(0, 0, 0, 0);
+  vbox->setSpacing(18);
+
+  // 读取学习记录
+  std::string txt = util::read_file("../carrot/carrot_learn_changes.json");
+  if (txt.empty()) txt = util::read_file("/data/openpilot/selfdrive/carrot/carrot_learn_changes.json");
+
+  QLabel *titleLbl = new QLabel("学习记录", listW);
+  titleLbl->setStyleSheet("font-size:36px; font-weight:bold; color:#ffffff; margin:4px 0 16px 0;");
+  vbox->addWidget(titleLbl);
+
+  if (txt.empty()) {
+    QLabel *empty = new QLabel("暂无学习记录\n\n开启[驾驶习惯自学习]并激活行驶一段时间后, 学习器每次真正调整参数都会在此留下一条记录。", listW);
+    empty->setWordWrap(true);
+    empty->setStyleSheet("font-size:32px; color:#bbbbbb;");
+    vbox->addWidget(empty);
+    return;
+  }
+
+  QJsonParseError perr;
+  QJsonDocument doc = QJsonDocument::fromJson(QByteArray(txt.data(), (int)txt.size()), &perr);
+  if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+    QLabel *err = new QLabel("记录文件解析失败: " + perr.errorString(), listW);
+    err->setStyleSheet("font-size:32px; color:#ff9f4a;");
+    vbox->addWidget(err);
+    return;
+  }
+
+  QJsonObject root = doc.object();
+  QJsonArray changes = root.value("changes").toArray();
+  int total_seq = root.value("seq").toInt(changes.size());
+  const int MAX_SHOW = 50;
+  int start = (changes.size() > MAX_SHOW) ? (changes.size() - MAX_SHOW) : 0;
+  int shown = (changes.size() > MAX_SHOW) ? MAX_SHOW : changes.size();
+
+  QLabel *statLbl = new QLabel(QString("当前 %1 条 / 历史累计 %2 次, 最新在前 (仅显示最近 %3 条)").arg(changes.size()).arg(total_seq).arg(shown), listW);
+  statLbl->setStyleSheet("font-size:32px; color:#8e8e93; margin-bottom:16px;");
+  vbox->addWidget(statLbl);
+
+  if (changes.isEmpty()) {
+    QLabel *empty = new QLabel("尚未发生参数调整。学习器只在确有足够证据时才会走一步。", listW);
+    empty->setWordWrap(true);
+    empty->setStyleSheet("font-size:32px; color:#bbbbbb;");
+    vbox->addWidget(empty);
+    return;
+  }
+
+  // 提示行
+  QLabel *hintLbl = new QLabel("勾选 = 保留这条学习的新值；取消勾选 = 回退到旧值；点[应用所选]生效", listW);
+  hintLbl->setWordWrap(true);
+  hintLbl->setStyleSheet("font-size:28px; color:#9a9a9a; margin-bottom:16px;");
+  vbox->addWidget(hintLbl);
+
+  // 按 JSON 顺序（旧→新）添加行，保证 findChildren 顺序稳定
+  for (int i = start; i < changes.size(); i++) {
+    QJsonObject e = changes.at(i).toObject();
+    int old_v = e.value("old").toInt();
+    int new_v = e.value("new").toInt();
+    int delta = e.value("delta").toInt(new_v - old_v);
+    QString color = delta > 0 ? "#8bd450" : "#ff9f4a";
+
+    QWidget *row = new QWidget(listW);
+    row->setStyleSheet("QWidget { background-color:transparent; }");
+    QHBoxLayout *hbox = new QHBoxLayout(row);
+    hbox->setContentsMargins(16, 18, 20, 18);
+    hbox->setSpacing(16);
+
+    QVBoxLayout *info = new QVBoxLayout();
+    info->setSpacing(8);
+
+    QLabel *line1 = new QLabel(QString("#%1 &nbsp; %2").arg(e.value("seq").toInt()).arg(e.value("time").toString()), row);
+    line1->setStyleSheet("font-size:30px; color:#dddddd;");
+    line1->setTextFormat(Qt::RichText);
+    info->addWidget(line1);
+
+    QLabel *line2 = new QLabel(
+      QString("%1: <b>%2 &rarr; %3</b> <span style='color:%4;'>(%5%6)</span>")
+        .arg(e.value("label").toString(e.value("param").toString()))
+        .arg(old_v).arg(new_v).arg(color).arg(delta > 0 ? "+" : "").arg(delta),
+      row);
+    line2->setStyleSheet("font-size:36px; color:#ffffff;");
+    line2->setTextFormat(Qt::RichText);
+    line2->setWordWrap(true);
+    info->addWidget(line2);
+
+    QLabel *line3 = new QLabel(QString("%1 &middot; 触发: %2").arg(e.value("reason").toString()).arg(e.value("trigger").toString("学习")), row);
+    line3->setStyleSheet("font-size:30px; color:#9a9a9a;");
+    line3->setWordWrap(true);
+    info->addWidget(line3);
+
+    hbox->addLayout(info, 1);
+
+    QCheckBox *cb = new QCheckBox(row);
+    cb->setChecked(true);
+    cb->setProperty("rec_param", e.value("param").toString());
+    cb->setProperty("rec_ctx", e.value("ctx").toString());
+    cb->setProperty("rec_old", old_v);
+    cb->setProperty("rec_new", new_v);
+    cb->setProperty("rec_seq", e.value("seq").toInt());
+    cb->setStyleSheet(
+      "QCheckBox { spacing:0; }"
+      "QCheckBox::indicator { width:40px; height:40px; border:3px solid #888; border-radius:9px; background:#3a3a3a; }"
+      "QCheckBox::indicator:checked { background:#2f9f5f; border:3px solid #2f9f5f; }"
+    );
+    hbox->addWidget(cb, 0, Qt::AlignVCenter);
+
+    vbox->addWidget(row);
+
+    // 记录之间的间隔线（不是文字下的线）
+    if (i < changes.size() - 1) {
+      QFrame *sep = new QFrame(listW);
+      sep->setFixedHeight(2);
+      sep->setStyleSheet("background-color:#333333;");
+      vbox->addWidget(sep);
+    }
+  }
+}
+
+
+// 二次确认重置自学习数据: 复用式安全浮层(非 QDialog, 防 c3 竖屏崩溃), 仅 hide 不删除。
+// 由"自动调参记录"弹窗内的[重置学习数据]按钮调用; 确认后同时关闭自动调参记录浮层以便数据刷新。
+static void showResetConfirm(QWidget *top) {
+  QWidget *ov = top->findChild<QWidget*>("learn_reset_confirm");
+  if (!ov) {
+    ov = new QWidget(top);
+    ov->setObjectName("learn_reset_confirm");
+    ov->setGeometry(top->rect());
+    ov->setStyleSheet(R"(
+      QWidget#learn_reset_confirm { background-color: rgba(0,0,0,0.85); }
+      QWidget#reset_panel { background-color: #241a1a; border: 3px solid #c0392b; border-radius: 28px; }
+      QLabel { color: white; }
+      QLabel#r_title { font-size: 50px; font-weight: bold; }
+      QLabel#r_body { font-size: 31px; }
+      QPushButton { height: 110px; font-size: 42px; color: white; border-radius: 18px; }
+      QPushButton#r_cancel { background-color: #393939; }
+      QPushButton#r_cancel:pressed { background-color: #4a4a4a; }
+      QPushButton#r_ok { background-color: #c0392b; }
+      QPushButton#r_ok:pressed { background-color: #a93226; }
+    )");
+    QWidget *panel = new QWidget(ov);
+    panel->setObjectName("reset_panel");
+    int m = 90;
+    panel->setFixedSize(top->width() - 2 * m, top->height() - 2 * m);
+    panel->move(m, m);
+    QVBoxLayout *vb = new QVBoxLayout(panel);
+    vb->setContentsMargins(44, 44, 44, 44);
+    vb->setSpacing(28);
+    QLabel *t = new QLabel("确认重置自学习数据？", panel);
+    t->setObjectName("r_title"); t->setAlignment(Qt::AlignCenter);
+    QLabel *b = new QLabel(
+      "将执行以下不可撤销操作:\n"
+      "• 所有已学习的参数偏移恢复到开启学习前的基线值\n"
+      "• 清空全部学习记录(含弯道/跟车等分桶数据)\n"
+      "• 需重新驾驶一段时间才会再次学习\n\n"
+      "如只是想微调某个参数, 请直接改对应旋钮, 不必整体重置。", panel);
+    b->setObjectName("r_body"); b->setWordWrap(true);
+    QPushButton *cancel = new QPushButton("取消", panel); cancel->setObjectName("r_cancel");
+    QPushButton *ok = new QPushButton("确定重置", panel); ok->setObjectName("r_ok");
+    QHBoxLayout *hb = new QHBoxLayout(); hb->setSpacing(24);
+    hb->addWidget(cancel); hb->addWidget(ok);
+    vb->addWidget(t);
+    vb->addWidget(b, 1);
+    vb->addLayout(hb);
+    auto closeConfirm = [ov, top]() { ov->hide(); if (top) { top->raise(); top->activateWindow(); } };
+    QObject::connect(cancel, &QPushButton::clicked, closeConfirm);
+    QObject::connect(ok, &QPushButton::clicked, [=]() {
+      Params().put("CarrotLearningReset", "1");
+      ov->hide();
+      if (QWidget *at = top->findChild<QWidget*>("autotune_overlay")) at->hide();
+      if (top) { top->raise(); top->activateWindow(); }
+    });
+  }
+  ov->setGeometry(top->rect());
+  ov->show();
+  ov->raise();
+}
 
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // param, title, desc, icon
@@ -183,83 +453,37 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
 
   // power buttons
   QHBoxLayout* power_layout = new QHBoxLayout();
-  power_layout->setSpacing(30);
+  power_layout->setSpacing(18);
 
   QPushButton* reboot_btn = new QPushButton(tr("重启"));
   reboot_btn->setObjectName("reboot_btn");
-  power_layout->addWidget(reboot_btn);
+  power_layout->addWidget(reboot_btn, 1);
   QObject::connect(reboot_btn, &QPushButton::clicked, this, &DevicePanel::reboot);
   //차선캘리
   QPushButton *reset_CalibBtn = new QPushButton(tr("重新校准"));
   reset_CalibBtn->setObjectName("reset_CalibBtn");
-  power_layout->addWidget(reset_CalibBtn);
+  power_layout->addWidget(reset_CalibBtn, 1);
   QObject::connect(reset_CalibBtn, &QPushButton::clicked, this, &DevicePanel::calibration);
 
   QPushButton* poweroff_btn = new QPushButton(tr("关机"));
   poweroff_btn->setObjectName("poweroff_btn");
-  power_layout->addWidget(poweroff_btn);
+  power_layout->addWidget(poweroff_btn, 1);
   QObject::connect(poweroff_btn, &QPushButton::clicked, this, &DevicePanel::poweroff);
+
+  QPushButton* default_btn = new QPushButton(tr("恢复默认"));
+  default_btn->setObjectName("default_btn");
+  power_layout->addWidget(default_btn, 1);
+  QObject::connect(default_btn, &QPushButton::clicked, [&]() {
+    if (ConfirmationDialog::confirm(tr("恢复为默认设置？"), tr("是"), this)) {
+      QTimer::singleShot(1000, []() {
+        Params().putInt("SoftRestartTriggered", 2);
+      });
+    }
+  });
 
   if (false && !Hardware::PC()) {
       connect(uiState(), &UIState::offroadTransition, poweroff_btn, &QPushButton::setVisible);
   }
-
-  addItem(power_layout);
-
-  QHBoxLayout* init_layout = new QHBoxLayout();
-  init_layout->setSpacing(30);
-
-  QPushButton* init_btn = new QPushButton(tr("Git 拉取 & 重启"));
-  init_btn->setObjectName("init_btn");
-  init_layout->addWidget(init_btn);
-  //QObject::connect(init_btn, &QPushButton::clicked, this, &DevicePanel::reboot);
-  QObject::connect(init_btn, &QPushButton::clicked, [&]() {
-    if (ConfirmationDialog::confirm(tr("执行 Git 拉取 & 重启？"), tr("是"), this)) {
-      QString cmd =
-        "bash -c 'cd /data/openpilot && "
-        "git fetch && "
-        "if git status -uno | grep -q \"Your branch is behind\"; then "
-        "git pull && reboot; "
-        "else "
-        "echo \"Already up to date.\"; "
-        "fi'";
-
-      if (!QProcess::startDetached(cmd)) {
-        ConfirmationDialog::alert(tr("启动更新过程失败。"), this);
-      }
-      else {
-        ConfirmationDialog::alert(tr("更新过程已启动。如果有更新，设备将重启。"), this);
-      }
-    }
-    });
-
-  QPushButton* default_btn = new QPushButton(tr("恢复默认"));
-  default_btn->setObjectName("default_btn");
-  init_layout->addWidget(default_btn);
-  //QObject::connect(default_btn, &QPushButton::clicked, this, &DevicePanel::poweroff);
-  QObject::connect(default_btn, &QPushButton::clicked, [&]() {
-    if (ConfirmationDialog::confirm(tr("恢复为默认设置？"), tr("是"), this)) {
-      //emit parent->closeSettings();
-      QTimer::singleShot(1000, []() {
-        printf("恢复为默认设置\n");
-        Params().putInt("SoftRestartTriggered", 2);
-        printf("恢复为默认设置完成\n");
-        });
-    }
-    });
-
-  QPushButton* remove_mapbox_key_btn = new QPushButton(tr("移除 Mapbox Key"));
-  remove_mapbox_key_btn->setObjectName("remove_mapbox_key_btn");
-  init_layout->addWidget(remove_mapbox_key_btn);
-  QObject::connect(remove_mapbox_key_btn, &QPushButton::clicked, [&]() {
-    if (ConfirmationDialog::confirm(tr("移除 Mapbox Key？"), tr("是"), this)) {
-      QTimer::singleShot(1000, []() {
-        Params().put("MapboxPublicKey", "");
-        Params().put("MapboxSecretKey", "");
-        });
-    }
-    });
-
 
   setStyleSheet(R"(
     #reboot_btn { height: 120px; border-radius: 15px; background-color: #2CE22C; }
@@ -268,14 +492,10 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
     #reset_CalibBtn:pressed { background-color: #FF2424; }
     #poweroff_btn { height: 120px; border-radius: 15px; background-color: #E22C2C; }
     #poweroff_btn:pressed { background-color: #FF2424; }
-    #init_btn { height: 120px; border-radius: 15px; background-color: #2C2CE2; }
-    #init_btn:pressed { background-color: #2424FF; }
     #default_btn { height: 120px; border-radius: 15px; background-color: #BDBDBD; }
     #default_btn:pressed { background-color: #A9A9A9; }
-    #remove_mapbox_key_btn { height: 120px; border-radius: 15px; background-color: #BDBDBD; }
-    #remove_mapbox_key_btn:pressed { background-color: #A9A9A9; }
   )");
-  addItem(init_layout);
+  addItem(power_layout);
 
   pair_device = new ButtonControl(tr("Pair Device"), tr("PAIR"),
                                   tr("Pair your device with comma connect (connect.comma.ai) and claim your comma prime offer."));
@@ -291,46 +511,6 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
                                    tr("Preview the driver facing camera to ensure that driver monitoring has good visibility. (vehicle must be off)"));
   connect(dcamBtn, &ButtonControl::clicked, [=]() { emit showDriverView(); });
   addItem(dcamBtn);
-
-  auto retrainingBtn = new ButtonControl(tr("Review Training Guide"), tr("REVIEW"), tr("Review the rules, features, and limitations of openpilot"));
-  connect(retrainingBtn, &ButtonControl::clicked, [=]() {
-    if (ConfirmationDialog::confirm(tr("Are you sure you want to review the training guide?"), tr("Review"), this)) {
-      emit reviewTrainingGuide();
-    }
-  });
-  addItem(retrainingBtn);
-
-  auto statusCalibBtn = new ButtonControl(tr("Calibration Status"), tr("SHOW"), "");
-  connect(statusCalibBtn, &ButtonControl::showDescriptionEvent, this, &DevicePanel::updateCalibDescription);
-  addItem(statusCalibBtn);
-
-  std::string calib_bytes = params.get("CalibrationParams");
-  if (!calib_bytes.empty()) {
-    try {
-      AlignedBuffer aligned_buf;
-      capnp::FlatArrayMessageReader cmsg(aligned_buf.align(calib_bytes.data(), calib_bytes.size()));
-      auto calib = cmsg.getRoot<cereal::Event>().getLiveCalibration();
-      if (calib.getCalStatus() != cereal::LiveCalibrationData::Status::UNCALIBRATED) {
-        double pitch = calib.getRpyCalib()[1] * (180 / M_PI);
-        double yaw = calib.getRpyCalib()[2] * (180 / M_PI);
-        QString position = QString("%2 %1° %4 %3°")
-                           .arg(QString::number(std::abs(pitch), 'g', 1), pitch > 0 ? "↓" : "↑",
-                                QString::number(std::abs(yaw), 'g', 1), yaw > 0 ? "←" : "→");
-        params.put("DevicePosition", position.toStdString());
-      }
-    } catch (kj::Exception) {
-      qInfo() << "invalid CalibrationParams";
-    }
-  }
-
-  if (Hardware::TICI()) {
-    auto regulatoryBtn = new ButtonControl(tr("Regulatory"), tr("VIEW"), "");
-    connect(regulatoryBtn, &ButtonControl::clicked, [=]() {
-      const std::string txt = util::read_file("../assets/offroad/fcc.html");
-      ConfirmationDialog::rich(QString::fromStdString(txt), this);
-    });
-    addItem(regulatoryBtn);
-  }
 
   auto translateBtn = new ButtonControl(tr("Change Language"), tr("CHANGE"), "");
   connect(translateBtn, &ButtonControl::clicked, [=]() {
@@ -355,7 +535,6 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
       }
     }
     translateBtn->setEnabled(true);
-    statusCalibBtn->setEnabled(true);
   });
 
 }
@@ -601,7 +780,8 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 }
 
 
-#include <QScroller>
+#include <QTouchEvent>
+#include <QMouseEvent>
 #include <QListWidget>
 
 static QStringList get_list(const char* path) {
@@ -679,9 +859,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     updateButtonStyles();
   });
 
-  QPushButton* path_btn = new QPushButton(tr("轨迹"));
-  path_btn->setObjectName("path_btn");
-  QObject::connect(path_btn, &QPushButton::clicked, this, [this]() {
+  QPushButton* feat_btn = new QPushButton(tr("功能"));
+  feat_btn->setObjectName("feat_btn");
+  QObject::connect(feat_btn, &QPushButton::clicked, this, [this]() {
     this->currentCarrotIndex = 6;
     this->togglesCarrot(6);
     updateButtonStyles();
@@ -696,7 +876,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   select_layout->addWidget(speed_btn);
   select_layout->addWidget(latLong_btn);
   select_layout->addWidget(disp_btn);
-  select_layout->addWidget(path_btn);
+  select_layout->addWidget(feat_btn);
   carrotLayout->addLayout(select_layout, 0);
 
   QWidget* toggles = new QWidget();
@@ -798,6 +978,12 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new CValueControl("ShowRouteInfo", "路线信息", "0:无,1:显示", 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowPlotMode", "调试图表", "", 0, 10, 1));
   dispToggles->addItem(new CValueControl("ShowCustomBrightness", "亮度比例", "", 0, 100, 10));
+  dispToggles->addItem(new CValueControl("ShowPathColorCruiseOff", "轨迹颜色：未开启巡航", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
+  dispToggles->addItem(new CValueControl("ShowPathMode", "轨迹模式：无车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
+  dispToggles->addItem(new CValueControl("ShowPathColor", "轨迹颜色：无车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
+  dispToggles->addItem(new CValueControl("ShowPathModeLane", "轨迹模式：有车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
+  dispToggles->addItem(new CValueControl("ShowPathColorLane", "轨迹颜色：有车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
+  dispToggles->addItem(new CValueControl("ShowPathWidth", "轨迹宽度比例(100%)", "", 10, 200, 10));
 
   //dispToggles->addItem(new CValueControl("ShowHudMode", "Display Mode", "0:Frog,1:APilot,2:Bottom,3:Top,4:Left,5:Left-Bottom", 0, 5, 1));
   //dispToggles->addItem(new CValueControl("ShowSteerRotate", "Handle rotate", "0:None,1:Rotate", 0, 1, 1));
@@ -809,13 +995,184 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   //dispToggles->addItem(new CValueControl("ShowGapInfo", "GAP Info", "0:None,1:Display", -1, 1, 1));
   //dispToggles->addItem(new CValueControl("ShowDmInfo", "DM Info", "0:None,1:Display,-1:Disable(Reboot)", -1, 1, 1));
 
-  pathToggles = new ListWidget(this);
-  pathToggles->addItem(new CValueControl("ShowPathColorCruiseOff", "轨迹颜色：未开启巡航", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
-  pathToggles->addItem(new CValueControl("ShowPathMode", "轨迹模式：无车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
-  pathToggles->addItem(new CValueControl("ShowPathColor", "轨迹颜色：无车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
-  pathToggles->addItem(new CValueControl("ShowPathModeLane", "轨迹模式：有车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
-  pathToggles->addItem(new CValueControl("ShowPathColorLane", "轨迹颜色：有车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
-  pathToggles->addItem(new CValueControl("ShowPathWidth", "轨迹宽度比例(100%)", "", 10, 200, 10));
+  featToggles = new ListWidget(this);
+  // 学习状态实时显示: 读取 carrot_learner.py 写入的 CarrotLearningStatus(仅系统激活后才会更新)
+  QLabel *learnStatusLbl = new QLabel(this);
+  learnStatusLbl->setObjectName("learnStatusLbl");
+  learnStatusLbl->setWordWrap(true);
+  learnStatusLbl->setStyleSheet("QLabel { color:#cfcfcf; font-size:26px; padding:8px 16px; background-color:transparent; }");
+  learnStatusLbl->setText("学习状态: 读取中…");
+  featToggles->addItem(learnStatusLbl);
+  {
+    QTimer *stTimer = new QTimer(this);
+    QObject::connect(stTimer, &QTimer::timeout, [learnStatusLbl]() {
+      std::string v = Params().get("CarrotLearningStatus");
+      QString txt = v.empty() ? QString("未运行/无数据") : QString::fromStdString(v);
+      learnStatusLbl->setText("学习状态: " + txt);
+    });
+    stTimer->start(1500);
+  }
+  featToggles->addItem(new ParamControl("CarrotLearningEnabled", tr("驾驶习惯自学习"), tr("基于奖励/惩罚机制, 在行驶中根据您的踩油门/踩刹车/接管等行为, 自动微调跟车距离、加速性、舒适制动、停车距离等参数, 使其贴合您的驾驶习惯。仅在系统激活时学习, 所有参数均在安全范围内平缓调整。"), "", this));
+  featToggles->addItem(new CValueControl("CarrotLearningRate", "自学习强度(5)", "学习/调整的速度, 越大收敛越快但越激进, 越小越稳健。范围1-10, 推荐5", 1, 10, 1));
+  featToggles->addItem(new CValueControl("CarrotLearningCurve", "弯道自学习(1)", "0:关闭, 1:开启。开启后在过弯中根据您的踩油门/踩刹车行为自动微调弯道降速的横向加速度系数(普通路/高速分别学习): 弯中踩刹车=进弯太快->多降速; 弯中踩油门=降速太肉->少降速。仅在总开关[驾驶习惯自学习]开启时生效", 0, 1, 1));
+  featToggles->addItem(new CValueControl("CarrotLearningSteer", "转向手感自学习(1)", "0:关闭, 1:开启。根据方向盘行为自动微调转向松紧(横向MPC转向速率代价): 直道方向盘反复小摆(画龙)=太灵敏->更平顺; 您同向扶盘帮转=转得太肉->更灵敏。不触碰转向比等物理标定(系统已自学), 仅在总开关[驾驶习惯自学习]开启时生效", 0, 1, 1));
+  // 自学习一键重置: 改成"按钮 + 二次确认浮层", 既清楚又防误触
+  // 确认后才置 CarrotLearningReset=1, 由 carrot_learner.py 检测并执行重置(自动归零, 并在学习记录留一条"一键重置")
+  // 注意: 不用 QMessageBox(它是 QDialog 子类, c3 上会锁竖屏崩溃); 沿用学习记录浮层的安全模式(只 hide 不复删除)
+  // 自学习重置已移入"自动调参记录"弹窗: 由该弹窗内[重置学习数据]按钮触发 showResetConfirm 二次确认(见文件下方静态函数)。
+  // 自动调参记录: 把学习记录本身做成可勾选列表(勾选=保留新值, 取消=回退旧值), 底部并列四个操作按钮。
+  // 覆盖层 overlay(非 QDialog, 避免 c3 竖屏崩溃); 列表滚动用自写 FollowScrollArea(1:1 跟手、零惯性, 不用 QScroller, c3 不崩)。
+  auto tuneBtn = new ButtonControl("自动调参记录", "查看",
+    "查看自学习生成的参数调整记录。每条记录后可勾选: 勾选=保留这条学习的新值, 取消勾选=回退到旧值。点[应用所选]后由学习器生效。底部[重置学习数据]可一键清空。");
+  connect(tuneBtn, &ButtonControl::clicked, [=]() {
+    QWidget *top = this->window();
+    QWidget *overlay = top->findChild<QWidget*>("autotune_overlay");
+    QWidget *listW = nullptr;
+    if (overlay) {
+      listW = overlay->findChild<QWidget*>("autotune_list");
+      if (listW) rebuildAutoTuneList(listW);
+      overlay->setGeometry(top->rect());
+      overlay->show();
+      overlay->raise();
+      return;
+    }
+    // 用覆盖层 widget 而非 QDialog: c3 上 QDialog 会被 Android 窗口管理器当作独立 Activity 弹出,
+    // 方向锁成竖屏、尺寸受限 -> UI 看门狗重启。overlay 铺满全屏从根上消除旋转/尺寸受限与崩溃。
+    overlay = new QWidget(top);
+    overlay->setObjectName("autotune_overlay");
+    overlay->setGeometry(top->rect());
+    overlay->setStyleSheet(R"(
+      QWidget#autotune_overlay { background-color: rgba(0,0,0,0.85); }
+      QWidget#autotune_panel { background-color: #1e1e1e; border-radius: 28px; }
+    )");
+
+    QWidget *panel = new QWidget(overlay);
+    panel->setObjectName("autotune_panel");
+    int margin = 60;
+    panel->setFixedSize(top->width() - 2 * margin, top->height() - 2 * margin);
+    panel->move(margin, margin);
+
+    QVBoxLayout *vbox = new QVBoxLayout(panel);
+    vbox->setContentsMargins(36, 36, 36, 36);
+    vbox->setSpacing(20);
+
+    QLabel *titleLbl = new QLabel("自动调参记录", panel);
+    titleLbl->setAlignment(Qt::AlignCenter);
+    titleLbl->setStyleSheet("font-size:36px; font-weight:bold; color:white;");
+    vbox->addWidget(titleLbl);
+
+    QWidget *listWgt = new QWidget();
+    listWgt->setObjectName("autotune_list");
+    rebuildAutoTuneList(listWgt);
+    FollowScrollArea *sv = new FollowScrollArea(listWgt, panel);
+    sv->setStyleSheet("background-color:#141414; border-radius:12px;");
+    vbox->addWidget(sv, 1);
+
+    // 底部按钮区: 全选 / 应用所选 / 关闭 / 重置学习数据，四个按钮平均宽度并列一排
+    QHBoxLayout *btnRow = new QHBoxLayout();
+    btnRow->setSpacing(20);
+
+    QPushButton *selAllBtn = new QPushButton("全选", panel);
+    selAllBtn->setStyleSheet("height:110px; font-size:34px; background-color:#2f4f7f; color:white; border-radius:18px;");
+    QObject::connect(selAllBtn, &QPushButton::clicked, listWgt, [selAllBtn, listWgt](bool) {
+      bool anyUnchecked = false;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (!cb->isChecked()) { anyUnchecked = true; break; }
+      }
+      bool target = anyUnchecked;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) cb->setChecked(target);
+      selAllBtn->setText(target ? "取消全选" : "全选");
+    });
+
+    QPushButton *applyBtn = new QPushButton("应用所选", panel);
+    applyBtn->setStyleSheet("height:110px; font-size:34px; background-color:#2f7f4f; color:white; border-radius:18px;");
+    QObject::connect(applyBtn, &QPushButton::clicked, listWgt, [listWgt, applyBtn](bool) {
+      QJsonArray applyArr, revertArr;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        QJsonObject base;
+        base["param"] = cb->property("rec_param").toString();
+        base["ctx"]   = cb->property("rec_ctx").toString();
+        base["old"]   = cb->property("rec_old").toInt();
+        base["new"]   = cb->property("rec_new").toInt();
+        if (cb->isChecked()) {
+          QJsonObject a;
+          a["key"] = base["param"].toString();
+          a["ctx_key"] = base["ctx"].toString();
+          a["new_value"] = base["new"].toInt();
+          applyArr.append(a);
+        } else {
+          revertArr.append(base);
+        }
+      }
+      QJsonDocument ad(applyArr), rd(revertArr);
+      QByteArray ab = ad.toJson(QJsonDocument::Compact);
+      QByteArray rb = rd.toJson(QJsonDocument::Compact);
+      Params().put("CarrotLearningApplyList", std::string(ab.constData(), ab.size()));
+      Params().put("CarrotLearningRevertList", std::string(rb.constData(), rb.size()));
+      rebuildAutoTuneList(listWgt);
+      applyBtn->setText("已提交 ✓");
+      QTimer::singleShot(1500, applyBtn, [applyBtn]() { applyBtn->setText("应用所选"); });
+    });
+
+    QPushButton *closeBtn = new QPushButton("关闭", panel);
+    closeBtn->setStyleSheet("height:110px; font-size:34px; background-color:#393939; color:white; border-radius:18px;");
+    QObject::connect(closeBtn, &QPushButton::clicked, overlay, [overlay, top](bool) {
+      overlay->hide();
+      if (top) { top->raise(); top->activateWindow(); }
+    });
+
+    QPushButton *deleteBtn = new QPushButton("删除", panel);
+    deleteBtn->setStyleSheet("height:110px; font-size:34px; background-color:#a85a2a; color:white; border-radius:18px;");
+    QObject::connect(deleteBtn, &QPushButton::clicked, listWgt, [listWgt, deleteBtn](bool) {
+      QJsonArray delArr;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (cb->isChecked()) {
+          QJsonObject o;
+          o["seq"]    = cb->property("rec_seq").toInt();
+          o["param"]  = cb->property("rec_param").toString();
+          o["ctx"]    = cb->property("rec_ctx").toString();
+          o["old"]    = cb->property("rec_old").toInt();
+          o["new"]    = cb->property("rec_new").toInt();
+          delArr.append(o);
+        }
+      }
+      if (delArr.isEmpty()) {
+        deleteBtn->setText("请先勾选");
+        QTimer::singleShot(1500, deleteBtn, [deleteBtn]() { deleteBtn->setText("删除"); });
+        return;
+      }
+      QJsonDocument dd(delArr);
+      QByteArray db = dd.toJson(QJsonDocument::Compact);
+      Params().put("CarrotLearningDeleteList", std::string(db.constData(), db.size()));
+      // 等 Python 端处理完再刷新列表(延迟刷新)
+      QTimer::singleShot(1200, listWgt, [listWgt]() { rebuildAutoTuneList(listWgt); });
+      deleteBtn->setText("已删除 ✓");
+      QTimer::singleShot(1500, deleteBtn, [deleteBtn]() { deleteBtn->setText("删除"); });
+    });
+
+    QPushButton *resetBtnIn = new QPushButton("重置学习数据", panel);
+    resetBtnIn->setStyleSheet("height:110px; font-size:34px; background-color:#7a2f2f; color:white; border-radius:18px;");
+    QObject::connect(resetBtnIn, &QPushButton::clicked, [top](bool) { showResetConfirm(top); });
+
+    btnRow->addWidget(selAllBtn, 1);
+    btnRow->addWidget(applyBtn, 1);
+    btnRow->addWidget(closeBtn, 1);
+    btnRow->addWidget(deleteBtn, 1);
+    btnRow->addWidget(resetBtnIn, 1);
+    vbox->addLayout(btnRow);
+
+    overlay->show();
+  });
+  featToggles->addItem(tuneBtn);
+  featToggles->addItem(new CValueControl("CarrotLearningReview", "自动调参审查模式(0)", "1:学习器只记录参数变化、不自动写入,由你在[自动调参记录]里勾选应用;0:学习器自动应用学习记录", 0, 1, 1));
+
+  // 自学习重置入口已移入"自动调参记录"弹窗内(见 showResetConfirm)。
+  featToggles->addItem(new CValueControl("AutoLaneCorrection", "自动居中纠偏(2)", "0:关闭, 1:实时纠偏, 2:实时纠偏+学习固定偏差(自动保持车道居中)", 0, 2, 1));
+  featToggles->addItem(new CValueControl("AutoLaneCorrectionGain", "纠偏强度(40)", "纠偏增益, 越大回中越快; 画龙时调小, 回中慢时调大", 0, 100, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
+  featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
+  featToggles->addItem(new ParamControl("dp_ui_rainbow", tr("彩虹路径"), tr("将行驶路径显示为彩虹色动态渐变效果"), "", this));
 
 
   startToggles = new ListWidget(this);
@@ -979,7 +1336,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   toggles_layout->addWidget(cruiseToggles);
   toggles_layout->addWidget(latLongToggles);
   toggles_layout->addWidget(dispToggles);
-  toggles_layout->addWidget(pathToggles);
+  toggles_layout->addWidget(featToggles);
   toggles_layout->addWidget(startToggles);
   toggles_layout->addWidget(speedToggles);
   toggles_layout->addWidget(navToggles);
@@ -1000,15 +1357,15 @@ void CarrotPanel::togglesCarrot(int widgetIndex) {
   speedToggles->setVisible(widgetIndex == 3);
   latLongToggles->setVisible(widgetIndex == 4);
   dispToggles->setVisible(widgetIndex == 5);
-  pathToggles->setVisible(widgetIndex == 6);
+  featToggles->setVisible(widgetIndex == 6);
 }
 
 void CarrotPanel::updateButtonStyles() {
   QString styleSheet = R"(
-      #start_btn, #cruise_btn, #nav_btn, #speed_btn, #latLong_btn ,#disp_btn, #path_btn {
+      #start_btn, #cruise_btn, #nav_btn, #speed_btn, #latLong_btn ,#disp_btn, #feat_btn {
         height: 120px; border-radius: 15px; background-color: #393939;
       }
-      #start_btn:pressed, #cruise_btn:pressed, #nav_btn:pressed, #speed_btn:pressed, #latLong_btn:pressed, #disp_btn:pressed, #path_btn:pressed {
+      #start_btn:pressed, #cruise_btn:pressed, #nav_btn:pressed, #speed_btn:pressed, #latLong_btn:pressed, #disp_btn:pressed, #feat_btn:pressed {
         background-color: #4a4a4a;
       }
   )";
@@ -1033,7 +1390,7 @@ void CarrotPanel::updateButtonStyles() {
     styleSheet += "#disp_btn { background-color: #33ab4c; }";
     break;
   case 6:
-    styleSheet += "#path_btn { background-color: #33ab4c; }";
+    styleSheet += "#feat_btn { background-color: #33ab4c; }";
     break;
   }
 
@@ -1100,3 +1457,5 @@ void CValueControl::increaseValue() {
 void CValueControl::decreaseValue() {
   adjustValue(-m_unit);
 }
+
+#include "settings.moc"

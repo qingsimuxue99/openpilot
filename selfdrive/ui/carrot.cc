@@ -46,6 +46,8 @@
 #define COLOR_GREY nvgRGBA(191, 191, 191, 1)
 #define COLOR_GREY_ALPHA(x) nvgRGBA(191, 191, 191, x)
 
+#define COLOR_MY_ALPHA(x) nvgRGBA(127, 255, 0, x)
+
 #define BOLD "KaiGenGothicKR-Bold"//"Inter-Bold"//"sans-bold"
 
 
@@ -56,7 +58,7 @@ ModelRenderer* _model = NULL;
 extern  int get_path_length_idx(const cereal::XYZTData::Reader& line, const float path_height);
 int g_fps= 0;
 
-static void ui_draw_text(const UIState* s, float x, float y, const char* string, float size, NVGcolor color, const char* font_name, float borderWidth=3.0, float shadowOffset=0.0, NVGcolor borderColor=COLOR_BLACK, NVGcolor shadowColor=COLOR_BLACK) {
+static void ui_draw_text(const UIState* s, float x, float y, const char* string, float size, NVGcolor color, const char* font_name, float borderWidth=3.0, float shadowOffset=0.0, NVGcolor borderColor=COLOR_BLACK_ALPHA(100), NVGcolor shadowColor=COLOR_BLACK_ALPHA(100)) {
     y += 6;
     nvgFontFace(s->vg, font_name);
     nvgFontSize(s->vg, size);
@@ -78,7 +80,7 @@ static void ui_draw_text(const UIState* s, float x, float y, const char* string,
     nvgFillColor(s->vg, color);
     nvgText(s->vg, x, y, string, NULL);
 }
-static void ui_draw_text_vg(NVGcontext* vg, float x, float y, const char* string, float size, NVGcolor color, const char* font_name, float borderWidth = 3.0, float shadowOffset = 0.0, NVGcolor borderColor = COLOR_BLACK, NVGcolor shadowColor = COLOR_BLACK) {
+static void ui_draw_text_vg(NVGcontext* vg, float x, float y, const char* string, float size, NVGcolor color, const char* font_name, float borderWidth = 3.0, float shadowOffset = 0.0, NVGcolor borderColor = COLOR_BLACK_ALPHA(100), NVGcolor shadowColor = COLOR_BLACK_ALPHA(100)) {
     //y += 6;
     nvgFontFace(vg, font_name);
     nvgFontSize(vg, size);
@@ -174,57 +176,6 @@ void ui_draw_line(const UIState* s, const QPolygonF& vd, NVGcolor* color, NVGpai
         nvgStroke(s->vg);
     }
 }
-
-void ui_draw_dashed_line(const UIState* s,
-                         const QPolygonF& vd,
-                         NVGcolor* color,
-                         float stroke,
-                         NVGcolor strokeColor) {
-  if (!color) return;
-
-  // ===== 默认虚线参数（内部固定）=====
-  constexpr int DASH_LEN = 1;
-  constexpr int GAP_LEN  = 1;
-
-  int N = vd.size();
-  if (N < 2) {
-    return ui_draw_line(s, vd, color, nullptr, stroke, strokeColor);
-  }
-
-  // OP 标准：vd = left + reversed(right)
-  int half = N / 2;
-  if (half < 1) return;
-
-  for (int i = 0; i + DASH_LEN < half; i += DASH_LEN + GAP_LEN) {
-    int dash_end = std::min(i + DASH_LEN, half - 1);
-
-    nvgBeginPath(s->vg);
-
-    // ---- left edge (near -> far) ----
-    nvgMoveTo(s->vg, vd[i].x(), vd[i].y());
-    for (int j = i + 1; j <= dash_end; j++) {
-      nvgLineTo(s->vg, vd[j].x(), vd[j].y());
-    }
-
-    // ---- right edge (far -> near) ----
-    for (int j = dash_end; j >= i; j--) {
-      int r_idx = N - 1 - j;
-      nvgLineTo(s->vg, vd[r_idx].x(), vd[r_idx].y());
-    }
-
-    nvgClosePath(s->vg);
-
-    nvgFillColor(s->vg, *color);
-    nvgFill(s->vg);
-
-    if (stroke > 0.0f) {
-      nvgStrokeColor(s->vg, strokeColor);
-      nvgStrokeWidth(s->vg, stroke);
-      nvgStroke(s->vg);
-    }
-  }
-}
-
 void ui_draw_line2(const UIState* s, float x[], float y[], int size, NVGcolor* color, NVGpaint* paint, float stroke = 0.0, NVGcolor strokeColor = COLOR_WHITE) {
 
     nvgBeginPath(s->vg);
@@ -307,7 +258,7 @@ static void ui_draw_text_a2(const UIState* s) {
     int x = (s->fb_w / 2 * a_time1 + a_x * (a_max - a_time1)) / a_max;
     int y = ((s->fb_h - 400) * a_time1 + a_y * (a_max - a_time1)) / a_max;
     int size = (350 * a_time1 + a_size * (a_max - a_time1)) / a_max;
-    if (a_time >= 100) ui_draw_text(s, x, y, a_string, size, a_color, a_font, 9.0, 8.0, COLOR_BLACK, COLOR_BLACK);
+    if (a_time >= 100) ui_draw_text(s, x, y, a_string, size, a_color, a_font, 9.0, 8.0, COLOR_BLACK_ALPHA(180), COLOR_BLACK_ALPHA(180));
     else ui_draw_text(s, x, y, a_string, size, a_color, a_font);
 }
 static void ui_draw_text_a(const UIState* s, float x, float y, const char* string, float size, NVGcolor color, const char* font_name) {
@@ -542,7 +493,7 @@ public:
         */
         if (s->fb_w < 1200) return;
 
-        NVGcolor color[3] = { COLOR_YELLOW, COLOR_GREEN, COLOR_ORANGE };
+        NVGcolor color[3] = { COLOR_YELLOW_ALPHA(200), COLOR_GREEN_ALPHA(200), COLOR_ORANGE_ALPHA(200) };
         for (int i = 0; i < 3; i++) {
             drawPlotting(s, i, plotIndex, plotX, plotQueue[i], plotSize, &color[i], 3.0f);
         }
@@ -780,21 +731,21 @@ public:
         int x = path_x;
         int y = path_y - 135;
         char str[128];
-        int disp_y = y + 195;// 175;
+        int disp_y = y + 105;// 向上移动90px;
         bool draw_dist = false;
-        float disp_size = 50;
+        float disp_size = 90;
         if (softHoldActive || brakeHoldActive || carrotCruise) {
-            sprintf(str, "%s", (brakeHoldActive) ? "AUTOHOLD" : (softHoldActive) ? "SOFTHOLD": "CARROT");
-            ui_draw_text(s, x, disp_y, str, disp_size, COLOR_WHITE, BOLD);
+            sprintf(str, "%s", (brakeHoldActive) ? "自动驻车已激活" : (softHoldActive) ? "轻刹": "胡萝卜巡航");
+            ui_draw_text(s, x, disp_y, str, disp_size, COLOR_ORANGE_ALPHA(210), BOLD);
         }
         else if (longActive) {
             if (xState == 3 || xState == 5) {      //XState.e2eStop, XState.e2eStopped
                 if (v_ego < 1.0) {
-                    sprintf(str, "%s", (trafficState >= 1000) ? tr("Signal Error").toStdString().c_str(): tr("Signal Ready").toStdString().c_str());
+                    sprintf(str, "%s", (trafficState >= 1000) ? tr("起飞失败").toStdString().c_str(): tr("准备起飞").toStdString().c_str());
                     ui_draw_text(s, x, disp_y, str, disp_size, COLOR_WHITE, BOLD);
                 }
                 else {
-                    ui_draw_text(s, x, disp_y, tr("Signal slowing").toStdString().c_str(), disp_size, COLOR_WHITE, BOLD);
+                    ui_draw_text(s, x, disp_y, tr("智能减速中").toStdString().c_str(), disp_size, COLOR_WHITE, BOLD);
                 }
 #if 0
                 else if (getStopDist() > 0.5) {
@@ -806,7 +757,7 @@ public:
 #endif
             }
             else if (xState == 4) {     //XState.e2ePrepare
-				      ui_draw_text(s, x, disp_y, "E2E주행중", disp_size, COLOR_WHITE, BOLD);
+				      ui_draw_text(s, x, disp_y, "E2E驾驶中", disp_size, COLOR_WHITE, BOLD);
 			      }
             else if (xState == 0 || xState == 1 || xState == 2) {     //XState.lead
                 draw_dist = true;
@@ -821,18 +772,18 @@ public:
             //ui_draw_text(s, x, disp_y, str, disp_size, COLOR_WHITE, BOLD);
             int wStr = 0, w = 80;
             float dist = radarDist * (s->scene.is_metric ? 1 : METER_TO_FOOT);
-            NVGcolor text_color = (xState==0) ? COLOR_WHITE : (xState==1) ? COLOR_GREY : COLOR_GREEN;
+            NVGcolor text_color = (xState==0) ? COLOR_WHITE_ALPHA(200) : (xState==1) ? COLOR_GREY_ALPHA(200) : COLOR_GREEN_ALPHA(200);
             if (dist > 0.0) {
                 sprintf(str, "%.1f", dist);
                 wStr = 32 * (strlen(str) + 0);
-                ui_fill_rect(s->vg, { (int)(x - w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, isLeadSCC() ? COLOR_RED : COLOR_ORANGE, 15);
+                ui_fill_rect(s->vg, { (int)(x - w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, isLeadSCC() ? COLOR_RED_ALPHA(180) : COLOR_ORANGE_ALPHA(180), 15);
                 ui_draw_text(s, x - w, disp_y, str, 40, text_color, BOLD);
             }
             dist = visionDist * (s->scene.is_metric ? 1 : METER_TO_FOOT);
             if (dist > 0.0) {
                 sprintf(str, "%.1f", dist);
                 wStr = 32 * (strlen(str) + 0);
-                ui_fill_rect(s->vg, { (int)(x + w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, COLOR_BLUE, 15);
+                ui_fill_rect(s->vg, { (int)(x + w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, COLOR_BLUE_ALPHA(180), 15);
                 ui_draw_text(s, x + w, disp_y, str, 40, text_color, BOLD);
             }
         }
@@ -847,8 +798,8 @@ public:
 
 
         float px[7], py[7];
-        NVGcolor rcolor = isLeadSCC() ? COLOR_RED : COLOR_ORANGE;
-        NVGcolor  pcolor = !isRadarDetected() ? ((trafficState == 1) ? rcolor : COLOR_GREEN) : isRadarDetected() ? rcolor : COLOR_BLUE;
+        NVGcolor rcolor = isLeadSCC() ? COLOR_RED_ALPHA(200) : COLOR_ORANGE_ALPHA(200);
+        NVGcolor  pcolor = !isRadarDetected() ? ((trafficState == 1) ? rcolor : COLOR_GREEN_ALPHA(200)) : isRadarDetected() ? rcolor : COLOR_BLUE_ALPHA(200);
         bool show_path_end = true;
         if (false && show_path_end && !isLeadDetected()) {
             px[0] = path_x - path_width / 2;
@@ -868,7 +819,7 @@ public:
             ui_draw_line2(s, px, py, 7, &pcolor, nullptr, 3.0f);
         }
         if (isLeadDetected()) {
-            NVGcolor radar_stroke = COLOR_BLUE;
+            NVGcolor radar_stroke = COLOR_BLUE_ALPHA(180);
             if (lead_two_status > 0) {
               radar_stroke = COLOR_OCHRE;
               int path_width2 = lead_two_xr - lead_two_xl;
@@ -940,8 +891,6 @@ private:
     QPolygonF road_edge_vertices[2];
     int  left_lane_line = 0;
     int  right_lane_line = 0;
-    bool left_solid = false;
-    bool right_solid = false;
 
 protected:
     bool make_data(const UIState* s) {
@@ -954,29 +903,13 @@ protected:
         int max_idx = get_path_length_idx(model_lane_lines[0], s->max_distance);
         left_lane_line = sm["carState"].getCarState().getLeftLaneLine();
         right_lane_line = sm["carState"].getCarState().getRightLaneLine();
-        auto amapNavi = sm["amapNavi"].getAmapNavi();
-        int carrotLeftBlind = amapNavi.getLeftBlind();
-        int carrotRightBlind = amapNavi.getRightBlind();
-        if(carrotLeftBlind & 8) {
-          left_solid = true;
-        }else{
-          left_solid = false;
-        }
-        if(carrotRightBlind & 8) {
-          right_solid = true;
-        }else{
-          right_solid = false;
-        }
-
         for (int i = 0; i < std::size(lane_line_vertices); i++) {
             lane_line_probs[i] = model_lane_line_probs[i];
-            float line_width = 0.05;
-            //float line_width = 0.025;
-            //if (i == 1 && (left_lane_line >= 20 || left_solid)) line_width = 0.05;
-            //if (i == 2 && (right_lane_line >= 20 || right_solid)) line_width = 0.05;
+            float line_width = 0.025;
+            if (i == 1 && left_lane_line >= 20) line_width = 0.05;
             update_line_data(s, model_lane_lines[i], line_width, 0.0, 0.0, &lane_line_vertices[i], max_idx);
             if (i == 1) {
-              update_line_data(s, model_lane_lines[i], line_width, 0.0, 0.0, &lane_line_vertices_for_double, max_idx, true, -0.3); //-0.3为偏移0.3米
+              update_line_data(s, model_lane_lines[i], line_width, 0.0, 0.0, &lane_line_vertices_for_double, max_idx, true, -0.3);
             }
             //update_line_data(s, model_lane_lines[i], line_width * lane_line_probs[i], 0.0, 0.0, &lane_line_vertices[i], max_idx);
             //if (i == 1) {
@@ -1012,35 +945,13 @@ public:
           int alpha = (lane_line_probs[i] > 0.3) ? 220 : 0;
           int stroke = 0.0;
           if (i == 1) {
-            if(left_lane_line >= 20 || left_solid){ //实线
-              color = COLOR_YELLOW_ALPHA(alpha);
-              stroke = 1.0;
-              ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
-            }else{ //虚线
-              color = COLOR_GREEN_ALPHA(alpha);
-              stroke = 0.0;
-              ui_draw_dashed_line(s, lane_line_vertices[i], &color, stroke, COLOR_WHITE);
-              //ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
-            }
-            //color = (left_lane_line >= 20 || left_solid) ? COLOR_YELLOW_ALPHA(alpha) : COLOR_GREEN_ALPHA(alpha);
-            //stroke = (left_lane_line >= 20 || left_solid) ? 1.0 : 0.0;
+            color = (left_lane_line >= 20) ? COLOR_YELLOW_ALPHA(alpha) : COLOR_WHITE_ALPHA(alpha);
+            stroke = (left_lane_line >= 20) ? 1.0 : 0.0;
           }
-          else if (i == 2) {
-            if(right_lane_line >= 20 || right_solid){ //实线
-              color = COLOR_YELLOW_ALPHA(alpha);
-              ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
-            }else{ //虚线
-              color = COLOR_GREEN_ALPHA(alpha);
-              ui_draw_dashed_line(s, lane_line_vertices[i], &color, stroke, COLOR_WHITE);
-              //ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
-            }
-            //color = (right_lane_line >= 20 || right_solid) ? COLOR_YELLOW_ALPHA(alpha) : COLOR_GREEN_ALPHA(alpha);
-          }else {
-            color = COLOR_WHITE_ALPHA(alpha);
-            ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
-          }
-          //ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
-          if ((i == 1) && (left_lane_line%10 == 4)) { //绘制双实线的另外一条线
+          else if (i == 2) color = (right_lane_line >= 20) ? COLOR_YELLOW_ALPHA(alpha) : COLOR_WHITE_ALPHA(alpha);
+          else color = COLOR_WHITE_ALPHA(alpha);
+          ui_draw_line(s, lane_line_vertices[i], &color, nullptr, stroke);
+          if ((i == 1) && (left_lane_line%10 == 4)) {
             ui_draw_line(s, lane_line_vertices_for_double, &color, nullptr, stroke);
           }
         }
@@ -1196,7 +1107,7 @@ protected:
                 nvgFillColor(s->vg, COLOR_WHITE);
                 nvgFill(s->vg);
                 sprintf(str, "%d", (int)(xSpdLimit * ((s->scene.is_metric)?1:KM_TO_MILE) + 0.5));
-                ui_draw_text(s, bx, by + 25 * scale - 6 * (1 - scale), str, 60 * scale, COLOR_BLACK, BOLD, 0.0f, 0.0f);
+                ui_draw_text(s, bx, by + 25 * scale - 6 * (1 - scale), str, 60 * scale, COLOR_BLACK_ALPHA(180), BOLD, 0.0f, 0.0f);
             }
         }
 	}
@@ -1206,7 +1117,7 @@ protected:
         active_carrot = 2;
         nGoPosDist = 500000;
         nGoPosTime = 4 * 60 * 60;
-        szSdiDescr = "어린이 보호구역(스쿨존 시작 구간)";
+        szSdiDescr = "儿童保护区（学校区域开始段）";
         xTurnInfo = 1;
         xDistToTurn = 1000;
         szPosRoadName = "구문천 1길 17";
@@ -1220,7 +1131,7 @@ protected:
 
         int tbt_x = s->fb_w - 800;
         int tbt_y = s->fb_h - 250;
-        NVGcolor stroke_color = COLOR_WHITE;
+        NVGcolor stroke_color = COLOR_WHITE_ALPHA(152);
         if (s->scene._current_carrot_display == 3) {
           ui_fill_rect(s->vg, { tbt_x, 5, 790, s->fb_h - 15 }, COLOR_BLACK_ALPHA(120), 30, 2, &stroke_color);
         }
@@ -1241,8 +1152,8 @@ protected:
             int bx = tbt_x + 100;
             int by = tbt_y + 85;
             if (atc_type.length() > 0) {
-              stroke_color = COLOR_BLACK;
-              ui_fill_rect(s->vg, { bx - 80, by - 90, 160, 230 }, atc_type.contains("prepare")?COLOR_GREEN_ALPHA(100) : COLOR_GREEN, 15, 1.0f, &stroke_color);
+              stroke_color = COLOR_BLACK_ALPHA(180);
+              ui_fill_rect(s->vg, { bx - 80, by - 90, 160, 230 }, atc_type.contains("prepare")?COLOR_GREEN_ALPHA(100) : COLOR_GREEN_ALPHA(200), 15, 1.0f, &stroke_color);
             }
             switch (xTurnInfo) {
             case 1: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_l", 1.0f); break;
@@ -1250,11 +1161,11 @@ protected:
             case 3: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f); break;
             case 4: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f); break;
             case 7: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_u", 1.0f); break;
-            case 6: ui_draw_text(s, bx, by + 20, "TG", 35, COLOR_WHITE, BOLD); break;
-            case 8: ui_draw_text(s, bx, by + 20, "목적지", 35, COLOR_WHITE, BOLD); break;
+            case 6: ui_draw_text(s, bx, by + 20, "TG", 35, COLOR_WHITE_ALPHA(200), BOLD); break;
+            case 8: ui_draw_text(s, bx, by + 20, "目的地", 35, COLOR_WHITE_ALPHA(200), BOLD); break;
             default:
-                sprintf(str, "감속:%d", xTurnInfo);
-                ui_draw_text(s, bx, by + 20, str, 35, COLOR_WHITE, BOLD);
+                sprintf(str, "减速:%d", xTurnInfo);
+                ui_draw_text(s, bx, by + 20, str, 35, COLOR_WHITE_ALPHA(200), BOLD);
                 break;
             }
             if (s->scene.is_metric) {
@@ -1265,34 +1176,31 @@ protected:
               if (xDistToTurn < 1609) sprintf(str, "%d ft", (int)(xDistToTurn * 3.28084));
               else sprintf(str, "%.1f mi", xDistToTurn / 1609.344f);
             }
-            ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
+            ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE_ALPHA(200), BOLD);
         }
         nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        if (szSdiDescr.length() > 0) {
-            float bounds[4];  // [xmin, ymin, xmax, ymax]를 저장하는 배열
+        if (szPosRoadName.length() > 0) {
+            float bounds[4];
             nvgFontSize(s->vg, 40);
-            nvgTextBounds(s->vg, tbt_x + 200, tbt_y + 200, szSdiDescr.toStdString().c_str(), NULL, bounds);
+            nvgTextBounds(s->vg, tbt_x + 200, tbt_y + 200, szPosRoadName.toStdString().c_str(), NULL, bounds);
             float text_width = bounds[2] - bounds[0];
             float text_height = bounds[3] - bounds[1];
-            ui_fill_rect(s->vg, { (int)bounds[0] - 10, (int)bounds[1] - 2, (int)text_width + 20, (int)text_height + 13 }, COLOR_GREEN, 10);
-            ui_draw_text(s, tbt_x + 200, tbt_y + 200, szSdiDescr.toStdString().c_str(), 40, COLOR_WHITE, BOLD);
-        }
-        else if (szPosRoadName.length() > 0) {
-          ui_draw_text(s, tbt_x + 200, tbt_y + 200, szPosRoadName.toStdString().c_str(), 40, COLOR_WHITE, BOLD);
-          //ui_draw_text(s, tbt_x + 190, tbt_y - 5, szPosRoadName.toStdString().c_str(), 40, COLOR_WHITE, BOLD);
+            ui_fill_rect(s->vg, { (int)bounds[0] - 10, (int)bounds[1] - 2, (int)text_width + 20, (int)text_height + 13 }, COLOR_GREEN_ALPHA(220), 10);
+            ui_draw_text(s, tbt_x + 200, tbt_y + 200, szPosRoadName.toStdString().c_str(), 40, COLOR_WHITE_ALPHA(230), BOLD);
         }
 
         if (nGoPosDist > 0 && nGoPosTime > 0) {
-            time_t now = time(NULL);  // 현재 시간 얻기
+            time_t now = time(NULL);  // 获取当前时间
             struct tm* local = localtime(&now);
             int remaining_minutes = (int)nGoPosTime / 60;
             local->tm_min += remaining_minutes;
             mktime(local);
             bool is_kor = s->language == "main_ko";
-            sprintf(str, "%s: %.1f%s(%02d:%02d)", (is_kor)?"도착":"ETA", (float)nGoPosTime / 60., (is_kor)?"분":"MIN", local->tm_hour, local->tm_min);
-            ui_draw_text(s, tbt_x + 190, tbt_y + 80, str, 50, COLOR_WHITE, BOLD);
-            sprintf(str, "%.1f%s", nGoPosDist / 1000. * ((s->scene.is_metric)?1:KM_TO_MILE), (s->scene.is_metric) ? "km" : "mile");
-            ui_draw_text(s, tbt_x + 190 + 120, tbt_y + 130, str, 50, COLOR_WHITE, BOLD);
+            int total_minutes = (nGoPosTime + 30) / 60; // 行程时间四舍五入
+            sprintf(str, "%s: %d%s(%02d:%02d到)", (is_kor)?"到达":"行程", total_minutes, (is_kor)?"分钟":"分钟", local->tm_hour, local->tm_min);
+            ui_draw_text(s, tbt_x + 190, tbt_y + 80, str, 50, COLOR_WHITE_ALPHA(230), BOLD);
+            sprintf(str, "剩余:%.1f%s", nGoPosDist / 1000. * ((s->scene.is_metric)?1:KM_TO_MILE), (s->scene.is_metric) ? "公里" : "英里");
+            ui_draw_text(s, tbt_x + 190, tbt_y + 130, str, 50, COLOR_WHITE_ALPHA(230), BOLD);
         }
         return 0;
     }
@@ -1328,6 +1236,7 @@ public:
           nGoPosTime = carrot_man.getNGoPosTime();
           szSdiDescr = QString::fromStdString(carrot_man.getSzSdiDescr());
           szPosRoadName = QString::fromStdString(carrot_man.getSzPosRoadName());
+          szPosRoadName.remove("route=270.0"); // 新增：移除路名中的 route=270.0
           szTBTMainText = QString::fromStdString(carrot_man.getSzTBTMainText());
 
         }
@@ -1357,8 +1266,6 @@ public:
 };
 bool _right_blinker = false;
 bool _left_blinker = false;
-int _ext_blinker = 0;
-int _ext_state = 0;
 class DesireDrawer : ModelDrawer {
 protected:
     int icon_size = 256;
@@ -1384,38 +1291,36 @@ public:
         else if (desireStateLaneChangeRight > 0.5) ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
         if (desireEvent == 57) {
             ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_steer", 1.0f);
-            ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f);
+            ui_draw_image(s, { x - icon_size / 2 - 90, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f);
         }
         else if (desireEvent == 58) {
             ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_steer", 1.0f);
-            ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
+            ui_draw_image(s, { x - icon_size / 2 + 90, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
         }
         else if (desireEvent == 71) {
             if (laneChangeDirection == cereal::LaneChangeDirection::LEFT) {
                 ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_inhibit", 1.0f);
-                ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f);
+                ui_draw_image(s, { x - icon_size / 2 - 90, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f);
             }
             else if (laneChangeDirection == cereal::LaneChangeDirection::RIGHT) {
                 ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_inhibit", 1.0f);
-                ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
+                ui_draw_image(s, { x - icon_size / 2 + 90, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
             }
         }
         if (laneChangeState == cereal::LaneChangeState::PRE_LANE_CHANGE) {
             if (laneChangeDirection == cereal::LaneChangeDirection::LEFT) {
                 ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_steer", 1.0f);
-                ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f);
+                ui_draw_image(s, { x - icon_size / 2 - 90, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f);
             }
             else if (laneChangeDirection == cereal::LaneChangeDirection::RIGHT) {
                 ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_steer", 1.0f);
-                ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
+                ui_draw_image(s, { x - icon_size / 2 + 90, y - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f);
             }
         }
 
         const auto carrot_man = sm["carrotMan"].getCarrotMan();
         const auto car_state = sm["carState"].getCarState();
         QString atc_type = QString::fromStdString(carrot_man.getAtcType());
-        _ext_blinker = carrot_man.getExtBlinker();
-        _ext_state = carrot_man.getExtState();
 
         bool left_blinker = car_state.getLeftBlinker() || atc_type=="fork left" || atc_type =="turn left" || atc_type == "atc left";
         bool right_blinker = car_state.getRightBlinker() || atc_type=="fork right" || atc_type =="turn right" || atc_type == "atc right";
@@ -1423,17 +1328,13 @@ public:
         _right_blinker = false;
         _left_blinker = false;
         if (blinker_timer <= 8) {
-            if (right_blinker || _ext_blinker == 2) {
-                _right_blinker = true;
-                if(right_blinker){
-                  ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_blinker_r", 1.0f);
-                }
+            if (right_blinker) {
+		_right_blinker = true;
+                ui_draw_image(s, { x - icon_size / 2 + 60, y - icon_size / 2, icon_size, icon_size }, "ic_blinker_r", 1.0f);
             }
-            if (left_blinker || _ext_blinker == 1) {
-                _left_blinker = true;
-                if(left_blinker){
-                  ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2, icon_size, icon_size }, "ic_blinker_l", 1.0f);
-                }
+            if (left_blinker) {
+		_left_blinker = true;
+                ui_draw_image(s, { x - icon_size / 2 - 60, y - icon_size / 2, icon_size, icon_size }, "ic_blinker_l", 1.0f);
             }
         }
     }
@@ -1485,45 +1386,20 @@ protected:
         return true;
     }
 public:
-    void draw(const UIState* s,int show_lane_info) {
+    void draw(const UIState* s) {
         if (!make_data(s)) return;
 
-        NVGcolor color_red = nvgRGBA(255, 0, 0, 60); //红色
-        NVGcolor color_yellow = nvgRGBA(255, 215, 0, 60); //黄色
-        NVGcolor color_blue = nvgRGBA(0, 0, 255, 60); //蓝色
-
-        NVGcolor icon_color_red = nvgRGBA(255, 0, 0, 150); //红色
-        NVGcolor icon_color_yellow = nvgRGBA(255, 215, 0, 150); //黄色
-        NVGcolor icon_color_blue = nvgRGBA(0, 0, 255, 150); //蓝色
-
-        // 绿色
-        NVGcolor color_green = nvgRGBA(0, 255, 0, 60);        // 绿色
-        NVGcolor icon_color_green = nvgRGBA(0, 255, 0, 150); // 绿色（图标）
-
-        // 紫色
-        NVGcolor color_purple = nvgRGBA(138, 43, 226, 60);        // 紫色（BlueViolet）
-        NVGcolor icon_color_purple = nvgRGBA(138, 43, 226, 150); // 紫色（图标）
-
-        NVGcolor red_arrow_color = nvgRGBA(255, 0, 0, 200);
-        NVGcolor yellow_arrow_color = nvgRGBA(255, 215, 0, 200);
+        NVGcolor color = nvgRGBA(255, 0, 0, 150);
+        NVGcolor color2 = nvgRGBA(255, 215, 0, 150);
 
         SubMaster& sm = *(s->sm);
         auto car_state = sm["carState"].getCarState();
-        int left_blindspot = car_state.getLeftBlindspot();
-        int right_blindspot = car_state.getRightBlindspot();
+        bool left_blindspot = car_state.getLeftBlindspot();
+        bool right_blindspot = car_state.getRightBlindspot();
 
-        //auto lead_left = sm["radarState"].getRadarState().getLeadLeft();
-        //auto lead_right = sm["radarState"].getRadarState().getLeadRight();
+        auto lead_left = sm["radarState"].getRadarState().getLeadLeft();
+        auto lead_right = sm["radarState"].getRadarState().getLeadRight();
         auto meta = sm["modelV2"].getModelV2().getMeta();
-        bool leftFrontBlind = meta.getLeftFrontBlind();
-        bool rightFrontBlind = meta.getRightFrontBlind();
-        //auto carrotMan = sm["carrotMan"].getCarrotMan();
-        //bool carrotLeftBlind = carrotMan.getLeftBlind() || amapNavi.getLeftBlind();
-        //bool carrotRightBlind = carrotMan.getRightBlind() || amapNavi.getRightBlind();
-        auto amapNavi = sm["amapNavi"].getAmapNavi();
-        int carrotLeftBlind = amapNavi.getLeftBlind();
-        int carrotRightBlind = amapNavi.getRightBlind();
-
         auto laneChangeState = meta.getLaneChangeState();
         auto laneChangeDirection = meta.getLaneChangeDirection();
         bool rightLaneChange = (laneChangeState == cereal::LaneChangeState::PRE_LANE_CHANGE) &&
@@ -1532,241 +1408,20 @@ public:
             (laneChangeDirection == cereal::LaneChangeDirection::LEFT);
 
 #if 0
-        //TEST
-        leftFrontBlind = true;
-        rightFrontBlind = true;
-        carrotLeftBlind = 1;
-        carrotRightBlind = 1;
-        left_blindspot = 1;
-        right_blindspot = 1;
+        left_blindspot = right_blindspot = true;
 #endif
-        if(leftLaneChange || show_lane_info == 2){
-            if (left_blindspot) {
-                ui_draw_bsd(s, lane_barrier_vertices[0], &color_red, false);
-            }
-            else if (carrotLeftBlind > 0) {
-                if(0 != (carrotLeftBlind & 8)){ //实线
-                    ui_draw_bsd(s, lane_barrier_vertices[0], &color_green, false);
-                }else if(0 != (carrotLeftBlind & 2)){ //摄像头盲区
-                    ui_draw_bsd(s, lane_barrier_vertices[0], &color_purple, false);
-                }else{ //激光雷达盲区
-                    ui_draw_bsd(s, lane_barrier_vertices[0], &color_blue, false);
-                }
-            }
-            else if (leftFrontBlind) {
-                ui_draw_bsd(s, lane_barrier_vertices[0], &color_yellow, false);
-            }
-        }
-
-        if(rightLaneChange || show_lane_info == 2){
-            if (right_blindspot) {
-                ui_draw_bsd(s, lane_barrier_vertices[1], &color_red, true);
-            }
-            else if (carrotRightBlind > 0) {
-                if(0 != (carrotRightBlind & 8)){ //实线
-                    ui_draw_bsd(s, lane_barrier_vertices[1], &color_green, true);
-                }else if(0 != (carrotRightBlind & 2)){ //摄像头盲区
-                    ui_draw_bsd(s, lane_barrier_vertices[1], &color_purple, true);
-                }else{ //激光雷达盲区
-                    ui_draw_bsd(s, lane_barrier_vertices[1], &color_blue, true);
-                }
-            }
-            else if (rightFrontBlind){
-                ui_draw_bsd(s, lane_barrier_vertices[1], &color_yellow, true);
-            }
-        }
-
-        int center_x = s->fb_w / 2;
-        int circle_radius = 46;
-        int vertical_spacing = 100;
-        int horizontal_offset = 150;
-        int top_y = 10;
-        int arrow_body_width = 22;
-        int arrow_body_length = 23;
-        int arrow_head_width = 46;
-        int arrow_head_length = 19;
-
-        // 计算整个箭头的总长度
-        int total_arrow_length = arrow_body_length + arrow_head_length;
-        bool icon_show = false;
-
-        // 左侧圆形和向左箭头(从上到下)
-        icon_show = false;
-        if (leftFrontBlind) {
-            int cx = center_x - horizontal_offset;
-            int cy = top_y + circle_radius;  // 保持在最下方
-            nvgBeginPath(s->vg);
-            nvgCircle(s->vg, cx, cy, circle_radius);
-            nvgFillColor(s->vg, icon_color_yellow);
-            nvgFill(s->vg);
-            if(show_lane_info >= 1)
-            {
-                nvgBeginPath(s->vg);
-                nvgRect(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy - arrow_body_width/2,
-                        arrow_body_length, arrow_body_width);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgMoveTo(s->vg, cx - total_arrow_length/2, cy);
-                nvgLineTo(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy - arrow_head_width/2);
-                nvgLineTo(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy + arrow_head_width/2);
-                nvgClosePath(s->vg);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-            }
-
-            icon_show = true;
-        }
-        if (rightFrontBlind) {
-            int cx = center_x + horizontal_offset;
-            int cy = top_y + circle_radius;  // 保持在最下方
-            nvgBeginPath(s->vg);
-            nvgCircle(s->vg, cx, cy, circle_radius);
-            nvgFillColor(s->vg, icon_color_yellow);
-            nvgFill(s->vg);
-            if(show_lane_info >= 1)
-            {
-                nvgBeginPath(s->vg);
-                nvgRect(s->vg, cx - total_arrow_length/2, cy - arrow_body_width/2,
-                        arrow_body_length, arrow_body_width);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgMoveTo(s->vg, cx + total_arrow_length/2, cy);
-                nvgLineTo(s->vg, cx + total_arrow_length/2 - arrow_head_length, cy - arrow_head_width/2);
-                nvgLineTo(s->vg, cx + total_arrow_length/2 - arrow_head_length, cy + arrow_head_width/2);
-                nvgClosePath(s->vg);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-            }
-
-            icon_show = true;
-        }
-
-        icon_show = true;
-        if(icon_show){
-            top_y += vertical_spacing;
-        }
-
-        icon_show = false;
-        if (carrotLeftBlind > 0) {
-            int cx = center_x - horizontal_offset;
-            int cy = top_y + circle_radius;  // 保持在中间
-            nvgBeginPath(s->vg);
-            nvgCircle(s->vg, cx, cy, circle_radius);
-            if(0 != (carrotLeftBlind & 8)){ //实线
-                nvgFillColor(s->vg, icon_color_green);
-            }else if(0 != (carrotLeftBlind & 2)){ //摄像头盲区
-                nvgFillColor(s->vg, icon_color_purple);
-            }else{ //激光雷达盲区
-                nvgFillColor(s->vg, icon_color_blue);
-            }
-            nvgFill(s->vg);
-            if(show_lane_info >= 1)
-            {
-                nvgBeginPath(s->vg);
-                nvgRect(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy - arrow_body_width/2,
-                        arrow_body_length, arrow_body_width);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgMoveTo(s->vg, cx - total_arrow_length/2, cy);
-                nvgLineTo(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy - arrow_head_width/2);
-                nvgLineTo(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy + arrow_head_width/2);
-                nvgClosePath(s->vg);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-            }
-
-            icon_show = true;
-        }
-        if (carrotRightBlind > 0) {
-            int cx = center_x + horizontal_offset;
-            int cy = top_y + circle_radius;  // 保持在中间
-            nvgBeginPath(s->vg);
-            nvgCircle(s->vg, cx, cy, circle_radius);
-            if(0 != (carrotRightBlind & 8)){ //实线
-                nvgFillColor(s->vg, icon_color_green);
-            }else if(0 != (carrotRightBlind & 2)){ //摄像头盲区
-                nvgFillColor(s->vg, icon_color_purple);
-            }else{ //激光雷达盲区
-                nvgFillColor(s->vg, icon_color_blue);
-            }
-            nvgFill(s->vg);
-            if(show_lane_info >= 1)
-            {
-                nvgBeginPath(s->vg);
-                nvgRect(s->vg, cx - total_arrow_length/2, cy - arrow_body_width/2,
-                        arrow_body_length, arrow_body_width);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgMoveTo(s->vg, cx + total_arrow_length/2, cy);
-                nvgLineTo(s->vg, cx + total_arrow_length/2 - arrow_head_length, cy - arrow_head_width/2);
-                nvgLineTo(s->vg, cx + total_arrow_length/2 - arrow_head_length, cy + arrow_head_width/2);
-                nvgClosePath(s->vg);
-                nvgFillColor(s->vg, red_arrow_color);
-                nvgFill(s->vg);
-            }
-
-            icon_show = true;
-        }
-
-        icon_show = true;
-        if(icon_show){
-            top_y += vertical_spacing;
-        }
-
-        icon_show = false;
         if (left_blindspot) {
-            int cx = center_x - horizontal_offset;
-            int cy = top_y + circle_radius;  // 保持在最上方
-            nvgBeginPath(s->vg);
-            nvgCircle(s->vg, cx, cy, circle_radius);
-            nvgFillColor(s->vg, icon_color_red);
-            nvgFill(s->vg);
-            if(show_lane_info >= 1)
-            {
-                nvgBeginPath(s->vg);
-                nvgRect(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy - arrow_body_width/2,
-                        arrow_body_length, arrow_body_width);
-                nvgFillColor(s->vg, yellow_arrow_color);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgMoveTo(s->vg, cx - total_arrow_length/2, cy);
-                nvgLineTo(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy - arrow_head_width/2);
-                nvgLineTo(s->vg, cx - total_arrow_length/2 + arrow_head_length, cy + arrow_head_width/2);
-                nvgClosePath(s->vg);
-                nvgFillColor(s->vg, yellow_arrow_color);
-                nvgFill(s->vg);
-            }
-
-            icon_show = true;
+            ui_draw_bsd(s, lane_barrier_vertices[0], &color, false);
         }
-        if (right_blindspot) {
-            int cx = center_x + horizontal_offset;
-            int cy = top_y + circle_radius;  // 保持在最上方
-            nvgBeginPath(s->vg);
-            nvgCircle(s->vg, cx, cy, circle_radius);
-            nvgFillColor(s->vg, icon_color_red);
-            nvgFill(s->vg);
-            if(show_lane_info >= 1)
-            {
-                nvgBeginPath(s->vg);
-                nvgRect(s->vg, cx - total_arrow_length/2, cy - arrow_body_width/2,
-                        arrow_body_length, arrow_body_width);
-                nvgFillColor(s->vg, yellow_arrow_color);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgMoveTo(s->vg, cx + total_arrow_length/2, cy);
-                nvgLineTo(s->vg, cx + total_arrow_length/2 - arrow_head_length, cy - arrow_head_width/2);
-                nvgLineTo(s->vg, cx + total_arrow_length/2 - arrow_head_length, cy + arrow_head_width/2);
-                nvgClosePath(s->vg);
-                nvgFillColor(s->vg, yellow_arrow_color);
-                nvgFill(s->vg);
-            }
+        else if (lead_left.getStatus() && lead_left.getDRel() < car_state.getVEgo() * 3.0 && leftLaneChange) {
+            ui_draw_bsd(s, lane_barrier_vertices[0], &color2, false);
+        }
 
-            icon_show = true;
+        if (right_blindspot) {
+            ui_draw_bsd(s, lane_barrier_vertices[1], &color, true);
+        }
+        else if (lead_right.getStatus() && lead_right.getDRel() < car_state.getVEgo() * 3.0 && rightLaneChange) {
+            ui_draw_bsd(s, lane_barrier_vertices[1], &color2, true);
         }
     }
 };
@@ -2425,6 +2080,109 @@ public:
             s->max_distance = std::clamp((float)lead_d, 0.0f, s->max_distance);
         }
 
+        // ===== 驾驶数据面板 - 数据采集 =====
+        {
+            // 计算真实帧间隔（修复平均车速不准的 bug）
+            uint64_t now_ts = nanos_since_boot();
+            float dt = 0.05f;  // 默认值（首帧）
+            if (last_panel_update_time > 0) {
+                dt = (now_ts - last_panel_update_time) / 1e9f;
+                // 防异常值：限制在 1ms~500ms 范围内
+                if (dt < 0.001f) dt = 0.001f;
+                if (dt > 0.5f)   dt = 0.5f;
+            }
+            last_panel_update_time = now_ts;
+
+            // 前车距离
+            auto radar_state_panel = sm["radarState"].getRadarState();
+            auto lead_one_panel = radar_state_panel.getLeadOne();
+            last_lead_distance = lead_one_panel.getStatus() ? lead_one_panel.getDRel() : 0.0f;
+
+            // 车道变更检测（转向灯从亮到灭算一次完整变道）
+            auto car_state_panel = sm["carState"].getCarState();
+            bool cur_left_blinker = car_state_panel.getLeftBlinker();
+            bool cur_right_blinker = car_state_panel.getRightBlinker();
+            bool cur_blinker_active = cur_left_blinker || cur_right_blinker;
+            if (blinker_was_active && !cur_blinker_active) {
+                lane_change_count++;
+            }
+            blinker_was_active = cur_blinker_active;
+
+            // 急刹检测（加速度滞回判断，避免重复计数；-3.5 m/s² 约为 0.35g）
+            float cur_a_ego = car_state_panel.getAEgo();
+            if (!is_hard_braking && cur_a_ego < -3.5f) {
+                is_hard_braking = true;
+                hard_brake_count++;
+            } else if (is_hard_braking && cur_a_ego > -1.5f) {
+                is_hard_braking = false;
+            }
+
+            // 里程和速度统计（使用真实帧间隔 dt，不再硬编码 0.05）
+            float current_speed = v_ego; // m/s
+            if (current_speed > 0.1f) {
+                total_distance += current_speed * dt;
+                moving_time_sec += dt;
+                if (longActive) {
+                    op_distance += current_speed * dt;
+                }
+                if (current_speed > max_speed) {
+                    max_speed = current_speed;
+                }
+            }
+
+            // 行程开始时间
+            if (drive_start_time == 0 && s->scene.started) {
+                drive_start_time = nanos_since_boot();
+            }
+
+            // OP控制时间累计
+            if (longActive) {
+                if (!was_engaged) {
+                    op_start_time = nanos_since_boot();
+                }
+            } else {
+                if (was_engaged && op_start_time > 0) {
+                    op_total_time += (nanos_since_boot() - op_start_time);
+                    op_start_time = 0;
+                }
+            }
+
+            // 接管次数检测：OP从engaged变为非engaged算一次接管
+            // was_engaged = 上一帧的longActive状态
+            // longActive = 当前帧的OP控制状态
+            if (was_engaged && !longActive) {
+                if (!was_override) {
+                    takeover_count++;
+                    was_override = true;
+                }
+            }
+            if (longActive) {
+                was_override = false;
+            }
+
+            was_engaged = longActive;
+
+            // 行程结束时重置
+            if (!s->scene.started) {
+                total_distance = 0.0f;
+                op_distance = 0.0f;
+                max_speed = 0.0f;
+                takeover_count = 0;
+                drive_start_time = 0;
+                op_total_time = 0;
+                op_start_time = 0;
+                moving_time_sec = 0.0f;
+                was_engaged = false;
+                was_override = false;
+                last_lead_distance = 0.0f;
+                lane_change_count = 0;
+                hard_brake_count = 0;
+                blinker_was_active = false;
+                is_hard_braking = false;
+                last_panel_update_time = 0;
+            }
+        }
+
 #if 0
         lead_vertices_side.clear();
         for (auto const& rs : { radar_state.getLeadsLeft(), radar_state.getLeadsRight(), radar_state.getLeadsCenter() }) {
@@ -2503,10 +2261,10 @@ public:
                   QPolygonF vertext;
                   vertext.push_back(side);
                   vertext.push_back(a_side);
-                  ui_draw_line(s, vertext, nullptr, nullptr, 3.0, (v_sum > 0.f)? COLOR_GREEN: COLOR_RED);
+                  ui_draw_line(s, vertext, nullptr, nullptr, 3.0, (v_sum > 0.f)? COLOR_GREEN_ALPHA(200): COLOR_RED_ALPHA(200));
                   nvgBeginPath(s->vg);
                   nvgCircle(s->vg, ax, ay, 10);
-                  nvgFillColor(s->vg, (v_sum > 0.f) ? COLOR_GREEN : COLOR_RED);
+                  nvgFillColor(s->vg, (v_sum > 0.f) ? COLOR_GREEN_ALPHA(200) : COLOR_RED_ALPHA(200));
                   nvgFill(s->vg);
                 }
 
@@ -2515,9 +2273,9 @@ public:
                 wStr = 35 * (int)strlen(str);
                 ui_fill_rect(s->vg,
                   { (int)(x - wStr / 2), (int)(y - 35), wStr, 42 },
-                  (!radar) ? COLOR_BLUE : (model_prob == 0.01f) ? COLOR_GREEN : (v_sum > 0.f) ? COLOR_ORANGE : COLOR_RED,
+                  (!radar) ? COLOR_BLUE_ALPHA(180) : (model_prob == 0.01f) ? COLOR_GREEN_ALPHA(200) : (v_sum > 0.f) ? COLOR_ORANGE_ALPHA(200) : COLOR_RED_ALPHA(200),
                   15);
-                ui_draw_text(s, x, y, str, 40, COLOR_WHITE, BOLD);
+                ui_draw_text(s, x, y, str, 40, COLOR_WHITE_ALPHA(200), BOLD);
 
                 if (show_radar_info >= 2) {
                   sprintf(str, "%.1f", y_rel);
@@ -2575,10 +2333,7 @@ public:
     }
 #endif
     void drawDebug(UIState* s) {
-        if (params.getInt("ShowDebugUI") > 1) {
-            nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-            ui_draw_text(s, s->fb_w, s->fb_h - 10, carrot_man_debug, 25, COLOR_WHITE, BOLD, 1.0f, 1.0f);
-        }
+        // 已注释：不显示 carrot_man_debug 调试信息
     }
     void drawNaviPath(UIState* s) {
       if (!nav_path_display) return;
@@ -2604,7 +2359,7 @@ public:
                 if(isnan(x) || isnan(y)) continue;
 				nvgBeginPath(s->vg);
                 nvgCircle(s->vg, x, y, 10);
-                nvgFillColor(s->vg, COLOR_GREEN);
+                nvgFillColor(s->vg, COLOR_GREEN_ALPHA(200));
                 nvgFill(s->vg);
 			}
         }
@@ -2643,6 +2398,57 @@ public:
     int   memoryUsage = 0;
     float freeSpace = 0.0f;
     float voltage = 0.0f;
+
+    // ===== 驾驶数据面板相关 =====
+    float   total_distance = 0.0f;       // 总里程 (m)
+    float   op_distance = 0.0f;          // OP控制里程 (m)
+    float   max_speed = 0.0f;             // 最高速度 (m/s)
+    int     takeover_count = 0;          // 接管次数
+    uint64_t drive_start_time = 0;        // 本次行程开始时间 (nanos)
+    uint64_t op_start_time = 0;           // OP激活累计开始时间 (nanos)
+    uint64_t op_total_time = 0;          // OP累计控制时间 (nanos)
+    float   moving_time_sec = 0.0f;      // 行驶时间（速度>0.1时累计，秒）
+    bool    was_engaged = false;          // 上一帧是否engaged
+    bool    was_override = false;         // 上一帧是否override
+    float   last_lead_distance = 0.0f;   // 前车距离 (m)
+    int     lane_change_count = 0;       // 车道变更次数
+    int     hard_brake_count = 0;        // 急刹次数
+    bool    blinker_was_active = false;  // 上一帧转向灯是否激活（用于车道变更计数）
+    bool    is_hard_braking = false;     // 当前是否处于急刹状态（滞回判断）
+    uint64_t last_panel_update_time = 0;  // 上一帧面板数据采集时间戳（用于精确计算 dt）
+
+    void drawTrafficLight(UIState* s) {
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        // 红绿灯图标 — 横向图片，V11: 精确居中于最高定速框正下方
+        int box_cruise_x = 14;   // V21: 与 drawCruiseSpeedBox box_x 一致，移回最左边
+        int box_cruise_y = 20;    // drawCruiseSpeedBox 中 box_y
+        int box_cruise_w = 200;
+        int box_cruise_h = 260;   // drawCruiseSpeedBox 中 box_height
+        // V15: 红绿灯换新图 460x200 PNG，等比缩放适配
+        int icon_display_w = 184;    // 460缩放到40%
+        int icon_display_h = 80;     // 200缩放到40%，保持宽高比
+        // 精确居中于定速框正下方
+        int x = box_cruise_x + box_cruise_w / 2 - icon_display_w / 2;   // = 554 - 92 = 462
+        int y = box_cruise_y + box_cruise_h + 6;                       // 紧贴定速框底部
+        int icon_red_w = icon_display_w, icon_red_h = icon_display_h;
+        int icon_green_w = icon_display_w, icon_green_h = icon_display_h;
+        int icon_no_w = icon_display_w, icon_no_h = icon_display_h;
+        bool red_light = trafficState == 1;
+        bool green_light = trafficState == 2;
+        bool no_light = !(trafficState_carrot == 1 || trafficState_carrot == 2);
+        if(trafficState_carrot == 1) {
+			red_light = true;
+            //icon_red *= 1.5;
+		}
+		else if(trafficState_carrot == 2) {
+			green_light = true;
+            //icon_green *= 1.5;
+		}
+        if (red_light) ui_draw_image(s, { x, y, icon_red_w, icon_red_h }, "ic_traffic_red", 1.0f);
+        else if (green_light) ui_draw_image(s, { x, y, icon_green_w, icon_green_h }, "ic_traffic_green", 1.0f);
+        else if (no_light) ui_draw_image(s, { x, y, icon_no_w, icon_no_h }, "ic_traffic_no", 1.0f);
+    }
+
     void drawHud(UIState* s) {
         int show_device_state = params.getInt("ShowDeviceState");
         blink_timer = (blink_timer + 1) % 16;
@@ -2658,10 +2464,11 @@ public:
         xSpdLimit = 50;
         xSignType = 1;
 #endif
-        bool cam_detected = false;
-        if (xSpdLimit > 0 && xSignType != 22 && xSignType != 4) cam_detected = true;
+        // bool cam_detected = false;
+        // if (xSpdLimit > 0 && xSignType != 22 && xSignType != 4) cam_detected = true;
         NVGcolor stroke_color = COLOR_WHITE;
-        NVGcolor bg_color = (cam_detected && blink_timer > 8)?COLOR_RED_ALPHA(180):COLOR_BLACK_ALPHA(90);
+        // 关闭 HUD 背景闪屏：始终使用黑色背景
+        NVGcolor bg_color = COLOR_BLACK_ALPHA(90);
         if (show_device_state > 0) {
           ui_fill_rect(s->vg, { bx - 120, by - 270, 475, 495 }, bg_color, 30, 2, &stroke_color);
         }
@@ -2715,7 +2522,7 @@ public:
 
         if (apply_source.length()) {
             sprintf(apply_speed_str, "%d", (int)((s->scene.is_metric)?apply_speed:apply_speed * KM_TO_MILE + 0.5));
-            textColor = COLOR_OCHRE;    // apply speed가 작동되면... 색을 바꾸자.
+            textColor = COLOR_ORANGE;    // apply speed가 작동되면... 색을 바꾸자.
             ui_draw_text(s, apply_x, apply_y, apply_speed_str, 50, textColor, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
             ui_draw_text(s, apply_x, apply_y - 50, apply_source.toStdString().c_str(), 30, textColor, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
         }
@@ -2727,16 +2534,16 @@ public:
         const SubMaster& sm = *(s->sm);
 
         // draw gap info
-        char driving_mode_str[32] = "经济";
+        char driving_mode_str[32] = "연비";
         int driving_mode = myDrivingMode;// params.getInt("MyDrivingMode");
         NVGcolor mode_color = COLOR_GREEN_ALPHA(210);
         NVGcolor text_color = COLOR_WHITE;
         switch (driving_mode) {
-        case 1: strcpy(driving_mode_str, tr("经 济").toStdString().c_str()); mode_color = COLOR_GREEN_ALPHA(210);  break;
-        case 2: strcpy(driving_mode_str, tr("安 全").toStdString().c_str()); mode_color = COLOR_ORANGE_ALPHA(210);  text_color = COLOR_WHITE;  break;
-        case 3: strcpy(driving_mode_str, tr("标 准").toStdString().c_str()); mode_color = COLOR_GREY_ALPHA(210);  text_color = COLOR_WHITE;  break;
-        case 4: strcpy(driving_mode_str, tr("运 动").toStdString().c_str()); mode_color = COLOR_RED_ALPHA(210);  break;
-        default: strcpy(driving_mode_str, tr("错 误").toStdString().c_str()); break;
+        case 1: strcpy(driving_mode_str, tr("ECO").toStdString().c_str()); mode_color = COLOR_GREEN_ALPHA(210);  break;
+        case 2: strcpy(driving_mode_str, tr("SAFE").toStdString().c_str()); mode_color = COLOR_ORANGE_ALPHA(210);  text_color = COLOR_WHITE;  break;
+        case 3: strcpy(driving_mode_str, tr("NORM").toStdString().c_str()); mode_color = COLOR_GREY_ALPHA(210);  text_color = COLOR_WHITE;  break;
+        case 4: strcpy(driving_mode_str, tr("FAST").toStdString().c_str()); mode_color = COLOR_RED_ALPHA(210);  break;
+        default: strcpy(driving_mode_str, tr("ERRM").toStdString().c_str()); break;
         }
         int dx = bx - 50;
         int dy = by + 175;
@@ -2807,25 +2614,16 @@ public:
         active_carrot = 2;
 #endif
         if (active_carrot >= 2) {
-          // 显示 N（绿色背景）
-          ui_fill_rect(s->vg, { dx - 55, dy - 38, 50, 48 }, COLOR_GREEN, 10, 2);
-          ui_draw_text(s, dx-30, dy, "N", 40, COLOR_WHITE, BOLD);
-
-        } else if (active_carrot >= 1) {
-          // 显示 M（蓝色背景）
-          ui_fill_rect(s->vg, { dx - 55, dy - 38, 50, 48 }, COLOR_BLUE_ALPHA(210), 10, 2);
-          ui_draw_text(s, dx-30, dy, "M", 40, COLOR_WHITE, BOLD);
+            ui_fill_rect(s->vg, { dx - 55, dy - 38, 110, 48 }, COLOR_GREEN_ALPHA(210), 15, 2);
+            ui_draw_text(s, dx, dy - 2, "APN", 32, COLOR_WHITE, BOLD);
         }
-
-        // 新加的 E
-        // 在 N/M 矩形右侧留出空位，偏移 60 像素
-        ui_fill_rect(s->vg, { dx + 5, dy - 38, 50, 48 }, _ext_state ? COLOR_GREEN : COLOR_RED, 10, 2);
-        ui_draw_text(s, dx + 30, dy, QString::number(_ext_state).toStdString().c_str(), 40, COLOR_WHITE, BOLD);
-
-        // ROUTE 标签保持不变
+        else if (active_carrot >= 1) {
+            ui_fill_rect(s->vg, { dx - 55, dy - 38, 110, 48 }, COLOR_BLUE_ALPHA(210), 15, 2);
+            ui_draw_text(s, dx, dy - 2, "APM", 32, COLOR_WHITE, BOLD);
+        }
         if (nav_path_vertex_count > 1) {
             ui_draw_text(s, dx, dy - 45, "ROUTE", 30, COLOR_WHITE, BOLD);
-		    }
+		}
 #ifdef __UI_TEST
         active_carrot = 2;
         nRoadLimitSpeed = 30;
@@ -2842,13 +2640,17 @@ public:
             if (xSpdLimit > 0 && xSignType != 22) {
                 disp_speed = (int)(xSpdLimit * ((s->scene.is_metric)?1:KM_TO_MILE) + 0.5);
                 limit_color = (blink_timer <= 8) ? COLOR_RED_ALPHA(210) : COLOR_YELLOW_ALPHA(210);
-                ui_draw_text(s, dx, dy-45, "CAM", 30, COLOR_WHITE, BOLD);
+                ui_draw_text(s, dx, dy-45, "CAM", 30, COLOR_ORANGE, BOLD);
             }
             else {
                 disp_speed = nRoadLimitSpeed;
-		            disp_speed = (int)(disp_speed * ((s->scene.is_metric)?1.0:KM_TO_MILE) + 0.5);
-                limit_color = (v_ego * 3.6 > disp_speed + 2) ? COLOR_RED_ALPHA(210) : COLOR_WHITE_ALPHA(210);
-                ui_draw_text(s, dx, dy - 45, "LIMIT", 30, COLOR_WHITE, BOLD);
+		        // 60 km/h 以下强制显示 60
+				if (disp_speed < 60) {
+					disp_speed = 60;
+				 }
+		        disp_speed = (int)(disp_speed * ((s->scene.is_metric)?1.0:KM_TO_MILE) + 0.5);
+                limit_color = COLOR_YELLOW_ALPHA(210);
+                ui_draw_text(s, dx, dy - 45, "LIMIT", 30, COLOR_ORANGE, BOLD);
             }
 
             ui_fill_rect(s->vg, { dx - 55, dy - 38, 110, 48 }, limit_color, 15, 2);
@@ -2860,66 +2662,104 @@ public:
             dx = bx - 35;
             dy = by - 200;
             mode_color = COLOR_GREEN_ALPHA(190);
-            ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, (cpuTemp>80 && blink_timer<=8)?COLOR_RED : mode_color, 15, 2);
-            ui_draw_text(s, dx, dy-5, "CPU", 25, COLOR_WHITE, BOLD);
+            ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, (cpuTemp>80 && blink_timer<=8)?COLOR_ORANGE : mode_color, 15, 2);
+            ui_draw_text(s, dx, dy-5, "温度", 25, COLOR_WHITE, BOLD);
             sprintf(str, "%.0f\u00B0C", cpuTemp);
             ui_draw_text(s, dx, dy + 40, str, 40, COLOR_WHITE, BOLD);
 
             dx += 150;
-            ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, (memoryUsage > 85 && blink_timer <= 8) ? COLOR_RED : mode_color, 15, 2);
-            ui_draw_text(s, dx, dy-5, "MEM", 25, COLOR_WHITE, BOLD);
+            ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, (memoryUsage > 85 && blink_timer <= 8) ? COLOR_ORANGE : mode_color, 15, 2);
+            ui_draw_text(s, dx, dy-5, "内存", 25, COLOR_WHITE, BOLD);
             sprintf(str, "%d%%", memoryUsage);
             ui_draw_text(s, dx, dy + 40, str, 40, COLOR_WHITE, BOLD);
 
             dx += 150;
-            if (disp_timer < 32) {
-              ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, mode_color, 15, 2);
-              ui_draw_text(s, dx, dy - 5, "DISK", 25, COLOR_WHITE, BOLD);
-              sprintf(str, "%.0f%%", 100 - freeSpace);
-              ui_draw_text(s, dx, dy + 40, str, 40, COLOR_WHITE, BOLD);
-            }
-            else {
-              ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, mode_color, 15, 2);
-              ui_draw_text(s, dx, dy - 5, "VOLT", 25, COLOR_WHITE, BOLD);
-              sprintf(str, "%.1fV", voltage);
-              ui_draw_text(s, dx, dy + 40, str, 40, COLOR_WHITE, BOLD);
-            }
+            ui_fill_rect(s->vg, { dx - 65, dy - 38, 130, 90 }, mode_color, 15, 2);
+            ui_draw_text(s, dx, dy - 5, "存储", 25, COLOR_WHITE, BOLD);
+            sprintf(str, "%.0f%%", 100 - freeSpace);
+            ui_draw_text(s, dx, dy + 40, str, 40, COLOR_WHITE, BOLD);
         }
     }
     void drawDateTime(const UIState* s) {
         char str[128];
-        // 시간표시
+        // 时间显示
         int show_datetime = params.getInt("ShowDateTime");
         if (show_datetime) {
             time_t now = time(nullptr);
             struct tm* local = localtime(&now);
 
-            int x = 170;// s->fb_w - 300;
-            int y = 120;// 150;
-            int nav_y = y + 50;
+            int x = 180;// s->fb_w - 300;
+            int y = 920;// 150;
+            // int nav_y = y + 50;
 
             nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             if (show_datetime == 1 || show_datetime == 2) {
                 strftime(str, sizeof(str), "%H:%M", local);
-                ui_draw_text(s, x, y, str, 100, COLOR_WHITE, BOLD, 3.0f, 8.0f);
+                ui_draw_text(s, x, y, str, 100, COLOR_WHITE_ALPHA(220), BOLD, 3.0f, 0.0f);
 
             }
             if (show_datetime == 1 || show_datetime == 3) {
                 //strftime(str, sizeof(str), "%m-%d-%a", local);
-                const char* weekdays_ko[] = { "日", "一", "二", "三", "四", "五", "六" };
+                const char* weekdays_ko[] = { "周日", "周一", "周二", "周三", "周四", "周五", "周六" };
                 strftime(str, sizeof(str), "%m-%d", local); // 날짜만 가져옴
                 int weekday_index = local->tm_wday; // tm_wday: 0=일, 1=월, ..., 6=토
                 snprintf(str + strlen(str), sizeof(str) - strlen(str), "(%s)", weekdays_ko[weekday_index]);
 
-                ui_draw_text(s, x, y + 70, str, 60, COLOR_WHITE, BOLD, 3.0f, 8.0f);
-                nav_y += 70;
+                ui_draw_text(s, x, y + 70, str, 60, COLOR_WHITE_ALPHA(220), BOLD, 3.0f, 0.0f);
+            //     nav_y += 70;
             }
-            if (false && szPosRoadName.size() > 0) {
-                nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-                ui_draw_text(s, x, nav_y, szPosRoadName.toStdString().c_str(), 35, COLOR_WHITE, BOLD, 3.0f, 8.0f);
-            }
+            // if (false && szPosRoadName.size() > 0) {
+            //     nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            //     ui_draw_text(s, x, nav_y, szPosRoadName.toStdString().c_str(), 35, COLOR_WHITE_ALPHA(200), BOLD, 0.0f, 0.0f);
+            // }
         }
     }
+    void drawCruiseSpeedBox(const UIState* s) {
+        char cruise_speed[32];
+        sprintf(cruise_speed, "%d", (int)v_cruise);
+
+        // 框体参数 — 放大高度容纳 km/h
+        int box_width = 200;
+        int box_height = 260;              // V10: 从204加大到260，容纳km/h单位
+        int box_x = 14;                    // V21: 移回最左边靠边框
+        int box_y = 20;                    // V10: 稍微上移贴顶
+
+        // 绘制框体
+        NVGcolor stroke_color = COLOR_WHITE_ALPHA(200);
+        ui_fill_rect(s->vg, { box_x, box_y, box_width, box_height }, COLOR_BLACK_ALPHA(120), 30, 2, &stroke_color);
+
+        // 显示"最高定速"文字
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        ui_draw_text(s, box_x + box_width / 2, box_y + 18, tr("最高定速").toStdString().c_str(), 40, COLOR_MY_ALPHA(230), BOLD, 0.0f, 0.0f);
+
+        // 显示定速速度值（位置不变）
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        ui_draw_text(s, box_x + box_width / 2, box_y + 130, cruise_speed, 90, COLOR_WHITE_ALPHA(220), BOLD, 0.0f, 0.0f);
+
+        // 单位 km/h（数字下方，框体内）
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        ui_draw_text(s, box_x + box_width / 2, box_y + 195, "km/h", 28, COLOR_WHITE_ALPHA(190), BOLD, 0.0f, 0.0f);
+
+        // ======================
+        // 新增：居中绿色实时车速（防崩溃稳定版）
+        // ======================
+        char real_speed[32];
+        int real_kph = 0;
+        if (v_ego > 0.2f) {
+            real_kph = (int)(v_ego * 3.6f);
+        }
+        sprintf(real_speed, "%d", real_kph);
+
+        // 屏幕绝对居中（位置固定，不随定速框 box_y 变动）
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        ui_draw_text(s, s->fb_w / 2, 155, real_speed, 180, nvgRGB(0, 255, 0), BOLD, 7.0f, 3.5f);
+
+        // 单位 km/h（实时车速下方，位置固定）
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        ui_draw_text(s, s->fb_w / 2, 265, "km/h", 40, nvgRGB(0, 255, 0), BOLD, 2.0f, 1.0f);
+
+    }
+
     void drawConnInfo(const UIState* s) {
         int y = 10;
         int x = 30;
@@ -3062,6 +2902,315 @@ public:
 		ui_draw_text(s, s->fb_w - 10, 2, str.toStdString().c_str(), 30, top_right_color, BOLD, 3.0f, 1.0f);
     }
 
+    void drawDrivePanel(UIState* s) {
+        int show_drive_panel = params.getInt("ShowDrivePanel");
+        if (show_drive_panel == 0) return;
+        if (!s->scene.started) return;
+
+        // ===== 面板布局参数 =====
+        const int panel_w = 460;
+        const int panel_x = s->fb_w - panel_w - 20;
+        const int font_label = 42;
+        const int font_value = 46;
+        const int group_gap = 16;
+        const int text_padding = 30;
+        const int pad = 12;
+
+        // 面板尽可能大，但不遮挡底部信息条（留120px）
+        int panel_y = 20;
+        int max_panel_bottom = s->fb_h - 120;
+        int panel_h = max_panel_bottom - panel_y;
+        int inner_h = panel_h - pad * 2;
+        int row_h = (inner_h - 2 * group_gap) / 9;
+
+        // ===== 计算驾驶数据 =====
+        float drive_time_sec = 0.0f;
+        if (drive_start_time > 0) {
+            drive_time_sec = (nanos_since_boot() - drive_start_time) / 1e9;
+        }
+        float op_ratio = 0.0f;
+        if (total_distance > 0.01f) {
+            op_ratio = (op_distance / total_distance) * 100.0f;
+        }
+        float avg_speed = 0.0f;
+        if (moving_time_sec > 1.0f) {
+            avg_speed = (total_distance / moving_time_sec);
+        }
+
+        // ===== 绘制半透明背景 =====
+        NVGcolor bg_color = nvgRGBA(0, 0, 0, 100);
+        NVGcolor border_color = nvgRGBA(255, 255, 255, 60);
+        ui_fill_rect(s->vg, {panel_x, panel_y, panel_w, panel_h}, bg_color, 20, 2, &border_color);
+
+        NVGcolor sep_color = nvgRGBA(255, 255, 255, 40);
+        char str[64];
+
+        // 第1组起始Y（垂直居中，文字在行中间）
+        int y = panel_y + pad + (row_h + font_value) / 2;
+
+        // --- 行驶里程 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "行驶里程", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        float dist_km = total_distance / 1000.0f;
+        if (!s->scene.is_metric) dist_km *= KM_TO_MILE;
+        sprintf(str, "%.1f %s", dist_km, s->scene.is_metric ? "km" : "mi");
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, COLOR_WHITE, BOLD);
+        y += row_h;
+
+        // --- 行驶时间 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "行驶时间", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        int minutes = (int)(drive_time_sec / 60);
+        int seconds = (int)(drive_time_sec) % 60;
+        if (minutes >= 60) {
+            int hours = minutes / 60;
+            minutes = minutes % 60;
+            sprintf(str, "%d:%02d:%02d", hours, minutes, seconds);
+        } else {
+            sprintf(str, "%d:%02d", minutes, seconds);
+        }
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, COLOR_WHITE, BOLD);
+        y += row_h;
+
+        // --- 平均车速 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "平均车速", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        float avg_kph = avg_speed * (s->scene.is_metric ? MS_TO_KPH : MS_TO_MPH);
+        sprintf(str, "%.1f %s", avg_kph, s->scene.is_metric ? "km/h" : "mph");
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, COLOR_WHITE, BOLD);
+        y += row_h;
+
+        // --- 最高车速 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "最高车速", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        float max_kph = max_speed * (s->scene.is_metric ? MS_TO_KPH : MS_TO_MPH);
+        sprintf(str, "%.0f %s", max_kph, s->scene.is_metric ? "km/h" : "mph");
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, COLOR_WHITE, BOLD);
+        y += row_h;
+
+        // 分隔线1
+        y += group_gap / 2 - 1;
+        ui_fill_rect(s->vg, {panel_x + 30, y, panel_w - 60, 1}, sep_color, 0);
+        y += group_gap / 2;
+
+        // --- OP控制 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "OP控制", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        sprintf(str, "%.0f%%", op_ratio);
+        NVGcolor op_color = op_ratio > 80.0f ? COLOR_GREEN : (op_ratio > 50.0f ? COLOR_YELLOW : COLOR_ORANGE);
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, op_color, BOLD);
+        y += row_h;
+
+        // --- OP里程 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "OP里程", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        float op_dist_km = op_distance / 1000.0f;
+        if (!s->scene.is_metric) op_dist_km *= KM_TO_MILE;
+        sprintf(str, "%.1f %s", op_dist_km, s->scene.is_metric ? "km" : "mi");
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, COLOR_GREEN, BOLD);
+        y += row_h;
+
+        // --- 手动接管 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "手动接管", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        sprintf(str, "%d 次", takeover_count);
+        NVGcolor takeover_color = takeover_count > 0 ? COLOR_ORANGE : COLOR_GREEN;
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, takeover_color, BOLD);
+        y += row_h;
+
+        // 分隔线2
+        y += group_gap / 2 - 1;
+        ui_fill_rect(s->vg, {panel_x + 30, y, panel_w - 60, 1}, sep_color, 0);
+        y += group_gap / 2;
+
+        // --- 车道变更 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "车道变更", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        sprintf(str, "%d 次", lane_change_count);
+        NVGcolor lane_color = lane_change_count > 0 ? COLOR_YELLOW : COLOR_WHITE_ALPHA(180);
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, lane_color, BOLD);
+        y += row_h;
+
+        // --- 急刹次数 ---
+        nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, panel_x + text_padding, y, "急刹次数", font_label, COLOR_WHITE_ALPHA(180), BOLD);
+        nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        sprintf(str, "%d 次", hard_brake_count);
+        NVGcolor brake_color = hard_brake_count > 0 ? COLOR_RED : COLOR_GREEN;
+        ui_draw_text(s, panel_x + panel_w - text_padding, y, str, font_value, brake_color, BOLD);
+        y += row_h;
+    }
+
+    void drawBottomBar(UIState* s) {
+        if (!s->scene.started) return;
+
+        // 更新设备信息
+        makeDeviceInfo(s);
+
+        // 信息条贴着屏幕下边框，底部留3px不覆盖
+        const int bar_margin_bottom = 3;
+        const int bar_h = 82;
+        const int bar_y = s->fb_h - bar_h - bar_margin_bottom;
+        const int bar_margin = 0;
+
+        // 绘制半透明黑色背景条，带圆角
+        ui_fill_rect(s->vg, {bar_margin, bar_y, s->fb_w - bar_margin * 2, bar_h}, nvgRGBA(0, 0, 0, 140), 12, 0);
+
+        char str[96];
+        const int font_size = 36;
+
+        // 计算5等分区域宽度
+        int item_w = s->fb_w / 5;
+        int center_x[5];
+        for (int i = 0; i < 5; i++) {
+            center_x[i] = item_w * i + item_w / 2;
+        }
+        int text_y = bar_y + bar_h / 2 + font_size / 2 - 4;
+
+        // 辅助：居中绘制“白色标签 + 变色数值”
+        auto draw_label_value = [&](int cx, const char* label, const char* value, NVGcolor val_color) {
+            nvgFontFace(s->vg, BOLD);
+            nvgFontSize(s->vg, font_size);
+            float lb[4], vb[4];
+            nvgTextBounds(s->vg, 0, 0, label, NULL, lb);
+            nvgTextBounds(s->vg, 0, 0, value, NULL, vb);
+            float lw = lb[2] - lb[0];
+            float vw = vb[2] - vb[0];
+            float gap = 4;
+            float total = lw + gap + vw;
+            float x = cx - total / 2.0f;
+            ui_draw_text(s, x, text_y, label, font_size, COLOR_WHITE_ALPHA(200), BOLD);
+            ui_draw_text(s, x + lw + gap, text_y, value, font_size, val_color, BOLD);
+        };
+
+        // --- 第1项：前车距离（整体变色，保持原样）---
+        NVGcolor lead_color = COLOR_GREEN;
+        if (last_lead_distance > 0.01f) {
+            float lead_dist = s->scene.is_metric ? last_lead_distance : last_lead_distance * 3.28084f;
+            if (last_lead_distance <= 3.0f) lead_color = COLOR_ORANGE;
+            else if (last_lead_distance <= 5.0f) lead_color = COLOR_YELLOW;
+            sprintf(str, "前车距离 %.1f %s", lead_dist, s->scene.is_metric ? "m" : "ft");
+        } else {
+            sprintf(str, "前车距离 --");
+            lead_color = COLOR_WHITE_ALPHA(120);
+        }
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        ui_draw_text(s, center_x[0], text_y, str, font_size, lead_color, BOLD);
+
+        // --- 第2项：CPU使用率（数值变色）---
+        float cpu_usage_val = cpuUsage;
+        NVGcolor cpu_usage_color;
+        if (cpu_usage_val >= 90.0f) cpu_usage_color = COLOR_RED;
+        else if (cpu_usage_val >= 70.0f) cpu_usage_color = COLOR_ORANGE;
+        else cpu_usage_color = COLOR_GREEN;
+        sprintf(str, "%.0f%%", cpu_usage_val);
+        draw_label_value(center_x[1], "CPU使用率 ", str, cpu_usage_color);
+
+        // --- 第3项：CPU温度（数值变色）---
+        float cpu_temp_val = cpuTemp;
+        NVGcolor cpu_temp_color;
+        if (cpu_temp_val >= 90.0f) cpu_temp_color = COLOR_RED;
+        else if (cpu_temp_val >= 75.0f) cpu_temp_color = COLOR_ORANGE;
+        else cpu_temp_color = COLOR_GREEN;
+        sprintf(str, "%.0f°C", cpu_temp_val);
+        draw_label_value(center_x[2], "CPU温度 ", str, cpu_temp_color);
+
+        // --- 第4项：内存占用（数值变色）---
+        float mem_val = (float)memoryUsage;
+        NVGcolor mem_color;
+        if (mem_val >= 90.0f) mem_color = COLOR_RED;
+        else if (mem_val >= 75.0f) mem_color = COLOR_ORANGE;
+        else if (mem_val >= 60.0f) mem_color = COLOR_YELLOW;
+        else mem_color = COLOR_GREEN;
+        sprintf(str, "%d%%", memoryUsage);
+        draw_label_value(center_x[3], "内存占用 ", str, mem_color);
+
+        // --- 第5项：剩余存储（数值变色）---
+        float disk_val = freeSpace;
+        NVGcolor disk_color;
+        if (disk_val <= 5.0f) disk_color = COLOR_RED;
+        else if (disk_val <= 15.0f) disk_color = COLOR_ORANGE;
+        else if (disk_val <= 30.0f) disk_color = COLOR_YELLOW;
+        else disk_color = COLOR_GREEN;
+        sprintf(str, "%.0f%%", disk_val);
+        draw_label_value(center_x[4], "剩余存储 ", str, disk_color);
+    }
+
+    void drawBottomBarOnBorder(NVGcontext* vg, int w, int h, UIState* s) {
+        if (!s->scene.started) return;
+
+        // 更新设备信息
+        makeDeviceInfo(s);
+
+        const int bar_h = 52;
+        const int bar_y = h - bar_h;
+        const int bar_margin = 0;
+
+        // 绘制半透明背景条
+        ui_fill_rect(vg, {bar_margin, bar_y, w - bar_margin * 2, bar_h}, nvgRGBA(0, 0, 0, 140), 0);
+
+        char str[64];
+        const int font_size = 30;
+
+        // 计算5等分区域宽度
+        int item_w = w / 5;
+        int center_x[5];
+        for (int i = 0; i < 5; i++) {
+            center_x[i] = item_w * i + item_w / 2;
+        }
+        int text_y = bar_y + bar_h - 12;
+
+        // --- 第1项：前车距离（最前面，整体变色）---
+        NVGcolor lead_label_color = COLOR_WHITE_ALPHA(200);
+        NVGcolor lead_value_color = COLOR_GREEN;
+        if (last_lead_distance > 0.01f) {
+            float lead_dist = s->scene.is_metric ? last_lead_distance : last_lead_distance * 3.28084f;
+            if (last_lead_distance <= 3.0f) {
+                lead_label_color = COLOR_ORANGE;
+                lead_value_color = COLOR_ORANGE;
+            } else if (last_lead_distance <= 5.0f) {
+                lead_label_color = COLOR_YELLOW;
+                lead_value_color = COLOR_YELLOW;
+            }
+            sprintf(str, "%.1f %s", lead_dist, s->scene.is_metric ? "m" : "ft");
+        } else {
+            sprintf(str, "--");
+            lead_value_color = COLOR_WHITE_ALPHA(120);
+        }
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        char lead_str[96];
+        sprintf(lead_str, "前车距离 %s", str);
+        ui_draw_text_vg(vg, center_x[0], text_y, lead_str, font_size, lead_label_color, BOLD);
+
+        // --- 第2项：CPU使用率 ---
+        NVGcolor cpu_usage_color = cpuUsage > 80.0f ? COLOR_ORANGE : COLOR_WHITE_ALPHA(200);
+        sprintf(str, "CPU使用率 %.0f%%", cpuUsage);
+        ui_draw_text_vg(vg, center_x[1], text_y, str, font_size, cpu_usage_color, BOLD);
+
+        // --- 第3项：CPU温度 ---
+        NVGcolor cpu_temp_color = cpuTemp > 85.0f ? COLOR_ORANGE : COLOR_WHITE_ALPHA(200);
+        sprintf(str, "CPU温度 %.0f%%C", cpuTemp);
+        ui_draw_text_vg(vg, center_x[2], text_y, str, font_size, cpu_temp_color, BOLD);
+
+        // --- 第4项：内存占用 ---
+        NVGcolor mem_color = memoryUsage > 85 ? COLOR_ORANGE : COLOR_WHITE_ALPHA(200);
+        sprintf(str, "内存占用 %d%%", memoryUsage);
+        ui_draw_text_vg(vg, center_x[3], text_y, str, font_size, mem_color, BOLD);
+
+        // --- 第5项：剩余存储 ---
+        NVGcolor disk_color = freeSpace < 15.0f ? COLOR_ORANGE : COLOR_WHITE_ALPHA(200);
+        sprintf(str, "剩余存储 %.0f%%", freeSpace);
+        ui_draw_text_vg(vg, center_x[4], text_y, str, font_size, disk_color, BOLD);
+    }
+
 };
 #if 0
 #include "msgq/visionipc/visionipc_server.h"
@@ -3195,10 +3344,12 @@ void ui_draw(UIState *s, ModelRenderer* model_renderer, int w, int h) {
   Params params;
   bool draw_carrot = drawCarrot.updateState(s);
   drawCarrot.drawNaviPath(s);
+
   static float pathDrawSeq = 0.0;
   int show_lane_info = params.getInt("ShowLaneInfo");
-  if(show_lane_info >= 0) drawPath.draw(s, pathDrawSeq);
-  drawLaneLine.draw(s, show_lane_info);
+  bool dp_ui_rainbow = params.getBool("dp_ui_rainbow");
+  if (!dp_ui_rainbow && show_lane_info >= 0) drawPath.draw(s, pathDrawSeq);
+  if (!dp_ui_rainbow) drawLaneLine.draw(s, show_lane_info);
   if (params.getInt("ShowPathEnd") > 0) drawPathEnd.draw(s);
 
   int path_x = drawPathEnd.getPathX();
@@ -3208,17 +3359,21 @@ void ui_draw(UIState *s, ModelRenderer* model_renderer, int w, int h) {
 
   drawPlot.draw(s);
 
-  drawBlindSpot.draw(s,show_lane_info);
+  drawBlindSpot.draw(s);
 
   if(draw_carrot)
     drawCarrot.drawRadarInfo(s);
 
-  drawCarrot.drawHud(s);
+  drawCarrot.drawTrafficLight(s);
 
-  drawCarrot.drawDebug(s);
+  //drawCarrot.drawHud(s);
+
+  drawCarrot.drawCruiseSpeedBox(s);
+
+  //drawCarrot.drawDebug(s);
   drawCarrot.drawDateTime(s);
   //drawCarrot.drawConnInfo(s);
-  drawCarrot.drawDeviceInfo(s);
+  //drawCarrot.drawDeviceInfo(s);
   int show_tpms = params.getInt("ShowTpms");
   switch (show_tpms) {
   case 0: break;
@@ -3233,6 +3388,9 @@ void ui_draw(UIState *s, ModelRenderer* model_renderer, int w, int h) {
     drawCarrot.drawTpms3(s);
     break;
   }
+
+  drawCarrot.drawDrivePanel(s);
+  drawCarrot.drawBottomBar(s);
 
   drawTurnInfo.draw(s);
 
@@ -3293,28 +3451,18 @@ public:
     void draw(UIState *s, int w, int h, NVGcolor bg, NVGcolor bg_long) {
         NVGcontext* vg = s->vg_border;
 
-        ui_fill_rect(vg, { 0,0, w, h / 2  - 100}, bg, 15);
+        ui_fill_rect(vg, { 0, 0, w, h / 2 - 100}, bg, 15);
         ui_fill_rect(vg, { 0, h / 2 + 100, w, h }, bg_long, 15);
 
-        if(_ext_blinker != 2){
-          ui_fill_rect(vg, {w - 50, h/2 - 95, 50, 190}, (_right_blinker)?COLOR_ORANGE:COLOR_BLACK, 15);
-        }
-        else{
-          ui_fill_rect(vg, {w - 50, h/2 - 95, 50, 190}, (_right_blinker)?COLOR_RED:COLOR_BLACK, 15);
-        }
-        if(_ext_blinker != 1){
-          ui_fill_rect(vg, {0, h/2 - 95, 50, 190}, (_left_blinker)?COLOR_ORANGE:COLOR_BLACK, 15);
-        }
-        else{
-          ui_fill_rect(vg, {0, h/2 - 95, 50, 190}, (_left_blinker)?COLOR_RED:COLOR_BLACK, 15);
-        }
+        ui_fill_rect(vg, {w - 50, h/2 - 95, 50, 190}, (_right_blinker)?COLOR_ORANGE_ALPHA(200):COLOR_BLACK_ALPHA(100), 15);
+        ui_fill_rect(vg, {0, h/2 - 95, 50, 190}, (_left_blinker)?COLOR_ORANGE_ALPHA(200):COLOR_BLACK_ALPHA(100), 15);
 
         const SubMaster& sm = *(s->sm);
         auto car_state = sm["carState"].getCarState();
         float a_ego = car_state.getAEgo();
 
         a_ego_width = a_ego_width * 0.5 + (w * std::abs(a_ego) / 4.0) * 0.5;
-        ui_fill_rect(vg, { w/2 - (int)(a_ego_width / 2), h - 30, (int)a_ego_width, 30 }, (a_ego >= 0)? COLOR_YELLOW : COLOR_RED, 15);
+        ui_fill_rect(vg, { w/2 - (int)(a_ego_width / 2), h - 30, (int)a_ego_width, 30 }, (a_ego >= 0)? COLOR_YELLOW_ALPHA(200) : COLOR_RED_ALPHA(200), 15);
 
         steering_angle_pos = steering_angle_pos * 0.5 + (w / 2. - w / 2. * car_state.getSteeringAngleDeg() / 90) * 0.5;
         int x_st = (int)steering_angle_pos - 50;
@@ -3323,76 +3471,76 @@ public:
         if (x_ed < 50) x_ed = 50;
         if (x_st > w - 50) x_st = w - 50;
         if (x_ed > w) x_ed = w;
-        ui_fill_rect(vg, { x_st, 0, x_ed - x_st, 30 }, COLOR_ORANGE, 15);
+        ui_fill_rect(vg, { x_st, 0, x_ed - x_st, 30 }, COLOR_ORANGE_ALPHA(200), 15);
 
 
-        char top[256] = "", top_left[256] = "", top_right[256] = "";
-        char bottom[256] = "", bottom_left[256] = "", bottom_right[256] = "";
+        // char top[256] = "", top_left[256] = "", top_right[256] = "";
+        // char bottom[256] = "", bottom_left[256] = "", bottom_right[256] = "";
 
-        Params params = Params();
+        // Params params = Params();
         QString str;
 
         // top
-        str = QString::fromStdString(car_state.getLogCarrot());
-        sprintf(top, "%s", str.toStdString().c_str());
+        // str = QString::fromStdString(car_state.getLogCarrot());
+        // sprintf(top, "%s", str.toStdString().c_str());
         // top_right
-        const auto live_delay = sm["liveDelay"].getLiveDelay();
-        const auto live_torque_params = sm["liveTorqueParameters"].getLiveTorqueParameters();
-        const auto live_params = sm["liveParameters"].getLiveParameters();
-        str.sprintf("LD[%.0f%%,%.2f],LT[%.0f%%,%s](LA[%.2f]/[%.2f]),SR(%.1f,%.1f),SO(%.1f/%.1f)",
-            (float)live_delay.getCalPerc(), live_delay.getLateralDelay(),
-            (float)live_torque_params.getCalPerc(), live_torque_params.getLiveValid() ? "ON" : "OFF",
-            live_torque_params.getLatAccelFactorFiltered(), live_torque_params.getFrictionCoefficientFiltered(),
-            live_params.getSteerRatio(), params.getFloat("CustomSR")/10.0,
-            live_params.getAngleOffsetAverageDeg(),
-            live_params.getAngleOffsetDeg());
-        sprintf(top_right, "%s", str.toStdString().c_str());
+        // const auto live_delay = sm["liveDelay"].getLiveDelay();
+        // const auto live_torque_params = sm["liveTorqueParameters"].getLiveTorqueParameters();
+        // const auto live_params = sm["liveParameters"].getLiveParameters();
+        // str.sprintf("LD[%.0f%%,%.2f],LT[%.0f%%,%s](%.2f/%.2f), SR(%.1f,%.1f)",
+        //     (float)live_delay.getCalPerc(), live_delay.getLateralDelay(),
+        //     (float)live_torque_params.getCalPerc(), live_torque_params.getLiveValid() ? "ON" : "OFF",
+        //     live_torque_params.getLatAccelFactorFiltered(), live_torque_params.getFrictionCoefficientFiltered(),
+        //     live_params.getSteerRatio(), params.getFloat("CustomSR")/10.0);
+        // sprintf(top_right, "%s", str.toStdString().c_str());
 
         //top_left
-        QString carName = QString::fromStdString(params.get("CarName"));
-        bool longitudinal_control = sm["carParams"].getCarParams().getOpenpilotLongitudinalControl();
-        if (params.getInt("HyundaiCameraSCC") > 0) {
-            carName += "(CAMERA SCC)";
-        }
-        else if (longitudinal_control) {
-            carName += " - OP Long";
-        }
-        QString NNFFModelName = QString::fromStdString(params.get("NNFFModelName"));
-        if (NNFFModelName.length() > 0) {
-            carName += ",NNFF";
-        }
-        sprintf(top_left, "%s", carName.toStdString().c_str());
+        // QString carName = QString::fromStdString(params.get("CarName"));
+        // bool longitudinal_control = sm["carParams"].getCarParams().getOpenpilotLongitudinalControl();
+        // if (params.getInt("HyundaiCameraSCC") > 0) {
+        //     carName += "(CAMERA SCC)";
+        // }
+        // else if (longitudinal_control) {
+        //     carName += " - OP Long";
+        // }
+        // QString NNFFModelName = QString::fromStdString(params.get("NNFFModelName"));
+        // if (NNFFModelName.length() > 0) {
+        //     carName += ",NNFF";
+        // }
+        // sprintf(top_left, "%s", carName.toStdString().c_str());
 
         // bottom
+        char bottom[256] = "";
         const auto lat_plan = sm["lateralPlan"].getLateralPlan();
         str = lat_plan.getLatDebugText().cStr();
         strcpy(bottom, str.toStdString().c_str());
 
         // bottom_left
-        QString gitBranch = QString::fromStdString(params.get("GitBranch"));
-        sprintf(bottom_left, "%s", gitBranch.toStdString().c_str());
+        // QString gitBranch = QString::fromStdString(params.get("GitBranch"));
+        // sprintf(bottom_left, "%s", gitBranch.toStdString().c_str());
+        char bottom_left[256] = "";
 
         // bottom_right
-        Params params_memory = Params("/dev/shm/params");
-        if (false && carrot_man_debug[0] != 0 && params.getInt("ShowDebugUI") > 0) {
-            strcpy(bottom_right, carrot_man_debug);
-        }
-        else {
-            QString ipAddress = QString::fromStdString(params_memory.get("NetworkAddress"));
+        // Params params_memory = Params("/dev/shm/params");
+        // if (false && carrot_man_debug[0] != 0 && params.getInt("ShowDebugUI") > 0) {
+        //     strcpy(bottom_right, carrot_man_debug);
+        // }
+        // else {
+        //     QString ipAddress = QString::fromStdString(params_memory.get("NetworkAddress"));
             //extern QString gitBranch;
-            sprintf(bottom_right, "%s", ipAddress.toStdString().c_str());
-        }
+        //     sprintf(bottom_right, "%s", ipAddress.toStdString().c_str());
+        // }
 
         int text_margin = 30;
         // top
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-        ui_draw_text_vg(vg, w / 2, 0, top, 30, COLOR_WHITE, BOLD);
+        // nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        // ui_draw_text_vg(vg, w / 2, 0, top, 30, COLOR_WHITE, BOLD);
         // top left
-        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-        ui_draw_text_vg(vg, text_margin, 0, top_left, 30, COLOR_WHITE, BOLD);
+        // nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        // ui_draw_text_vg(vg, text_margin, 0, top_left, 30, COLOR_WHITE, BOLD);
         // top right
-        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
-        ui_draw_text_vg(vg, w - text_margin, 0, top_right, 30, COLOR_WHITE, BOLD);
+        // nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+        // ui_draw_text_vg(vg, w - text_margin, 0, top_right, 30, COLOR_WHITE, BOLD);
         // bottom
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         ui_draw_text_vg(vg, w / 2, h, bottom, 30, COLOR_WHITE, BOLD);
@@ -3400,8 +3548,8 @@ public:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
         ui_draw_text_vg(vg, text_margin, h, bottom_left, 30, COLOR_WHITE, BOLD);
         // bottom right
-        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-        ui_draw_text_vg(vg, w- text_margin, h, bottom_right, 30, COLOR_WHITE, BOLD);
+        // nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        // ui_draw_text_vg(vg, w- text_margin, h, bottom_right, 30, COLOR_WHITE, BOLD);
 
         //drawTpms(s, w, h);
     }
@@ -3484,6 +3632,7 @@ void ui_nvg_init(UIState *s) {
   {"ic_speed_bg", "../assets/images/speed_bg.png"},
   {"ic_traffic_green", "../assets/images/traffic_green.png"},
   {"ic_traffic_red", "../assets/images/traffic_red.png"},
+  {"ic_traffic_no", "../assets/images/traffic_no.png"},
   {"ic_tire", "../assets/images/img_tire.png"},
   {"ic_road_speed", "../assets/images/road_speed.png"},
   {"ic_speed_bump", "../assets/images/speed_bump.png"},

@@ -1,4 +1,6 @@
+import json
 import math
+import os
 import numpy as np
 from cereal import log
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -74,6 +76,119 @@ class LanePlanner:
 
     self.params = Params()
 
+    # === 大路口动态偏移限制 (硬编码参数) ===
+    self.curveOffsetLimit = 0.15       # 最大偏移限制(m), 0=关闭
+    self.curveSpeedThreshold = 70      # curve_speed阈值, 超过此值视为大路口
+
+    # === AutoCenter: 自动居中纠偏 (auto lane centering correction) ===
+    # 0: off, 1: realtime correction only, 2: realtime + long-term learning (persisted)
+    self.ac_enabled = 2
+    self.ac_gain = 0.4                                        # P gain for realtime correction
+    self.ac_error_filtered = FirstOrderFilter(0.0, 1.0, DT_MDL)  # 1s low-pass on measured error
+    self.ac_learned = 0.0                                     # slow-learned static offset (m)
+    self.ac_learned_saved = 0.0
+    self.ac_applied = 0.0                                     # rate-limited output (m)
+    self.ac_param_ok = False                                  # params registered? else json file fallback
+    self.ac_read_counter = 0
+    self.ac_save_counter = 0
+    self._ac_load()
+
+  AC_FILE = "/data/carrot_auto_center.json"
+  AC_LEARN_LIMIT = 0.15      # max learned static offset (m)
+  AC_P_LIMIT = 0.20          # max realtime correction (m)
+  AC_TOTAL_LIMIT = 0.30      # max total correction (m)
+  AC_LEARN_TAU = 45.0        # learning time constant (s)
+  AC_RATE_LIMIT = 0.06       # max output slew rate (m/s)
+
+  def _ac_read_config(self):
+    # prefer Params (needs key registration + rebuild); fallback to json file (no rebuild needed)
+    try:
+      self.ac_enabled = self.params.get_int("AutoLaneCorrection")
+      gain = self.params.get_int("AutoLaneCorrectionGain")
+      self.ac_gain = clamp(gain, 10, 100) * 0.01 if gain > 0 else 0.4
+      self.ac_param_ok = True
+    except Exception:
+      self.ac_param_ok = False
+      try:
+        if os.path.exists(self.AC_FILE):
+          with open(self.AC_FILE) as f:
+            d = json.load(f)
+          self.ac_enabled = int(d.get("enabled", 2))
+          self.ac_gain = clamp(float(d.get("gain", 40)), 10, 100) * 0.01
+      except Exception:
+        pass
+
+  def _ac_load(self):
+    self._ac_read_config()
+    try:
+      if self.ac_param_ok:
+        self.ac_learned = clamp(self.params.get_float("AutoLaneCorrectionLearned"), -self.AC_LEARN_LIMIT, self.AC_LEARN_LIMIT)
+      elif os.path.exists(self.AC_FILE):
+        with open(self.AC_FILE) as f:
+          d = json.load(f)
+        self.ac_learned = clamp(float(d.get("learned", 0.0)), -self.AC_LEARN_LIMIT, self.AC_LEARN_LIMIT)
+    except Exception:
+      self.ac_learned = 0.0
+    self.ac_learned_saved = self.ac_learned
+
+  def _ac_save(self):
+    try:
+      if self.ac_param_ok:
+        self.params.put_float_nonblocking("AutoLaneCorrectionLearned", float(self.ac_learned))
+      else:
+        with open(self.AC_FILE, "w") as f:
+          json.dump({"enabled": self.ac_enabled, "gain": round(self.ac_gain * 100), "learned": round(self.ac_learned, 4)}, f)
+      self.ac_learned_saved = self.ac_learned
+    except Exception:
+      pass
+
+  def update_auto_center(self, CS, v_ego):
+    # re-read config every ~5s so panel/file changes apply on the fly
+    self.ac_read_counter += 1
+    if self.ac_read_counter >= 100:
+      self.ac_read_counter = 0
+      self._ac_read_config()
+
+    if self.ac_enabled <= 0:
+      self.ac_error_filtered.x = 0.0
+      self.ac_applied = 0.0
+      return 0.0
+
+    # measurement gating: only trust confident, sane lane lines while driving straight-ish
+    lane_width_now = self.rll_y[0] - self.lll_y[0]
+    meas_ok = (
+      self.lll_prob > 0.5 and self.rll_prob > 0.5 and
+      self.lll_std < 0.3 and self.rll_std < 0.3 and
+      2.5 < lane_width_now < 4.6 and
+      self.lane_change_multiplier > 0.5 and
+      not CS.steeringPressed and
+      v_ego * 3.6 > 15.0
+    )
+
+    if meas_ok:
+      # e > 0: lane center is to the right of car -> shift path right (y positive = right in this fork)
+      error = clamp((self.lll_y[0] + self.rll_y[0]) * 0.5, -0.6, 0.6)
+      self.ac_error_filtered.update(error)
+      if self.ac_enabled >= 2:
+        # slow integrator removes steady-state bias (camera mount / steering bias)
+        self.ac_learned = clamp(self.ac_learned + self.ac_error_filtered.x * (DT_MDL / self.AC_LEARN_TAU),
+                                -self.AC_LEARN_LIMIT, self.AC_LEARN_LIMIT)
+    else:
+      self.ac_error_filtered.update(0.0)
+
+    # persist learned offset every ~30s when changed > 5mm
+    self.ac_save_counter += 1
+    if self.ac_save_counter >= 600:
+      self.ac_save_counter = 0
+      if abs(self.ac_learned - self.ac_learned_saved) > 0.005:
+        self._ac_save()
+
+    p_term = clamp(self.ac_error_filtered.x * self.ac_gain, -self.AC_P_LIMIT, self.AC_P_LIMIT)
+    target = clamp(p_term + self.ac_learned, -self.AC_TOTAL_LIMIT, self.AC_TOTAL_LIMIT)
+    max_step = self.AC_RATE_LIMIT * DT_MDL
+    self.ac_applied = clamp(target, self.ac_applied - max_step, self.ac_applied + max_step)
+    return self.ac_applied
+
   def parse_model(self, md):
 
     lane_lines = md.laneLines
@@ -143,6 +258,7 @@ class LanePlanner:
       self.lane_width_estimate.update(self.lane_width_last)
 
     self.lane_width =  self.lane_width_estimate.x
+
     clipped_lane_width = min(4.0, self.lane_width)
     path_from_left_lane = self.lll_y + clipped_lane_width / 2.0
     path_from_right_lane = self.rll_y - clipped_lane_width / 2.0
@@ -161,6 +277,10 @@ class LanePlanner:
     self.adjustLaneOffset = float(self.params.get_int("AdjustLaneOffset")) * 0.01
     self.adjustCurveOffset = float(self.params.get_int("AdjustCurveOffset")) * 0.01
     #self.adjustCurveOffset = self.adjustLaneOffset #float(self.params.get_int("AdjustCurveOffset")) * 0.01
+
+    # === 大路口动态偏移限制 (硬编码参数) ===
+    # self.curveOffsetLimit 和 self.curveSpeedThreshold 已在 __init__ 中初始化
+
     ADJUST_OFFSET_LIMIT = 0.4 #max(self.adjustLaneOffset, self.adjustCurveOffset)
     offset_curve = 0.0
     ## curve offset
@@ -221,8 +341,17 @@ class LanePlanner:
     else:
       self.lane_offset_filtered.update(np.interp(self.d_prob, [0, 0.3], [0, offset_total]))
 
+    # === 大路口动态偏移限制 ===
+    # curve_speed 大 = 曲率小 = 大路口(弯道平缓)
+    # 仅在 curveOffsetLimit > 0(功能开启) 且 curve_speed 超过阈值时生效
+    if self.curveOffsetLimit > 0 and abs(curve_speed) > self.curveSpeedThreshold:
+      if curve_speed > 0:    # 左转（大路口）：限制向左的最大偏移
+        self.lane_offset_filtered.x = min(self.lane_offset_filtered.x, self.curveOffsetLimit)
+      elif curve_speed < 0:  # 右转（大路口）：限制向右的最大偏移
+        self.lane_offset_filtered.x = max(self.lane_offset_filtered.x, -self.curveOffsetLimit)
+
     ## laneless at lowspeed
-    self.d_prob *= np.interp(v_ego*3.6, [5., 10.], [0.0, 1.0])
+    self.d_prob *= np.interp(v_ego*3.6, [5., 15.], [0.0, 1.0])
 
     #self.debugText = "OFFSET({:.2f}={:.2f}+{:.2f}+{:.2f}),Vc:{:.2f},dp:{:.1f},lf:{},lrw={:.1f}|{:.1f}|{:.1f}".format(
     #  self.lane_offset_filtered.x,
@@ -246,10 +375,12 @@ class LanePlanner:
           lane_path_y_interp = np.interp(path_t * (1.0 + adjustLaneTime), self.ll_t[safe_idxs], lane_path_y[safe_idxs])
           path_xyz[:,1] = self.d_prob * lane_path_y_interp + (1.0 - self.d_prob) * path_xyz[:,1]
 
+    # AutoCenter: continuous auto correction towards lane center (works in lane mode AND laneless mode)
+    ac_offset = self.update_auto_center(CS, v_ego)
 
-    path_xyz[:, 1] += (CAMERA_OFFSET + self.lane_offset_filtered.x)
+    path_xyz[:, 1] += (CAMERA_OFFSET + self.lane_offset_filtered.x + ac_offset)
 
-    self.offset_total = self.lane_offset_filtered.x
+    self.offset_total = self.lane_offset_filtered.x + ac_offset
 
     return path_xyz, laneline_active
 

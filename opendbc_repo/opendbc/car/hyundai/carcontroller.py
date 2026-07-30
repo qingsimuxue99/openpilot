@@ -223,6 +223,13 @@ class CarController(CarControllerBase):
 
     # accel + longitudinal
     accel = float(np.clip(actuators.accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
+    # Accel rate limiting for smoother braking
+    if not hasattr(self, "accel_smoothed"):
+      self.accel_smoothed = CS.out.aEgo
+    if actuators.longControlState != LongCtrlState.stopping:
+      max_rate = 0.02
+      accel = float(np.clip(accel, self.accel_smoothed - max_rate, self.accel_smoothed + max_rate * 2))
+    self.accel_smoothed = accel
     stopping = actuators.longControlState == LongCtrlState.stopping
     set_speed_in_units = hud_control.setSpeed * (CV.MS_TO_KPH if CS.is_metric else CV.MS_TO_MPH)
 
@@ -571,7 +578,7 @@ class HyundaiJerk:
       #a_error = actuators.aTarget - CS.out.aEgo
       self.jerk = jerk# + a_error
 
-    jerk_max_l = 5.0
+    jerk_max_l = 1.5
     jerk_max_u = jerk_max_l
     if actuators.longControlState == LongCtrlState.off:
       self.jerk_u = jerk_max_u
@@ -579,12 +586,12 @@ class HyundaiJerk:
       self.cb_upper = self.cb_lower = 0.0
     else:
       if CP.flags & HyundaiFlags.CANFD:
-        self.jerk_u = min(max(self.jerk_u_min, self.jerk * 2.0), jerk_max_u)
-        self.jerk_l = min(max(1.0, -self.jerk * 4.0), jerk_max_l)
+        self.jerk_u = min(max(self.jerk_u_min, self.jerk * 1.5), jerk_max_u)
+        self.jerk_l = min(max(0.5, -self.jerk * 1.5), jerk_max_l)
         self.cb_upper = self.cb_lower = 0.0
       else:
-        self.jerk_u = min(max(self.jerk_u_min, self.jerk * 2.0), jerk_max_u)
-        self.jerk_l = min(max(1.0, -self.jerk * 2.0), jerk_max_l)
+        self.jerk_u = min(max(self.jerk_u_min, self.jerk * 1.5), jerk_max_u)
+        self.jerk_l = min(max(0.5, -self.jerk * 1.5), jerk_max_l)
         self.cb_upper = np.clip(0.9 + accel * 0.2, 0, 1.2)
         self.cb_lower = np.clip(0.8 + accel * 0.2, 0, 1.2)
 

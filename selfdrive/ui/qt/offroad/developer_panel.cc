@@ -3,27 +3,9 @@
 #include "selfdrive/ui/qt/widgets/controls.h"
 
 DeveloperPanel::DeveloperPanel(SettingsWindow *parent) : ListWidget(parent) {
-  adbToggle = new ParamControl("AdbEnabled", tr("Enable ADB"),
-            tr("ADB (Android Debug Bridge) allows connecting to your device over USB or over the network. See https://docs.comma.ai/how-to/connect-to-comma for more info."), "");
-  addItem(adbToggle);
-
   // SSH keys
   addItem(new SshToggle());
   addItem(new SshControl());
-
-  joystickToggle = new ParamControl("JoystickDebugMode", tr("Joystick Debug Mode"), "", "");
-  QObject::connect(joystickToggle, &ParamControl::toggleFlipped, [=](bool state) {
-    params.putBool("LongitudinalManeuverMode", false);
-    longManeuverToggle->refresh();
-  });
-  addItem(joystickToggle);
-
-  longManeuverToggle = new ParamControl("LongitudinalManeuverMode", tr("Longitudinal Maneuver Mode"), "", "");
-  QObject::connect(longManeuverToggle, &ParamControl::toggleFlipped, [=](bool state) {
-    params.putBool("JoystickDebugMode", false);
-    joystickToggle->refresh();
-  });
-  addItem(longManeuverToggle);
 
   experimentalLongitudinalToggle = new ParamControl(
     "AlphaLongitudinalEnabled",
@@ -80,9 +62,7 @@ void DeveloperPanel::updateToggles(bool _offroad) {
      */
     experimentalLongitudinalToggle->setVisible(CP.getAlphaLongitudinalAvailable() && !is_release);
 
-    longManeuverToggle->setEnabled(hasLongitudinalControl(CP) && _offroad);
   } else {
-    longManeuverToggle->setEnabled(false);
     experimentalLongitudinalToggle->setVisible(false);
   }
   experimentalLongitudinalToggle->refresh();

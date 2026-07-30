@@ -134,6 +134,9 @@ class CarrotPlanner:
     #new
     self.red_light_dist_offset = 0
 
+    # ===== 加塞场景优化v2：新增状态追踪 =====
+    self.lead_accel_smooth = 0.0  # 平滑后的前车加速度
+    # ===== 加塞场景优化v2结束 =====
 
   def _params_update(self):
     self.frame += 1
@@ -222,8 +225,32 @@ class CarrotPlanner:
       self.jerk_factor_apply = self.jerk_factor * self.dynamicTFollowLC   # 차선변경시 jerk factor를 줄여 aggresive하게
     elif lead.status:
       t_follow += np.interp(prev_a[0], [-2.0, -0.5], [0.2, 0.0])
+
+      # ===== 加塞场景优化v2：前车加速时大幅减少t_follow增加 =====
+      # 平滑前车加速度（与long_mpc中的平滑保持一致）
+      self.lead_accel_smooth = 0.9 * self.lead_accel_smooth + 0.1 * lead.aLead
+
       if self.dynamicTFollow > 0.0:
         gap_dist_adjust = np.clip((desired_follow_distance - lead.dRel) * self.dynamicTFollow, - 0.1, 1.0) * 0.1
+
+        # 判断是否为加塞加速场景
+        is_cutin_accel = (self.lead_accel_smooth > 0.2 and
+                          lead.vLead >= 0 and  # 前车在前进
+                          lead.dRel > 3.0)  # 距离安全底线
+
+        if gap_dist_adjust > 0 and is_cutin_accel:
+          # v2修改：前车加速时，几乎完全消除gap_dist_adjust
+          # 原v1：只乘以0.3~0.7的系数，效果太弱
+          # v2：根据前车加速度，将gap_dist_adjust降到0~0.15
+          accel_strength = np.clip(self.lead_accel_smooth, 0.2, 3.0)
+          suppress_factor = np.interp(accel_strength, [0.2, 0.5, 1.0, 3.0], [0.5, 0.2, 0.1, 0.0])
+          gap_dist_adjust *= suppress_factor
+
+          # 前车加速时保持更高的jerk_factor，让MPC更积极
+          # v2：jerk_factor_apply恢复到接近1.0，允许更aggressive的加速度变化
+          self.jerk_factor_apply = self.jerk_factor * np.interp(accel_strength, [0.2, 1.0, 3.0], [0.95, 1.0, 1.1])
+        # ===== 加塞场景优化v2结束 =====
+
         t_follow += gap_dist_adjust
         if gap_dist_adjust < 0:
           self.jerk_factor_apply = self.jerk_factor * 0.5 # 전방차량을 따라갈때는 aggressive하게.
@@ -444,8 +471,8 @@ class CarrotPlanner:
           self.comfort_brake = self.comfortBrake * 0.9
           #self.comfort_brake = COMFORT_BRAKE
           self.trafficStopAdjustRatio = np.interp(v_ego_kph, [0, 100], [1.0, 0.7])
-          stop_dist = self.xStop * np.interp(self.xStop, [0, 50], [1.0, self.trafficStopAdjustRatio])  ##�����Ÿ��� ���� �����Ÿ� ��������
-          if stop_dist > 10.0: ### 10M�̻��϶���, self.actual_stop_distance�� ������Ʈ��.
+          stop_dist = self.xStop * np.interp(self.xStop, [0, 50], [1.0, self.trafficStopAdjustRatio])  ##정지표지판 거리에 따라 정지거리를 조정함
+          if stop_dist > 10.0: ### 10M이상이면, self.actual_stop_distance를 업데이트함.
             self.actual_stop_distance = stop_dist
           stop_model_x = 0
           self.fakeCruiseDistance = 0 if self.actual_stop_distance > 10.0 else 10.0
@@ -488,9 +515,9 @@ class CarrotPlanner:
     self.comfort_brake *= self.mySafeFactor
     self.actual_stop_distance = max(0, self.actual_stop_distance - (v_ego * DT_MDL))
 
-    if stop_model_x == 1000.0: ##  e2eCruise, lead�ΰ��
+    if stop_model_x == 1000.0: ##  e2eCruise, lead상태일때
       self.actual_stop_distance = 0.0
-    elif self.actual_stop_distance > 0: ## e2eStop, e2eStopped�ΰ��..
+    elif self.actual_stop_distance > 0: ## e2eStop, e2eStopped상태일때..
       stop_model_x = 0.0
 
     # self.debugLongText = (
@@ -499,7 +526,7 @@ class CarrotPlanner:
     #   f"stopDist={self.actual_stop_distance:.1f}," +
     #   f"Traffic={str(self.trafficState)}"
     # )
-    #��ȣ�� �������� self.xState.value
+    #주행모드에 따라 self.xState.value
 
     stop_dist =  stop_model_x + self.actual_stop_distance
     #new 增加红灯停车距离的调节
@@ -522,7 +549,6 @@ class CarrotPlanner:
     #return v_cruise, stop_dist, mode
 
     return v_cruise_kph
-
 
 class DrivingModeDetector:
     def __init__(self):

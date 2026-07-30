@@ -265,12 +265,21 @@ class LateralPlanner:
     if lead_right.status:
       radar_right_info += f"| R:{lead_right.dRel:.1f}m,{lead_right.vLead * 3.6:.0f}km/h"
     '''
+    lanemode_str = 'lanemode' if self.lanelines_active else 'laneless'
+    if self.lanelines_active:
+      cs = self.curve_speed
+      # vTurnSpeed 在直路/无曲率时为 clip 上限 200(等效无限大)，或启动初期为 0，均非有效弯道限速，不显示为具体速度
+      turn_str = f"{cs:.0f}km/h" if 0 < cs < 199 else "inf"
+      offset_turn_info = f"offset={self.LP.offset_total * 100.0:.1f}cm turn={turn_str}"
+    else:
+      offset_turn_info = ""
     debugText = (
-      f"{'lanemode' if self.lanelines_active else 'laneless'} | " +
+      f"{lanemode_str} | " +
       f"{self.LP.lane_width_left:.1f}m | " +
       f"{self.LP.lane_width:.1f}m | " +
       f"{self.LP.lane_width_right:.1f}m | " +
-      f"{f'offset={self.LP.offset_total * 100.0:.1f}cm turn={np.clip(self.curve_speed, -200, 200):.0f}km/h' if self.lanelines_active else ''}" +
+      f"{offset_turn_info} | " +
+      f"AC:{self.LP.ac_applied * 100.0:+.0f}cm(L{self.LP.ac_learned * 100.0:+.0f})" +
       radar_left_info +
       radar_right_info
     )

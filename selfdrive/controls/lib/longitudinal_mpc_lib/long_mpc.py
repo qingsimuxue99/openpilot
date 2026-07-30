@@ -41,11 +41,10 @@ J_EGO_COST = 5.0
 A_CHANGE_COST = 250.
 A_CHANGE_COST_STARTING = 30.
 DANGER_ZONE_COST = 100.
-CRASH_DISTANCE = .25
+CRASH_DISTANCE = 0.8  # carrot VRU tuning: was 0.25 -> earlier crash_cnt accumulation / FCW (tune 0.5~1.5)
 LEAD_DANGER_FACTOR = 0.8 # 0.75
 LIMIT_COST = 1e6
 ACADOS_SOLVER_TYPE = 'SQP_RTI'
-
 
 # Fewer timestamps don't hurt performance and lead to
 # much better convergence of the MPC with low iterations
@@ -71,7 +70,6 @@ def get_jerk_factor(personality=log.LongitudinalPersonality.standard):
   else:
     raise NotImplementedError("Longitudinal personality not supported")
 
-
 def get_T_FOLLOW(personality=log.LongitudinalPersonality.standard):
   if personality==log.LongitudinalPersonality.moreRelaxed:
     return 2.0
@@ -96,7 +94,6 @@ def desired_follow_distance(v_ego, v_lead, comfort_brake, stop_distance, t_follo
   if t_follow is None:
     t_follow = get_T_FOLLOW()
   return get_safe_obstacle_distance(v_ego, t_follow, comfort_brake, stop_distance) - get_stopped_equivalence_factor(v_lead)
-
 
 def gen_long_model():
   model = AcadosModel()
@@ -134,7 +131,6 @@ def gen_long_model():
   model.f_impl_expr = model.xdot - f_expl
   model.f_expl_expr = f_expl
   return model
-
 
 def gen_long_ocp():
   ocp = AcadosOcp()
@@ -197,7 +193,6 @@ def gen_long_ocp():
   ocp.constraints.x0 = x0
   ocp.parameter_values = np.array([-1.2, 1.2, 0.0, 0.0, lead_t_follow, LEAD_DANGER_FACTOR, comfort_brake, stop_distance])
 
-
   # We put all constraint cost weights to 0 and only set them at runtime
   cost_weights = np.zeros(CONSTR_DIM)
   ocp.cost.zl = cost_weights
@@ -231,7 +226,6 @@ def gen_long_ocp():
   ocp.code_export_directory = EXPORT_DIR
   return ocp
 
-
 class LongitudinalMpc:
   def __init__(self, mode='acc', dt=DT_MDL):
     self.mode = mode
@@ -248,6 +242,12 @@ class LongitudinalMpc:
     self.desired_distance = 0.0
     self.lead_danger_factor = LEAD_DANGER_FACTOR
 
+    # ===== 加塞场景优化：新增状态变量追踪加塞场景 =====
+    self.lead_accel_smooth = 0.0  # 平滑后的前车加速度
+    self.cutin_relax_active = False  # 加塞松弛是否激活
+    self.cutin_relax_timer = 0.0  # 松弛计时器（秒）
+    self.cutin_relax_max_time = 3.0  # 最大松弛持续时间（秒）
+    # ===== 加塞场景优化结束 =====
 
   def reset(self):
     # self.solver = AcadosOcpSolverCython(MODEL_NAME, ACADOS_SOLVER_TYPE, N)
@@ -318,14 +318,24 @@ class LongitudinalMpc:
 
   @staticmethod
   def extrapolate_lead(x_lead, v_lead, a_lead, a_lead_tau, j_lead):
-    j_lead_tau = np.interp(j_lead, [-2.0, 0.0, 2.0], [0.2, 2.0, 0.1]) # tau: 2: 2sec, 1: 4sec, 0.5: 10sec
+    # ===== 加塞场景优化v2：前车加速时大幅增强jerk预测信任度 =====
+    # 原逻辑：正jerk时tau=0.1（几乎不信任前车加速会持续）
+    # 修改后：正jerk且前车确实在加速时，tau提高到0.8~2.0，让MPC充分相信前车会远离
+    if j_lead > 0.3 and a_lead > 0.2:
+      # 前车正在加速且jerk为正，大幅提高预测信任度
+      # tau越高，jerk衰减越慢，MPC越相信前车会持续加速远离
+      j_lead_tau = np.interp(j_lead, [0.3, 1.0, 2.0], [0.8, 1.5, 2.0])
+    else:
+      j_lead_tau = np.interp(j_lead, [-2.0, 0.0, 2.0], [0.2, 2.0, 0.1])
+    # ===== 加塞场景优化v2结束 =====
+
     j_lead_traj = j_lead * np.exp(-j_lead_tau * (T_IDXS**2)/2.)
     a_lead_traj = a_lead * np.exp(-a_lead_tau * (T_IDXS**2)/2.) + j_lead_traj
     v_lead_traj = np.clip(v_lead + np.cumsum(T_DIFFS * a_lead_traj), 0.0, 1e8)
     x_lead_traj = x_lead + np.cumsum(T_DIFFS * v_lead_traj)
     lead_xv = np.column_stack((x_lead_traj, v_lead_traj))
     return lead_xv
-  
+
   def process_lead(self, lead, j_lead):
     v_ego = self.x0[1]
     if lead is not None and lead.status:
@@ -367,6 +377,37 @@ class LongitudinalMpc:
     a_ego = self.x0[2]
     self.status = radarstate.leadOne.status or radarstate.leadTwo.status
 
+    # ===== 加塞场景优化v2：追踪前车加速度状态 =====
+    lead_aLead_raw = radarstate.leadOne.aLead if radarstate.leadOne.status else 0.0
+    # 平滑前车加速度，避免噪声触发
+    self.lead_accel_smooth = 0.9 * self.lead_accel_smooth + 0.1 * lead_aLead_raw
+
+    # 判断是否处于"加塞车加速"场景
+    # 条件：前车存在 + 前车在加速(aLead > 0) + 前车速度接近或超过自车 + 距离不是极近
+    lead_v = radarstate.leadOne.vLead if radarstate.leadOne.status else 0.0
+    lead_d = radarstate.leadOne.dRel if radarstate.leadOne.status else 100.0
+    is_lead_accelerating = (self.lead_accel_smooth > 0.2 and
+                             lead_v >= v_ego * 0.8 and  # 前车速度不低于自车80%
+                             lead_d > 3.0)  # 距离大于3m（安全底线）
+
+    if is_lead_accelerating:
+      if not self.cutin_relax_active:
+        self.cutin_relax_active = True
+        self.cutin_relax_timer = 0.0
+      self.cutin_relax_timer += self.dt
+      # 最长松弛3秒，超时后恢复正常
+      if self.cutin_relax_timer > self.cutin_relax_max_time:
+        self.cutin_relax_active = False
+        self.cutin_relax_timer = 0.0
+    else:
+      # 前车不再加速时，延迟0.5秒再关闭松弛（避免抖动）
+      if self.cutin_relax_active:
+        self.cutin_relax_timer += self.dt
+        if self.cutin_relax_timer > self.cutin_relax_max_time + 0.5:
+          self.cutin_relax_active = False
+          self.cutin_relax_timer = 0.0
+    # ===== 加塞场景优化v2结束 =====
+
     if radarstate.leadOne.status:
       j_lead = radarstate.leadOne.jLead
       self.j_lead = j_lead * 0.1 + self.j_lead * 0.9
@@ -379,7 +420,7 @@ class LongitudinalMpc:
     mode = self.mode
     comfort_brake = carrot.comfort_brake
     stop_distance = carrot.stop_distance
-    
+
     if mode == 'blended':
       stop_x = 1000.0
     else:
@@ -392,7 +433,7 @@ class LongitudinalMpc:
     # and then treat that as a stopped car/obstacle at this new distance.
     lead_0_obstacle = lead_xv_0[:,0] + get_stopped_equivalence_factor(lead_xv_0[:,1])
     lead_1_obstacle = lead_xv_1[:,0] + get_stopped_equivalence_factor(lead_xv_1[:,1])
-    
+
     self.desired_distance = desired_follow_distance(v_ego, lead_v_0, comfort_brake, stop_distance, t_follow)
 
     self.params[:,0] = ACCEL_MIN if not reset_state else a_ego
@@ -428,15 +469,36 @@ class LongitudinalMpc:
       # These are not used in ACC mode
       x[:], v[:], a[:], j[:] = 0.0, 0.0, 0.0, 0.0
 
+      # ===== 加塞场景优化v2：核心修改 - 动态调整MPC代价和约束 =====
       if radarstate.leadOne.status:
-        self.a_change_cost = np.interp(abs(self.j_lead), [0.3, 2.0], [A_CHANGE_COST, 20])
+        # 原逻辑：a_change_cost根据j_lead从250降到20
+        # 修改后：当加塞松弛激活时，更激进地降低a_change_cost，允许更平滑的减速
+        if self.cutin_relax_active:
+          # 加塞松弛激活：大幅降低a_change_cost，让MPC允许更平缓的速度变化
+          # 前车加速越明显，a_change_cost越低
+          accel_strength = np.clip(self.lead_accel_smooth, 0.2, 3.0)
+          relax_factor = np.interp(accel_strength, [0.2, 1.0, 3.0], [0.3, 0.15, 0.08])
+          self.a_change_cost = A_CHANGE_COST * relax_factor
+        else:
+          # 正常模式：保持原逻辑但降低触发阈值
+          self.a_change_cost = np.interp(abs(self.j_lead), [0.15, 1.5], [A_CHANGE_COST, 20])
       else:
         self.a_change_cost = A_CHANGE_COST
 
-      #safe_distance = lead_0_obstacle[0] - get_safe_obstacle_distance(v_ego, comfort_brake, stop_distance)
-      self.lead_danger_factor = LEAD_DANGER_FACTOR #np.interp(safe_distance, [-30.0, 0.0], [0.9, LEAD_DANGER_FACTOR]) # 이걸적용하니, 사고방지턱 감속시 너무 급정거하는것 같음.
+      # ===== 加塞场景优化v2：动态调整LEAD_DANGER_FACTOR =====
+      # 原逻辑：固定0.8，在80%期望距离处有1e6的硬约束惩罚
+      # 修改后：前车加速时适当放宽danger_factor，减少硬约束触发的急刹
+      if self.cutin_relax_active and radarstate.leadOne.status:
+        accel_strength = np.clip(self.lead_accel_smooth, 0.2, 3.0)
+        # danger_factor从0.8放宽到0.65~0.75
+        # 前车加速越猛，danger_factor越宽松（但不会低于0.6，保持安全底线）
+        self.lead_danger_factor = np.interp(accel_strength, [0.2, 1.0, 3.0], [0.78, 0.72, 0.65])
+      else:
+        self.lead_danger_factor = LEAD_DANGER_FACTOR
+      # ===== 加塞场景优化v2结束 =====
+
       self.params[:,5] = self.lead_danger_factor
-      
+
     elif mode == 'blended':
       self.params[:,5] = 1.0
 
@@ -469,6 +531,22 @@ class LongitudinalMpc:
     self.params[:,7] = stop_distance
 
     self.t_follow = t_follow
+
+    # ===== 加塞场景优化v2：动态调整X_EGO_OBSTACLE_COST =====
+    # 原逻辑：X_EGO_OBSTACLE_COST固定3.0
+    # 修改后：加塞松弛激活时降低obstacle cost，让MPC不那么急于远离障碍物
+    if self.cutin_relax_active and mode == 'acc':
+      accel_strength = np.clip(self.lead_accel_smooth, 0.2, 3.0)
+      # obstacle cost从3.0降到1.0~2.0
+      # 前车加速越明显，obstacle cost越低
+      obstacle_cost = np.interp(accel_strength, [0.2, 1.0, 3.0], [2.5, 1.8, 1.0])
+      # 重新设置权重
+      jerk_factor = carrot.jerk_factor_apply
+      a_change_cost = self.a_change_cost
+      cost_weights = [obstacle_cost, X_EGO_COST, V_EGO_COST, A_EGO_COST, jerk_factor * a_change_cost, jerk_factor * J_EGO_COST]
+      constraint_cost_weights = [LIMIT_COST, LIMIT_COST, LIMIT_COST, DANGER_ZONE_COST]
+      self.set_cost_weights(cost_weights, constraint_cost_weights)
+    # ===== 加塞场景优化v2结束 =====
 
     self.run()
     if (np.any(lead_xv_0[FCW_IDXS,0] - self.x_sol[FCW_IDXS,0] < CRASH_DISTANCE) and
@@ -527,7 +605,6 @@ class LongitudinalMpc:
       # reset = 1
     # print(f"long_mpc timings: total internal {self.solve_time:.2e}, external: {(time.monotonic() - t0):.2e} qp {self.time_qp_solution:.2e}, \
     # lin {self.time_linearization:.2e} qp_iter {qp_iter}, reset {reset}")
-
 
 if __name__ == "__main__":
   ocp = gen_long_ocp()

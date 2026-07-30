@@ -1,6 +1,7 @@
 #include "selfdrive/ui/qt/sidebar.h"
 
 #include <QMouseEvent>
+#include <QTimer>
 
 #include "selfdrive/ui/qt/util.h"
 
@@ -29,6 +30,15 @@ Sidebar::Sidebar(QWidget *parent) : QFrame(parent), onroad(false), flag_pressed(
   flag_img = loadPixmap("../assets/images/button_flag.png", home_btn.size());
   settings_img = loadPixmap("../assets/images/button_settings.png", settings_btn.size(), Qt::IgnoreAspectRatio);
   c3x_img = loadPixmap("../assets/img_c3x.png", home_btn.size());
+
+  // 打开工具箱二维码：由 /data/c3_toolbox/gen_qr.py 按当前 LAN IP:5588 实时生成
+  qr_img.load("/data/c3_toolbox/qr.png");
+  qrTimer = new QTimer(this);
+  QObject::connect(qrTimer, &QTimer::timeout, this, [=]() {
+    qr_img.load("/data/c3_toolbox/qr.png");
+    update();
+  });
+  qrTimer->start(15000);
 
   connect(this, &Sidebar::valueChanged, [=] { update(); });
 
@@ -150,4 +160,16 @@ void Sidebar::paintEvent(QPaintEvent *event) {
   drawMetric(p, temp_status.first, temp_status.second, 338);
   drawMetric(p, panda_status.first, panda_status.second, 496);
   drawMetric(p, connect_status.first, connect_status.second, 654);
+
+  // 打开工具箱二维码：画在 CONNECT 卡下方，盖住红车+角度显示
+  if (!qr_img.isNull()) {
+    const int qrSize = 220;
+    const int qrX = (width() - qrSize) / 2;
+    const int qrY = 800;
+    p.drawPixmap(qrX, qrY, qrSize, qrSize, qr_img);
+    // 底部 caption
+    p.setPen(QColor(0xff, 0xff, 0xff));
+    p.setFont(InterFont(20));
+    p.drawText(QRect(0, qrY + qrSize + 8, width(), 24), Qt::AlignCenter, tr("扫码打开工具箱"));
+  }
 }

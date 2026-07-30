@@ -91,31 +91,79 @@
     <name>CarrotPanel</name>
     <message>
         <source>Start</source>
-        <translation>시작</translation>
+        <translation type="vanished">시작</translation>
     </message>
     <message>
         <source>Cruise</source>
-        <translation>크루즈</translation>
+        <translation type="vanished">크루즈</translation>
     </message>
     <message>
         <source>Speed</source>
-        <translation>속도</translation>
+        <translation type="vanished">속도</translation>
     </message>
     <message>
         <source>Tuning</source>
-        <translation>튜닝</translation>
+        <translation type="vanished">튜닝</translation>
     </message>
     <message>
         <source>Disp</source>
-        <translation>화면</translation>
+        <translation type="vanished">화면</translation>
     </message>
     <message>
         <source>Path</source>
-        <translation>패쓰</translation>
+        <translation type="vanished">패쓰</translation>
     </message>
     <message>
         <source>SELECT YOUR CAR</source>
-        <translation>차량선택</translation>
+        <translation type="vanished">차량선택</translation>
+    </message>
+    <message>
+        <source>开始</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>巡航</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>导航</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>速度</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>调节</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>显示</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>选择您的车辆</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>彩虹路径</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>将行驶路径显示为彩虹色动态渐变效果</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>功能</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>驾驶习惯自学习</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>基于奖励/惩罚机制, 在行驶中根据您的踩油门/踩刹车/接管等行为, 自动微调跟车距离、加速性、舒适制动、停车距离等参数, 使其贴合您的驾驶习惯。仅在系统激活时学习, 所有参数均在安全范围内平缓调整。</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -175,11 +223,11 @@
     <name>DeveloperPanel</name>
     <message>
         <source>Joystick Debug Mode</source>
-        <translation>조이스틱 디버그 모드</translation>
+        <translation type="vanished">조이스틱 디버그 모드</translation>
     </message>
     <message>
         <source>Longitudinal Maneuver Mode</source>
-        <translation>가감속 제어 조작 모드</translation>
+        <translation type="vanished">가감속 제어 조작 모드</translation>
     </message>
     <message>
         <source>openpilot Longitudinal Control (Alpha)</source>
@@ -195,11 +243,11 @@
     </message>
     <message>
         <source>Enable ADB</source>
-        <translation>ADB 사용</translation>
+        <translation type="vanished">ADB 사용</translation>
     </message>
     <message>
         <source>ADB (Android Debug Bridge) allows connecting to your device over USB or over the network. See https://docs.comma.ai/how-to/connect-to-comma for more info.</source>
-        <translation>ADB (안드로이드 디버그 브릿지) USB 또는 네트워크를 통해 장치에 연결할 수 있습니다. 자세한 내용은 https://docs.comma.ai/how-to/connect-to-comma를 참조하세요.</translation>
+        <translation type="vanished">ADB (안드로이드 디버그 브릿지) USB 또는 네트워크를 통해 장치에 연결할 수 있습니다. 자세한 내용은 https://docs.comma.ai/how-to/connect-to-comma를 참조하세요.</translation>
     </message>
 </context>
 <context>
@@ -230,7 +278,7 @@
     </message>
     <message>
         <source>Are you sure you want to reset calibration?</source>
-        <translation>캘리브레이션을 초기화하시겠습니까?</translation>
+        <translation type="vanished">캘리브레이션을 초기화하시겠습니까?</translation>
     </message>
     <message>
         <source>Review Training Guide</source>
@@ -318,7 +366,7 @@
     </message>
     <message>
         <source>Reset</source>
-        <translation>초기화</translation>
+        <translation type="vanished">초기화</translation>
     </message>
     <message>
         <source>Review</source>
@@ -341,36 +389,16 @@
         <translation>캘리브레이션 재설정</translation>
     </message>
     <message>
-        <source>Git Pull &amp; Reboot</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Yes</source>
-        <translation>예</translation>
-    </message>
-    <message>
-        <source>Failed to start update process.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Update process started. Device will reboot if updates are applied.</source>
-        <translation type="unfinished"></translation>
+        <translation type="vanished">예</translation>
     </message>
     <message>
         <source>Set default</source>
-        <translation>기본값으로 설정</translation>
-    </message>
-    <message>
-        <source>Set to default?</source>
-        <translation type="unfinished"></translation>
+        <translation type="vanished">기본값으로 설정</translation>
     </message>
     <message>
         <source>Remove MapboxKey</source>
-        <translation>MapboxKey 삭제</translation>
-    </message>
-    <message>
-        <source>Remove Mapbox key?</source>
-        <translation type="unfinished"></translation>
+        <translation type="vanished">MapboxKey 삭제</translation>
     </message>
     <message>
         <source>Calibration Status</source>
@@ -384,28 +412,96 @@
         <source>Reboot &amp; Disengage to Calibration</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>重启</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>重新校准</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>关机</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Git 拉取 &amp; 重启</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>执行 Git 拉取 &amp; 重启？</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>是</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>启动更新过程失败。</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>更新过程已启动。如果有更新，设备将重启。</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>恢复默认</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>恢复为默认设置？</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>移除 Mapbox Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>移除 Mapbox Key？</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AllCalibParams</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CalibrationParams</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AllLiveParams</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select calibration parameter to reset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Are you sure you want to reset %1?</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DrawCarrot</name>
     <message>
         <source>MANUAL</source>
-        <translation>수동운전</translation>
+        <translation type="vanished">수동운전</translation>
     </message>
     <message>
         <source>CRUISE</source>
-        <translation>정속주행</translation>
+        <translation type="vanished">정속주행</translation>
     </message>
     <message>
         <source>E2ECRUISE</source>
-        <translation>E2E주행</translation>
+        <translation type="vanished">E2E주행</translation>
     </message>
     <message>
         <source>CRUISE READY</source>
-        <translation>크루즈준비</translation>
+        <translation type="vanished">크루즈준비</translation>
     </message>
     <message>
         <source>SIGN DETECTED</source>
-        <translation>신호감지</translation>
+        <translation type="vanished">신호감지</translation>
     </message>
     <message>
         <source>ECO</source>
@@ -457,6 +553,10 @@
     </message>
     <message>
         <source>ERRM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>最高定速</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -748,26 +848,39 @@ Firehose Mode allows you to maximize your training data uploads to improve openp
     <name>PathEndDrawer</name>
     <message>
         <source>Signal slowing</source>
-        <translation>신호감속중</translation>
+        <translation type="vanished">신호감속중</translation>
     </message>
     <message>
         <source>Signal Error</source>
-        <translation>신호오류</translation>
+        <translation type="vanished">신호오류</translation>
     </message>
     <message>
         <source>Signal Ready</source>
-        <translation>신호대기</translation>
-    </message>
-</context>
-<context>
-    <name>TurnInfoDrawer</name>
-    <message>
-        <source>ETA</source>
-        <translation>도착</translation>
+        <translation type="vanished">신호대기</translation>
     </message>
     <message>
-        <source>MIN</source>
-        <translation>분</translation>
+        <source>信号错误</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>信号就绪</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>信号减速中</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>智能减速中</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>起飞失败</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>准备起飞</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -824,7 +937,7 @@ Firehose Mode allows you to maximize your training data uploads to improve openp
     </message>
     <message>
         <source>openpilot</source>
-        <translation>오픈파일럿</translation>
+        <translation type="vanished">오픈파일럿</translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s) ago</source>
@@ -934,7 +1047,7 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>Developer</source>
-        <translation>개발자</translation>
+        <translation type="vanished">개발자</translation>
     </message>
     <message>
         <source>Firehose</source>
@@ -942,7 +1055,15 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>Carrot</source>
-        <translation>당근설정</translation>
+        <translation type="vanished">당근설정</translation>
+    </message>
+    <message>
+        <source>萝卜</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>开发</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1063,7 +1184,7 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation>연결 안됨</translation>
+        <translation type="vanished">연결 안됨</translation>
     </message>
     <message>
         <source>ONLINE</source>
@@ -1071,23 +1192,23 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>ERROR</source>
-        <translation>오류</translation>
+        <translation type="vanished">오류</translation>
     </message>
     <message>
         <source>TEMP</source>
-        <translation>온도</translation>
+        <translation type="vanished">온도</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation>높음</translation>
+        <translation type="vanished">높음</translation>
     </message>
     <message>
         <source>GOOD</source>
-        <translation>좋음</translation>
+        <translation type="vanished">좋음</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation>OK</translation>
+        <translation type="vanished">OK</translation>
     </message>
     <message>
         <source>VEHICLE</source>
@@ -1128,6 +1249,30 @@ This may take up to a minute.</source>
     <message>
         <source>5G</source>
         <translation>5G</translation>
+    </message>
+    <message>
+        <source>永远在线</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>温度</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>很热</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>凉爽</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>还行</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>扫码打开工具箱</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1203,6 +1348,26 @@ This may take up to a minute.</source>
     <message>
         <source>never</source>
         <translation>업데이트 안함</translation>
+    </message>
+    <message>
+        <source>Onroad/Offroad Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go Offroad</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Are you sure you want to switch mode?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CONFIRM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go Onroad</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1391,6 +1556,17 @@ This may take up to a minute.</source>
     <message>
         <source>Record and store microphone audio while driving. The audio will be included in the dashcam video in comma connect.</source>
         <translation>운전 중에 마이크 오디오를 녹음하고 저장하십시오. 오디오는 comma connect의 대시캠 비디오에 포함됩니다.</translation>
+    </message>
+</context>
+<context>
+    <name>TurnInfoDrawer</name>
+    <message>
+        <source>ETA</source>
+        <translation type="vanished">도착</translation>
+    </message>
+    <message>
+        <source>MIN</source>
+        <translation type="vanished">분</translation>
     </message>
 </context>
 <context>

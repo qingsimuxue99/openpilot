@@ -15,6 +15,32 @@
       "unit": 1
     },
     {
+      "group": "조향일반",
+      "name": "AutoLaneCorrection",
+      "title": "자동 중앙 보정(2)",
+      "descr": "0:끄기 / 1:실시간보정 / 2:실시간+학습\n차선중앙 자동유지 보정",
+      "egroup": "LAT",
+      "etitle": "Auto Lane Centering Correction(2)",
+      "edescr": "0:Off / 1:Realtime / 2:Realtime+Learn\nAuto-corrects lateral drift to keep the car centered",
+      "min": 0,
+      "max": 2,
+      "default": 2,
+      "unit": 1
+    },
+    {
+      "group": "조향일반",
+      "name": "AutoLaneCorrectionGain",
+      "title": "자동 중앙 보정 강도(40)",
+      "descr": "실시간 보정 강도 (10~100)\n높을수록 빠르게 중앙으로 복귀",
+      "egroup": "LAT",
+      "etitle": "Auto Centering Strength(40)",
+      "edescr": "Realtime correction gain (10~100)\nHigher = faster return to center",
+      "min": 10,
+      "max": 100,
+      "default": 40,
+      "unit": 5
+    },
+    {
       "group": "조향튜닝",
       "name": "LateralTorqueCustom",
       "title": "_LateralTorqueCustom(0)",
@@ -1288,6 +1314,32 @@
       "max": 1,
       "default": 0,
       "unit": 1
+    },
+    {
+      "group": "조향일반",
+      "name": "BlinkerTurnIntent",
+      "title": "방향지시등 턴의도(0)",
+      "descr": "방향지시등 켜면 C3모델에 턴의도 전송",
+      "egroup": "LAT",
+      "etitle": "Blinker Turn Intent(0)",
+      "edescr": "Send turn intent to C3 model when blinker is on",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "unit": 1
+    },
+    {
+      "group": "조향일반",
+      "name": "BlinkerTurnIntentSpeed",
+      "title": "턴의도 활성속도(30)km/h",
+      "descr": "턴의도 활성화 속도 임계값",
+      "egroup": "LAT",
+      "etitle": "Turn Intent Speed(30)km/h",
+      "edescr": "Speed threshold for blinker turn intent activation",
+      "min": 0,
+      "max": 120,
+      "default": 30,
+      "unit": 5
     },
     {
       "group": "시작",

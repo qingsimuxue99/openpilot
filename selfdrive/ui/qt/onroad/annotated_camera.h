@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QVBoxLayout>
+#include <QPainter>
+#include <QRect>
 #include <memory>
 #include "selfdrive/ui/qt/onroad/hud.h"
 #include "selfdrive/ui/qt/onroad/buttons.h"
@@ -26,6 +28,11 @@ private:
 
   int skip_frame_count = 0;
   bool wide_cam_requested = false;
+
+  // 驾驶习惯自学习: 行车界面「学习中」徽标
+  bool learning_enabled_ = false;      // 总开关 CarrotLearningEnabled 是否开启 (节流读取)
+  int  learning_param_frame_ = 0;      // 参数节流读取计数
+  void drawLearningBadge(QPainter &p, const QRect &surface_rect, bool engaged);
 
 protected:
   void paintGL() override;

@@ -3,6 +3,7 @@
 #include <memory>
 
 #include <QFrame>
+#include <QTimer>
 #include <QMap>
 
 #include "selfdrive/ui/ui.h"
@@ -36,7 +37,8 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void drawMetric(QPainter &p, const QPair<QString, QString> &label, QColor c, int y);
 
-  QPixmap home_img, flag_img, settings_img, c3x_img;
+  QPixmap home_img, flag_img, settings_img, c3x_img, qr_img;
+  QTimer *qrTimer = nullptr;
   bool onroad, flag_pressed, settings_pressed;
   const QMap<cereal::DeviceState::NetworkType, QString> network_type = {
     {cereal::DeviceState::NetworkType::NONE, tr("--")},

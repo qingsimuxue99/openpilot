@@ -1,7 +1,7 @@
-
 #include "selfdrive/ui/qt/onroad/annotated_camera.h"
 
 #include <QPainter>
+#include <QFontMetrics>
 #include <algorithm>
 #include <cmath>
 #include <unistd.h>
@@ -63,6 +63,16 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
           recorder->toggle();
         }
       }
+    }
+  }
+
+  // 驾驶习惯自学习: 每 ~0.5s 节流读取一次总开关状态 (避免每帧读盘)
+  if (--learning_param_frame_ <= 0) {
+    learning_param_frame_ = std::max(1, (int)(UI_FREQ / 2));
+    try {
+      learning_enabled_ = Params().getBool("CarrotLearningEnabled");
+    } catch (...) {
+      learning_enabled_ = false;
     }
   }
 }
@@ -167,18 +177,37 @@ void AnnotatedCameraWidget::paintEvent(QPaintEvent *event) {
       skip_frame_count = 5;
     }
 
-    // Wide or narrow cam dependent on speed
+    // >>>>>>>>>>>>>>>>>> 广角/主摄切换逻辑（30km/h 带迟滞） <<<<<<<<<<<<<<<<<<
     bool has_wide_cam = available_streams.count(VISION_STREAM_WIDE_ROAD);
     if (has_wide_cam) {
-      float v_ego = sm["carState"].getCarState().getVEgo();
-      if ((v_ego < 10) || available_streams.size() == 1) {
-        wide_cam_requested = true;
-      } else if (v_ego > 15) {
-        wide_cam_requested = false;
+      float v_ego = sm["carState"].getCarState().getVEgo(); // in m/s
+
+      // Hysteresis thresholds around 30 km/h:
+      // - Switch TO wide below 28 km/h (7.8 m/s)
+      // - Switch TO road above 32 km/h (8.9 m/s)
+      const float SWITCH_TO_WIDE_THRESHOLD = 7.8f;   // 28 km/h
+      const float SWITCH_TO_ROAD_THRESHOLD = 8.9f;   // 32 km/h
+
+      if (wide_cam_requested) {
+        // Currently using wide cam: only switch back to road if speed is high enough
+        if (v_ego >= SWITCH_TO_ROAD_THRESHOLD) {
+          wide_cam_requested = false;
+        }
+      } else {
+        // Currently using road cam: only switch to wide if speed is low enough
+        if (v_ego < SWITCH_TO_WIDE_THRESHOLD) {
+          wide_cam_requested = true;
+        }
       }
-      //wide_cam_requested = wide_cam_requested && sm["selfdriveState"].getSelfdriveState().getExperimentalMode();
-      //wide_cam_requested = wide_cam_requested && s->scene.carrot_experimental_mode;
+      // Optional: keep experimental mode guard if needed (currently commented out)
+      // wide_cam_requested = wide_cam_requested && sm["selfdriveState"].getSelfdriveState().getExperimentalMode();
+      // wide_cam_requested = wide_cam_requested && s->scene.carrot_experimental_mode;
+    } else {
+      // No wide camera available, force road cam
+      wide_cam_requested = false;
     }
+    // >>>>>>>>>>>>>>>>>> END <<<<<<<<<<<<<<<<<<
+
     painter.beginNativePainting();
     CameraWidget::setStreamType(wide_cam_requested ? VISION_STREAM_WIDE_ROAD : VISION_STREAM_ROAD);
     CameraWidget::setFrameId(sm["modelV2"].getModelV2().getFrameId());
@@ -204,6 +233,13 @@ void AnnotatedCameraWidget::paintEvent(QPaintEvent *event) {
   //hud.updateState(*s);
   //hud.draw(painter, rect());
 
+  // 驾驶习惯自学习: 绘制「学习中/待机」徽标 (总开关开启时显示)
+  if (learning_enabled_) {
+    bool engaged = sm.alive("selfdriveState") &&
+                   sm["selfdriveState"].getSelfdriveState().getEnabled();
+    drawLearningBadge(painter, rect(), engaged);
+  }
+
   double cur_draw_t = millis_since_boot();
   double dt = cur_draw_t - prev_draw_t;
   double fps = fps_filter.update(1. / dt * 1000);
@@ -224,4 +260,76 @@ void AnnotatedCameraWidget::showEvent(QShowEvent *event) {
 
   ui_update_params(uiState());
   prev_draw_t = millis_since_boot();
+}
+
+// 驾驶习惯自学习: 在行车主界面左下角绘制「学习中/待机」徽标 (纯矢量, 无需图片资源)
+//   engaged=true (系统激活中, 正在学习)  -> 绿色脉动圆点 + "自学习中"
+//   engaged=false (总开关开但未激活/待机) -> 灰色静态圆点 + "自学习待机"
+void AnnotatedCameraWidget::drawLearningBadge(QPainter &p, const QRect &surface_rect, bool engaged) {
+  p.save();
+  p.setRenderHint(QPainter::Antialiasing);
+
+  const QString label = engaged ? QStringLiteral("自学习中") : QStringLiteral("自学习待机");
+  QColor accent = engaged ? QColor(0x2e, 0xcc, 0x71) : QColor(0x9e, 0xa7, 0xad);
+
+  // 呼吸脉动 (仅激活学习时): 0.55 ~ 1.0
+  double pulse = 1.0;
+  if (engaged) {
+    double t = millis_since_boot() / 1000.0;
+    pulse = 0.55 + 0.45 * (0.5 * (1.0 + std::sin(t * 3.2)));
+  }
+
+  QFont font = p.font();
+  font.setPixelSize(34);
+  font.setBold(true);
+  p.setFont(font);
+  QFontMetrics fm(font);
+  const int textW = fm.horizontalAdvance(label);
+  const int textH = fm.height();
+
+  const int dotR = 9;
+  const int padX = 24, padY = 14, gap = 14;
+  const int badgeW = padX + dotR * 2 + gap + textW + padX;
+  const int badgeH = padY + std::max(textH, dotR * 2) + padY;
+
+  // 位置: 左下角偏上 (避开右下录制按钮 + 底部状态栏 "跟车距离/CPU/温度" 那行)
+  const int x = surface_rect.left() + UI_BORDER_SIZE + 20;
+  const int y = surface_rect.bottom() - UI_BORDER_SIZE - 110 - badgeH;
+  const QRect badge(x, y, badgeW, badgeH);
+
+  // 半透明深色圆角背景
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(0, 0, 0, 150));
+  p.drawRoundedRect(badge, badgeH / 2, badgeH / 2);
+
+  // 描边 (激活时随脉动变亮)
+  QColor border = accent;
+  border.setAlpha(engaged ? (int)(200 * pulse) : 120);
+  p.setPen(QPen(border, 3));
+  p.setBrush(Qt::NoBrush);
+  p.drawRoundedRect(badge, badgeH / 2, badgeH / 2);
+
+  // 圆点 (激活时带外发光并脉动)
+  const int cx = x + padX + dotR;
+  const int cy = y + badgeH / 2;
+  if (engaged) {
+    QColor glow = accent;
+    glow.setAlpha((int)(90 * pulse));
+    p.setPen(Qt::NoPen);
+    p.setBrush(glow);
+    p.drawEllipse(QPoint(cx, cy), (int)(dotR + 7 * pulse), (int)(dotR + 7 * pulse));
+  }
+  QColor dot = accent;
+  dot.setAlpha(engaged ? (int)(255 * pulse) : 200);
+  p.setPen(Qt::NoPen);
+  p.setBrush(dot);
+  p.drawEllipse(QPoint(cx, cy), dotR, dotR);
+
+  // 文本
+  p.setPen(engaged ? QColor(255, 255, 255, 240) : QColor(220, 220, 220, 200));
+  const int tx = cx + dotR + gap;
+  const QRect textRect(tx, y, textW + 10, badgeH);
+  p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, label);
+
+  p.restore();
 }

@@ -1006,7 +1006,10 @@ class CarrotServ:
       if self.lidar_rvalid and self.lidar_lvalid:  #有激光雷达
         #计算理论巡航速度
         if self.active_carrot >= 2:  # 开了导航
-          min_desire_speed_kph = min(v_cruise_kph, self.nRoadLimitSpeed, atc_desired)
+          if self.road_limit_valid:
+            min_desire_speed_kph = min(v_cruise_kph, self.nRoadLimitSpeed, atc_desired)
+          else:
+            min_desire_speed_kph = min(v_cruise_kph, atc_desired)  # fix: invalid nav limit (nRoadLimitSpeed=0) must not clamp cruise to 0
           print(f"min_desire_speed {min_desire_speed_kph:.1f} km/h, road_limit {self.nRoadLimitSpeed:.1f} km/h")
         else:
           min_desire_speed_kph = min(v_cruise_kph, atc_desired)
@@ -1116,7 +1119,10 @@ class CarrotServ:
         elif self.atc_speed_delta > 0: #之前是进行的提速，现在逐步恢复回原速度
           print("==============restore================")
           if self.active_carrot >= 2:  # 开了导航
-            min_desire_speed_kph = min(v_cruise_kph, self.nRoadLimitSpeed, atc_desired)
+            if self.road_limit_valid:
+              min_desire_speed_kph = min(v_cruise_kph, self.nRoadLimitSpeed, atc_desired)
+            else:
+              min_desire_speed_kph = min(v_cruise_kph, atc_desired)  # fix: invalid nav limit (nRoadLimitSpeed=0) must not clamp cruise to 0
             print(f"min_desire_speed {min_desire_speed_kph:.1f} km/h, road_limit {self.nRoadLimitSpeed:.1f} km/h")
           else:
             min_desire_speed_kph = min(v_cruise_kph, atc_desired)
@@ -1271,7 +1277,7 @@ class CarrotServ:
     else:
       self.active_carrot = 0
 
-    if self.autoRoadSpeedLimitOffset >= 0 and self.active_carrot>=2:
+    if self.autoRoadSpeedLimitOffset >= 0 and self.active_carrot>=2 and self.road_limit_valid:  # fix: only clamp cruise to road limit when nav really sent a VALID limit; default/invalid nRoadLimitSpeed(=30) must NOT clamp cruise (this was the "stuck at 30" bug on roads with no nav limit data)
       if self.nRoadLimitSpeed >= 30:
         road_speed_limit_offset = self.autoRoadSpeedLimitOffset
         if not self.is_metric:

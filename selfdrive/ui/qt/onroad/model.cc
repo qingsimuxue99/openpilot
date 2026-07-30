@@ -1,8 +1,15 @@
 #include "selfdrive/ui/qt/onroad/model.h"
 
+#include <cmath>     // [DP] 新增
+
 constexpr int CLIP_MARGIN = 500;
 constexpr float MIN_DRAW_DISTANCE = 10.0;
 constexpr float MAX_DRAW_DISTANCE = 100.0;
+
+// [DP] 新增：构造函数，初始化彩虹动画计时器
+ModelRenderer::ModelRenderer() {
+  dp_rainbow_timer.start();
+}
 
 int get_path_length_idx(const cereal::XYZTData::Reader &line, const float path_height) {
   const auto &line_x = line.getX();
@@ -28,7 +35,6 @@ void ModelRenderer::draw(QPainter &painter, const QRect &surface_rect) {
   longitudinal_control = sm["carParams"].getCarParams().getOpenpilotLongitudinalControl();
   path_offset_z = sm["liveCalibration"].getLiveCalibration().getHeight()[0];
 
-  return;
   painter.save();
 
   const auto &model = sm["modelV2"].getModelV2();
@@ -109,6 +115,29 @@ void ModelRenderer::drawLaneLines(QPainter &painter) {
 
 void ModelRenderer::drawPath(QPainter &painter, const cereal::ModelDataV2::Reader &model, int height) {
   QLinearGradient bg(0, height, 0, 0);
+
+  // ===== [DP] 新增：彩虹路径分支 =====
+  if (uiState()->scene.dp_ui_rainbow) {
+    updateRainbowGradient(bg);
+
+    // 加宽彩虹路径：用 DP_RAINBOW_PATH_WIDTH 重新计算路径多边形
+    const auto &model_position = model.getPosition();
+    float max_w = std::clamp(*(model_position.getX().end() - 1), MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE);
+    const auto &lead = (*uiState()->sm)["radarState"].getRadarState().getLeadOne();
+    if (lead.getStatus()) {
+      const float lead_d = lead.getDRel() * 2.;
+      max_w = std::clamp((float)(lead_d - fmin(lead_d * 0.35, 10.)), 0.0f, max_w);
+    }
+    int max_idx = get_path_length_idx(model_position, max_w);
+    QPolygonF wide_vertices;
+    mapLineToPolygon(model_position, DP_RAINBOW_PATH_WIDTH, path_offset_z, &wide_vertices, max_idx, false);
+
+    painter.setBrush(bg);
+    painter.drawPolygon(wide_vertices);
+    return;
+  }
+  // ===== [DP] 结束 =====
+
   if (experimental_mode) {
     // The first half of track_vertices are the points for the right side of the path
     const auto &acceleration = model.getAcceleration().getX();
@@ -248,5 +277,50 @@ void ModelRenderer::mapLineToPolygon(const cereal::XYZTData::Reader &line, float
       pvd->push_back(left);
       pvd->push_front(right);
     }
+  }
+}
+
+// ============================================================
+// [DP] 新增：HSV转QColor辅助函数
+// ============================================================
+QColor ModelRenderer::hsvToColor(float h, float s, float v, int alpha) {
+  h = h - floor(h);  // 确保 h 在 0~1 范围
+  int sector = static_cast<int>(floor(h * 6.0f));
+  float f = h * 6.0f - sector;
+  float p = v * (1.0f - s);
+  float q = v * (1.0f - f * s);
+  float t = v * (1.0f - (1.0f - f) * s);
+
+  float r, g, b;
+  switch (sector % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+    default: r = v; g = t; b = p; break;
+  }
+  return QColor::fromRgbF(r, g, b, alpha / 255.0f);
+}
+
+// ============================================================
+// [DP] 新增：更新彩虹渐变（固定速度，不随车速变化）
+// ============================================================
+void ModelRenderer::updateRainbowGradient(QLinearGradient &bg) {
+  // 固定速度滚动，不随车速变化
+  float rotation_speed = 1.0f / (float)UI_FREQ / DP_RAINBOW_SCROLL_SPEED_FACTOR;
+  dp_rainbow_rotation += rotation_speed;
+  if (dp_rainbow_rotation > 1.0f) {
+    dp_rainbow_rotation -= 1.0f;
+  }
+
+  // 在路径上生成 DP_RAINBOW_GRADIENT_SAMPLES 个彩虹色采样点
+  for (int i = 0; i < DP_RAINBOW_GRADIENT_SAMPLES; ++i) {
+    float stop = static_cast<float>(i) / (DP_RAINBOW_GRADIENT_SAMPLES - 1);
+    float hue = stop * DP_RAINBOW_NUM_REPEATS + dp_rainbow_rotation;
+    hue = hue - floor(hue);  // 保持在 0~1
+    QColor color = hsvToColor(hue, 1.0f, DP_RAINBOW_BRIGHTNESS, DP_RAINBOW_ALPHA);
+    bg.setColorAt(stop, color);
   }
 }

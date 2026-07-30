@@ -118,7 +118,7 @@ private:
 
   ListWidget* cruiseToggles;
   ListWidget* latLongToggles;
-  ListWidget* pathToggles;
+  ListWidget* featToggles;
   ListWidget* dispToggles;
   ListWidget* startToggles;
   ListWidget* speedToggles;

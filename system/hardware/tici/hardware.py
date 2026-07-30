@@ -95,9 +95,8 @@ class Tici(HardwareBase):
 
   @cached_property
   def amplifier(self):
-    if self.get_device_type() == "mici":
-      return None
-    return Amplifier()
+   return None
+
 
   def get_os_version(self):
     with open("/VERSION") as f:
