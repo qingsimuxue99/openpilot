@@ -1,8 +1,8 @@
 {
-  "version": "1.1.11",
-  "versionCode": 112,
-  "apk": "c3xl_app_v1.1.11.apk",
-  "note": "新增备份后自动校验（解包比对文件数）：备份完成(md5 之后)用 tar -tzf 列出包内条目统计文件数，并与源目录 find 计数比对，日志明确打印『✓ 校验通过：备份包含 N 个文件，与源目录一致』或『⚠ 文件数不一致…』，一眼确认没缺文件。修复备份列表不刷新问题：此前 loadList() 在 setBusy(false) 之前调用、因 isBusy 提前 return，导致刚创建的备份包不显示、一直提示『暂无备份包』；现已先解除忙碌再刷新列表。",
+  "version": "1.1.12",
+  "versionCode": 113,
+  "apk": "c3xl_app_v1.1.12.apk",
+  "note": "优化 SSH 认证失败(Auth fail)的诊断体验：错误提示给出具体排查步骤（地址/端口/用户名、私钥 vs .pub 公钥、authorized_keys 是否写入、权限是否正确）；测试连接/部署/安装二维码失败时，日志自动输出诊断信息（user/host/port/私钥存在性与首行格式）以及需要在 C3 设备上执行的排查命令，方便一眼定位是 App 配置问题还是设备端公钥未配置。",
   "mirrors": {
     "apk": [
       "https://gitee.com/wyc-qsmx/c3toolbox/raw/master/c3xl_app_v{version}.apk",
