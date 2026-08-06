@@ -4,25 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>晚風的OP工具箱</title>
-<!-- PWA：可「添加到主屏幕」当作独立 APP 打开，独立模式下浏览器允许自动播放（无需点击即可播报） -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="C3工具箱">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icon.png">
-<link rel="icon" href="/icon.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#f5f2ec;--bg2:#ffffff;--bg3:#f9f7f3;--bg4:#eeebe4;
-  --ink:#2d2d2d;--muted:#8a8690;--dim:#c5c0ba;
-  --accent:#1aab8a;--accent2:#e85d50;--accent3:#4a90d9;
-  --accent-rgb:26,171,138;
-  --rule:#e8e4dd;--glow:rgba(var(--accent-rgb),.08);--radius:12px;
-  --hdr:rgba(255,255,255,.85);
+  --bg:#0e1117;--bg2:#141821;--bg3:#1a2130;--bg4:#232a36;
+  --ink:#e6e9ef;--muted:#8b93a7;--dim:#3a4252;
+  --accent:#f97316;--accent2:#f43f5e;--accent3:#38bdf8;
+  --accent-rgb:249,115,22;
+  --rule:#232a36;--glow:rgba(249,115,22,.10);--radius:12px;
+  --hdr:rgba(20,24,33,.85);
+  --bg-grad:linear-gradient(160deg,#0e1117 0%,#0b0e14 100%);
 }
-/* === 皮肤主题（data-theme 切换；default=当前默认背景 在 :root，redblue=红蓝渐变；两大家族：浅色扁平风 / 粉彩渐变风） === */
+/* === 皮肤主题（data-theme 切换；dark=暗夜默认；其余为可选浅色 / 粉彩渐变风） === */
+:root[data-theme="dark"]{
+  --bg:#0e1117;--bg2:#141821;--bg3:#1a2130;--bg4:#232a36;
+  --ink:#e6e9ef;--muted:#8b93a7;--dim:#3a4252;
+  --accent:#f97316;--accent2:#f43f5e;--accent3:#38bdf8;
+  --accent-rgb:249,115,22;
+  --rule:#232a36;--glow:rgba(249,115,22,.10);--radius:12px;
+  --hdr:rgba(20,24,33,.85);
+  --bg-grad:linear-gradient(160deg,#0e1117 0%,#0b0e14 100%);
+}
 /* —— 家族A：当前默认风（浅色扁平，无渐变） —— */
 :root[data-theme="cleanwhite"]{
   --bg:#f7f8fa;--bg2:#ffffff;--bg3:#f1f3f6;--bg4:#e7eaef;
@@ -146,7 +148,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 
 /* === Layout === */
 .wrap{display:flex;height:calc(100vh - 52px);position:relative;z-index:1}
-.side{width:200px;min-width:200px;background:rgba(255,255,255,.7);backdrop-filter:blur(12px);border-right:1px solid var(--rule);overflow-y:auto;padding:6px;scrollbar-width:thin}
+.side{width:200px;min-width:200px;background:var(--bg2);backdrop-filter:blur(12px);border-right:1px solid var(--rule);overflow-y:auto;padding:6px;scrollbar-width:thin}
 .side::-webkit-scrollbar{width:4px}
 .side::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
 .body{flex:1;overflow-y:auto;padding:24px 28px;scrollbar-width:thin}
@@ -296,7 +298,7 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .md .ma{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
 
 /* === Mobile Nav Toggle === */
-.mnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);border-top:1px solid var(--rule);padding:6px 0 env(safe-area-inset-bottom,6px);overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.mnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:var(--hdr);backdrop-filter:blur(20px);border-top:1px solid var(--rule);padding:6px 0 env(safe-area-inset-bottom,6px);overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .mnav::-webkit-scrollbar{display:none}
 .mnav-in{display:flex;gap:4px;padding:0 8px;min-width:max-content;margin:0 auto}
 .mn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px;border-radius:8px;cursor:pointer;transition:all .15s;font-size:10px;color:var(--muted);min-width:40px}
@@ -421,6 +423,18 @@ body::after{content:'';position:fixed;bottom:-20%;left:-10%;width:400px;height:4
 .ca .btn-sv.ready{background:var(--accent);color:#fff}
 .shc{font-size:12px;color:var(--accent);font-weight:500;margin-bottom:10px}
 
+/* 参数分组折叠面板 */
+.pgrp{border:1px solid var(--rule);border-radius:10px;margin-bottom:8px;overflow:hidden;background:var(--bg2)}
+.pgh{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;user-select:none;transition:background .15s}
+.pgh:hover{background:var(--bg)}
+.pgt{font-size:13px;font-weight:600;color:var(--ink);flex:1}
+.pgn{font-size:11px;color:var(--muted)}
+.pgc{min-width:22px;text-align:center;padding:1px 7px;border-radius:9px;background:var(--bg);border:1px solid var(--rule);color:var(--accent);font-size:11px;font-weight:600}
+.pga{font-size:10px;color:var(--dim);transition:transform .2s}
+.pgrp.open .pga{transform:rotate(180deg)}
+.pgb{display:none;padding:10px 12px;border-top:1px solid var(--rule);background:var(--bg)}
+.pgrp.open .pgb{display:block}
+
 /* Responsive cards */
 @media(max-width:640px){
   .param-card{padding:8px 10px;margin-bottom:5px;display:flex;flex-wrap:wrap;gap:6px}
@@ -472,6 +486,22 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .pc-star:hover{border-color:var(--accent);color:var(--accent)}
 .pc-star.on{background:rgba(var(--accent-rgb),.12);border-color:var(--accent);color:var(--accent)}
 
+/* === 进度推送窗（SSE 流式进度 + 防卡） === */
+.prog-mo .prog-md{max-width:520px;width:92%}
+.prog-bar{height:8px;background:var(--bg4);border-radius:6px;overflow:hidden;margin:14px 0 6px}
+.prog-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#ffb070);border-radius:6px;transition:width .3s}
+.prog-bar-fill.indet{width:100%!important;background:linear-gradient(90deg,var(--accent) 30%,rgba(var(--accent-rgb),.2) 50%,var(--accent) 70%);background-size:200% 100%;animation:progIndet 1.2s linear infinite}
+@keyframes progIndet{0%{background-position:0 0}100%{background-position:200% 0}}
+.prog-pct{font-size:12px;color:var(--muted);margin-bottom:8px;min-height:16px}
+.prog-log{height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:8px;font-family:monospace;font-size:11px;color:var(--ink);line-height:1.7}
+.prog-log .pl{white-space:pre-wrap;word-break:break-all}
+.prog-log .pl.ok{color:var(--accent)}
+.prog-log .pl.err{color:var(--accent2)}
+/* 工具子区（p-tools 内） */
+.sec{margin-bottom:18px}
+.sec .ph{margin-bottom:10px}
+.cmd-box{background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:10px;font-family:monospace;font-size:11px;color:var(--ink);white-space:pre-wrap;word-break:break-all;line-height:1.6}
+
 </style>
 </head>
 <body>
@@ -503,25 +533,13 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 <div class="wrap">
   <!-- Sidebar -->
   <nav class="side" style="padding:12px 8px">
-    <div class="cat-card on" data-p="dashboard" onclick="go('dashboard')"><span class="cname">设备信息 📱</span><span class="cbadge" id="bc-dashboard">—</span></div>
-    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">参数控制 ⚙️ <span id="branchBadge" class="branch-badge"></span></div>
-    <div class="cat-card" data-p="lateral" onclick="go('lateral')"><span class="cname">横向 ↔️</span><span class="cbadge" id="bc-lateral">0</span></div>
-    <div class="cat-card" data-p="longitudinal" onclick="go('longitudinal')"><span class="cname">纵向 ↕️</span><span class="cbadge" id="bc-longitudinal">0</span></div>
-    <div class="cat-card" data-p="curve" onclick="go('curve')"><span class="cname">弯道 🌀</span><span class="cbadge" id="bc-curve">0</span></div>
-    <div class="cat-card" data-p="lanechange" onclick="go('lanechange')"><span class="cname">变道 ↪️</span><span class="cbadge" id="bc-lanechange">0</span></div>
-    <div class="cat-card" data-p="nav" onclick="go('nav')"><span class="cname">导航 🗺️</span><span class="cbadge" id="bc-nav">0</span></div>
-    <div class="cat-card" data-p="display" onclick="go('display')"><span class="cname">显示 🖥️</span><span class="cbadge" id="bc-display">0</span></div>
-    <div class="cat-card" data-p="settings" onclick="go('settings')"><span class="cname">设置 ⚙️</span><span class="cbadge" id="bc-settings">0</span></div>
-    <div class="cat-card" data-p="info" onclick="go('info')"><span class="cname">其他 📦</span><span class="cbadge" id="bc-info">0</span></div>
-    <div class="cat-card" data-p="fav" onclick="go('fav')"><span class="cname">收藏 ⭐</span><span class="cbadge" id="bc-fav">0</span></div>
-    <div class="cat-card" data-p="search" onclick="go('search')"><span class="cname">搜索 🔍</span><span class="cbadge" id="bc-search">—</span></div>
-    <div style="margin:16px 0 8px 6px;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px">工具 🛠️</div>
-    <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端 💻</span><span class="cbadge" id="bc-terminal">—</span></div>
-    <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份 💾</span><span class="cbadge" id="bc-backup">—</span></div>
-    <div class="cat-card" data-p="bootanim" onclick="go('bootanim')"><span class="cname">开机动画 🎬</span><span class="cbadge" id="bc-bootanim">—</span></div>
-    <div class="cat-card" data-p="perception" onclick="go('perception')"><span class="cname">感知 🧊</span><span class="cbadge" id="bc-perception">—</span></div>
-    <div class="cat-card" data-p="theme" onclick="go('theme')"><span class="cname">主题 🎨</span><span class="cbadge" id="bc-theme">—</span></div>
-    <div class="cat-card" data-p="lan" onclick="go('lan')"><span class="cname">局域网扫描 📡</span><span class="cbadge" id="bc-lan">—</span></div>
+    <div class="cat-card on" data-p="dashboard" onclick="go('dashboard')"><span class="cname">概览</span><span class="cbadge" id="bc-dashboard">—</span></div>
+    <div class="cat-card" data-p="params" onclick="go('params')"><span class="cname">参数设置</span><span class="cbadge" id="bc-params">0</span></div>
+    <div class="cat-card" data-p="terminal" onclick="go('terminal')"><span class="cname">终端</span><span class="cbadge" id="bc-terminal">—</span></div>
+    <div class="cat-card" data-p="backup" onclick="go('backup')"><span class="cname">备份恢复</span><span class="cbadge" id="bc-backup">—</span></div>
+    <div class="cat-card" data-p="deploy" onclick="go('deploy')"><span class="cname">一键部署</span><span class="cbadge" id="bc-deploy">—</span></div>
+    <div class="cat-card" data-p="tools" onclick="go('tools')"><span class="cname">工具</span><span class="cbadge" id="bc-tools">—</span></div>
+    <div class="cat-card" data-p="about" onclick="go('about')"><span class="cname">关于</span><span class="cbadge" id="bc-about">—</span></div>
   </nav>
 
   <!-- Content -->
@@ -557,83 +575,70 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
           <div class="qb" onclick="doReboot()"><span class="qi">⟳</span><span class="qt">重启设备</span></div>
           <div class="qb" onclick="loadParams()"><span class="qi">📥</span><span class="qt">刷新参数</span></div>
           <div class="qb" onclick="go('backup')"><span class="qi">💾</span><span class="qt">备份参数</span></div>
-          <div class="qb" onclick="go('settings')"><span class="qi">⚙️</span><span class="qt">参数设置</span></div>
+          <div class="qb" onclick="go('params')"><span class="qi">⚙️</span><span class="qt">参数设置</span></div>
         </div>
       </div>
     </div>
 
-    <!-- 横向 -->
-    <div class="pnl" id="p-lateral">
-      <div class="ph"><h2>横向控制</h2><p>转向、扭矩、MPC 参数</p></div>
-      <div class="shc" id="sh-lateral">已读取 0 项</div>
-      <div id="sp-lateral"></div>
-    </div>
+    <!-- 参数设置（合并原 横向/纵向/弯道/变道/导航/显示/设置/其他/收藏/搜索） -->
+    <div class="pnl" id="p-params">
+      <div class="ph"><h2>参数设置 <span id="branchBadge" class="branch-badge"></span></h2><p>按功能分组管理 openpilot 参数，支持搜索与收藏</p></div>
 
-    <!-- 纵向 -->
-    <div class="pnl" id="p-longitudinal">
-      <div class="ph"><h2>纵向控制</h2><p>巡航、加减速、跟车、加加速度</p></div>
-      <div class="shc" id="sh-longitudinal">已读取 0 项</div>
-      <div id="sp-longitudinal"></div>
-    </div>
-
-    <!-- 弯道 -->
-    <div class="pnl" id="p-curve">
-      <div class="ph"><h2>弯道控制</h2><p>弯道速度、弯道限速</p></div>
-      <div class="shc" id="sh-curve">已读取 0 项</div>
-      <div id="sp-curve"></div>
-    </div>
-
-    <!-- 变道 -->
-    <div class="pnl" id="p-lanechange">
-      <div class="ph"><h2>变道控制</h2><p>变道扭矩、延迟、连续变道</p></div>
-      <div class="shc" id="sh-lanechange">已读取 0 项</div>
-      <div id="sp-lanechange"></div>
-    </div>
-
-    <!-- 导航 -->
-    <div class="pnl" id="p-nav">
-      <div class="ph"><h2>导航控制</h2><p>导航速度、限速、红绿灯、地图</p></div>
-      <div class="shc" id="sh-nav">已读取 0 项</div>
-      <div id="sp-nav"></div>
-    </div>
-
-    <!-- 显示 -->
-    <div class="pnl" id="p-display">
-      <div class="ph"><h2>显示设置</h2><p>图表、路径、车道路径颜色、调试界面</p></div>
-      <div class="shc" id="sh-display">已读取 0 项</div>
-      <div id="sp-display"></div>
-    </div>
-
-    <!-- 设置 -->
-    <div class="pnl" id="p-settings">
-      <div class="ph"><h2>系统设置</h2><p>系统开关、按钮模式、连接与录制</p></div>
-      <div class="shc" id="sh-settings">已读取 0 项</div>
-      <div id="sp-settings"></div>
-    </div>
-
-    <!-- 信息 -->
-    <div class="pnl" id="p-info">
-      <div class="ph"><h2>其他参数</h2><p>未归入上述分类的兜底参数</p></div>
-      <div class="shc" id="sh-info">已读取 0 项</div>
-      <div id="sp-info"></div>
-    </div>
-
-    <!-- 收藏 -->
-    <div class="pnl" id="p-fav">
-      <div class="ph"><h2>收藏参数</h2><p>把常用参数点 ★ 收藏后集中在此，调参更快</p></div>
-      <div class="shc" id="sh-fav">已收藏 0 项</div>
-      <div id="sp-fav"></div>
-    </div>
-
-    <!-- 搜索 -->
-    <div class="pnl" id="p-search">
-      <div class="ph"><h2>参数搜索</h2><p>跨全部分类极速查找参数</p></div>
-      <div class="search-bar">
-        <span style="font-size:15px">🔍</span>
-        <input type="text" id="paramSearch" placeholder="输入参数名 / 英文 key / 说明，如「转向」「Steer」「灵敏度」" oninput="doParamSearch(this.value)" autocomplete="off">
-        <span class="sc" id="searchCount"></span>
+      <div class="cd">
+        <div class="search-bar">
+          <span style="font-size:15px">🔍</span>
+          <input type="text" id="paramSearch" placeholder="搜索参数：名称 / 英文 key / 说明，如「转向」「Steer」「灵敏度」" oninput="doParamSearch(this.value)" autocomplete="off">
+          <span class="sc" id="searchCount"></span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn bs" id="favFilterBtn" onclick="toggleFavFilter()" style="font-size:11px;padding:5px 12px">★ 仅看收藏</button>
+          <button class="btn bs" id="allGrpBtn" onclick="togAllGrp()" style="font-size:11px;padding:5px 12px">全部展开</button>
+          <button class="btn bs" onclick="loadParams()" style="font-size:11px;padding:5px 12px">刷新参数</button>
+        </div>
       </div>
-      <div id="sp-search"><div class="empty-hint">输入关键字开始搜索<br>支持中文名 / 英文 key / 说明</div></div>
+
+      <!-- 搜索结果（有关键字时显示，覆盖分组） -->
+      <div id="sp-search" style="display:none"></div>
+
+      <!-- 分组容器 -->
+      <div id="pgrps">
+        <div class="pgrp open" id="g-fav">
+          <div class="pgh" onclick="togGrp('fav')"><span class="pgt">★ 我的收藏</span><span class="pgn" id="sh-fav">已收藏 0 项</span><span class="pgc" id="bc-fav">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-fav"></div>
+        </div>
+        <div class="pgrp" id="g-lateral">
+          <div class="pgh" onclick="togGrp('lateral')"><span class="pgt">横向控制 · 转向</span><span class="pgn" id="sh-lateral">—</span><span class="pgc" id="bc-lateral">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-lateral"></div>
+        </div>
+        <div class="pgrp" id="g-longitudinal">
+          <div class="pgh" onclick="togGrp('longitudinal')"><span class="pgt">纵向控制 · 巡航加减速</span><span class="pgn" id="sh-longitudinal">—</span><span class="pgc" id="bc-longitudinal">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-longitudinal"></div>
+        </div>
+        <div class="pgrp" id="g-curve">
+          <div class="pgh" onclick="togGrp('curve')"><span class="pgt">弯道减速</span><span class="pgn" id="sh-curve">—</span><span class="pgc" id="bc-curve">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-curve"></div>
+        </div>
+        <div class="pgrp" id="g-lanechange">
+          <div class="pgh" onclick="togGrp('lanechange')"><span class="pgt">自动变道</span><span class="pgn" id="sh-lanechange">—</span><span class="pgc" id="bc-lanechange">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-lanechange"></div>
+        </div>
+        <div class="pgrp" id="g-nav">
+          <div class="pgh" onclick="togGrp('nav')"><span class="pgt">导航 · 限速 · 路口</span><span class="pgn" id="sh-nav">—</span><span class="pgc" id="bc-nav">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-nav"></div>
+        </div>
+        <div class="pgrp" id="g-display">
+          <div class="pgh" onclick="togGrp('display')"><span class="pgt">界面显示</span><span class="pgn" id="sh-display">—</span><span class="pgc" id="bc-display">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-display"></div>
+        </div>
+        <div class="pgrp" id="g-settings">
+          <div class="pgh" onclick="togGrp('settings')"><span class="pgt">系统设置 · 开关</span><span class="pgn" id="sh-settings">—</span><span class="pgc" id="bc-settings">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-settings"></div>
+        </div>
+        <div class="pgrp" id="g-info">
+          <div class="pgh" onclick="togGrp('info')"><span class="pgt">其他参数</span><span class="pgn" id="sh-info">—</span><span class="pgc" id="bc-info">0</span><span class="pga">▼</span></div>
+          <div class="pgb" id="sp-info"></div>
+        </div>
+      </div>
     </div>
 
     <!-- 终端 -->
@@ -694,33 +699,14 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
         <button class="btn bw" onclick="doParamDiff()" style="margin-top:8px">开始对比</button>
         <div id="diffResult" style="margin-top:10px"></div>
       </div>
-      <div class="cd"><div class="ct">完整备份 (openpilot 整目录)</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">将 <code style="background:var(--bg);padding:1px 6px;border-radius:4px;font-size:11px">/data/openpilot</code> 整体打包为 .tar.gz 备份包（含全部文件、模型与配置）。耗时可能数分钟。</p>
-        <button class="btn bp" onclick="startOpBackup()">创建完整备份</button>
-        <div id="opBkProg" class="prog-wrap" style="display:none">
-          <div class="prog-bar"><div class="prog-fill" id="opBkFill"></div></div>
-          <div class="prog-txt" id="opBkTxt"></div>
+      <div class="cd"><div class="ct">完整备份（openpilot 整目录 + 参数）</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">在线打包 <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/openpilot</code> + <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/params</code>，后台执行、绝不杀 openpilot（避免设备重启断连），实时进度 + 末尾 md5 / 文件数校验。点「整体备份」后弹出进度窗。</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn bp" onclick="doFullBackup()">🗄️ 整体备份</button>
+          <span class="bs-info" id="fullBkStatus"></span>
         </div>
-      </div>
-      <div class="cd"><div class="ct">完整备份包 / 恢复</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">设备内已有备份包：</p>
-        <div id="opBkList" style="margin-bottom:8px"></div>
-        <select id="opBkSelect" style="width:100%;padding:6px;border-radius:6px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);font-size:12px">
-          <option value="">— 请选择备份包 —</option>
-        </select>
-        <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;margin:8px 0">
-          <input type="checkbox" id="opReboot" checked> 恢复后重启设备（推荐，确保 openpilot 重新加载）
-        </label>
-        <button class="btn bw" onclick="restoreOpDevice()">从设备备份包恢复</button>
-        <div style="border-top:1px dashed var(--rule);margin:12px 0"></div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">或上传本地备份包恢复：</p>
-        <div class="fg"><input type="file" id="opUpFile" accept=".tar.gz,.tgz" style="color:var(--ink)"></div>
-        <button class="btn bp" onclick="restoreOpUpload()" style="margin-top:8px">上传并恢复</button>
-        <div id="opResProg" class="prog-wrap" style="display:none">
-          <div class="prog-bar"><div class="prog-fill" id="opResFill"></div></div>
-          <div class="prog-txt" id="opResTxt"></div>
-        </div>
-        <p style="font-size:11px;color:var(--dim);margin-top:8px">备份包保存于 <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/备份恢复包openpilot_backup_*.tar.gz</code></p>
+        <div id="fullBkList" style="margin-top:8px"></div>
+        <div class="bs-note">完整恢复（解包回写）建议在 <b>App 工具箱</b> 完成（SSH 直连、断点可控更稳）；网页端侧重「一键备份 + 校验」。</div>
       </div>
       <div class="cd"><div class="ct">自定义写入</div>
         <div class="fg"><textarea id="cParams" rows="5" placeholder='{"AutoCruiseControl": "1"}' style="font-family:monospace;font-size:11px"></textarea></div>
@@ -728,8 +714,30 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
       </div>
     </div>
 
+    <!-- 一键部署 / 在线更新 -->
+    <div class="pnl" id="p-deploy">
+      <div class="ph"><h2>一键部署 / 在线更新</h2><p>将网页工具箱更新到最新版，全程流式进度，告别「假死」</p></div>
+      <div class="cd"><div class="ct">在线更新（进度推送 + 防卡）</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">点「立即更新」后：检测新版本 → 分块下载发布包（实时百分比）→ 解压 → 自动重启服务。过程弹窗实时显示，连接中断会自动重连，不再卡住无响应。</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn bp" onclick="doDeployUpdate()">🚀 立即更新</button>
+          <button class="btn bs" onclick="checkUpdate()">检查更新</button>
+          <span class="bs-info">当前版本 v<span id="deployVer2">-</span></span>
+        </div>
+      </div>
+      <div class="cd"><div class="ct">从零部署命令（朋友 / 重置）</div>
+        <p style="font-size:11px;color:var(--dim);margin-bottom:8px">设备端 SSH 执行以下一行命令即可完成安装（下载发布包→解压→开机自启→启动）：</p>
+        <div class="cmd-box" id="deployCmd">S="https://gitee.com/wyc-qsmx/c3toolbox/raw/master/install_c3_toolbox.sh"; for P in "" "https://gh-proxy.com/"; do curl -fsSL --retry 8 --retry-delay 3 "${P}${S}" -o /tmp/i.sh && [ -s /tmp/i.sh ] && break; done; chmod +x /tmp/i.sh && bash /tmp/i.sh --reboot</div>
+        <button class="btn bw" onclick="copyText('deployCmd')" style="margin-top:8px">复制命令</button>
+        <div class="bs-note">部署脚本读取 GitHub 最新发布包（jsdelivr CDN，国内可达）并写入开机自启。手机须连 C3 同网段（通常 C3 热点 192.168.5.x）才能访问 :5588。</div>
+      </div>
+    </div>
+
     <!-- 开机动画定制 -->
-    <div class="pnl" id="p-bootanim">
+    <div class="pnl" id="p-tools">
+      <div class="ph"><h2>工具</h2><p>开机动画、感知线框、主题皮肤、局域网扫描</p></div>
+
+    <div class="sec" id="p-bootanim">
       <div class="ph"><h2>开机动画定制</h2><p>自定义开机第一屏（Logo）与第二屏（背景图），浏览器内一键生成，无需电脑工具</p></div>
 
       <!-- 第一屏：splash 浏览器生成器 -->
@@ -781,8 +789,8 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     </div>
 
     <!-- 感知线框 3D 场景 -->
-    <div class="pnl" id="p-perception">
-      <div class="ph"><h2>感知线框 🧊</h2><p>把模型实时检测到的车辆 / 行人画成赛博线框 3D 场景</p></div>
+    <div class="sec" id="p-perception">
+      <div class="ph"><h2>感知线框</h2><p>把模型实时检测到的车辆 / 行人画成赛博线框 3D 场景</p></div>
 
       <div class="perc-wrap">
         <canvas id="percCanvas"></canvas>
@@ -800,8 +808,8 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     </div>
 
     <!-- 主题皮肤 -->
-    <div class="pnl" id="p-theme">
-      <div class="ph"><h2>主题皮肤 🎨</h2><p>一键切换整体配色风格，选择会被记住</p></div>
+    <div class="sec" id="p-theme">
+      <div class="ph"><h2>主题皮肤</h2><p>一键切换整体配色风格，选择会被记住</p></div>
       <div class="cd">
         <div class="ct" style="margin-top:8px">浅色扁平风（当前默认风格）</div>
         <div class="theme-row" id="themeRow">
@@ -827,8 +835,8 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
     </div>
 
     <!-- 局域网扫描 / 设备发现 -->
-    <div class="pnl" id="p-lan">
-      <div class="ph"><h2>局域网扫描 📡</h2><p>自动发现同网段设备，确认 C3 当前地址、排查平板是否在线</p></div>
+    <div class="sec" id="p-lan">
+      <div class="ph"><h2>局域网扫描</h2><p>自动发现同网段设备，确认 C3 当前地址、排查平板是否在线</p></div>
 
       <div class="cyber-card">
         <div class="cc-head">
@@ -855,6 +863,23 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
       </div>
     </div>
 
+    </div>
+
+    <!-- 关于 -->
+    <div class="pnl" id="p-about">
+      <div class="ph"><h2>关于</h2><p>工具箱信息与连接管理</p></div>
+      <div class="cd"><div class="ct">版本</div>
+        <p style="font-size:13px;color:var(--ink)">晚風的OP工具箱（网页版）<br>当前版本：v<span id="aboutVer">-</span></p>
+        <p style="font-size:11px;color:var(--dim);margin-top:6px">更新与部署请前往「一键部署」页，或点右上角「检查更新」。</p>
+      </div>
+      <div class="cd"><div class="ct">项目</div>
+        <p style="font-size:12px;color:var(--muted)">Carrotpilot cpv9-dev · comma three (c3)<br>后端：<code style="background:var(--bg);padding:1px 6px;border-radius:4px">c3_toolbox_local.py</code> @ :5588</p>
+      </div>
+      <div class="cd"><div class="ct">连接</div>
+        <button class="btn bd" onclick="doDisconnect()">断开连接</button>
+        <div class="bs-note">断开仅关闭本页面视图，不会停止设备端服务。</div>
+      </div>
+    </div>
 
   </div>
 </div>
@@ -862,23 +887,13 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 <!-- Mobile Bottom Nav -->
 <nav class="mnav">
   <div class="mnav-in">
-    <div class="mn on" data-p="dashboard" onclick="go('dashboard')"><span class="mi">📱</span><span class="mt">设备</span></div>
-    <div class="mn" data-p="lateral" onclick="go('lateral')"><span class="mi">↔️</span><span class="mt">横向</span></div>
-    <div class="mn" data-p="longitudinal" onclick="go('longitudinal')"><span class="mi">↕️</span><span class="mt">纵向</span></div>
-    <div class="mn" data-p="curve" onclick="go('curve')"><span class="mi">🌀</span><span class="mt">弯道</span></div>
-    <div class="mn" data-p="lanechange" onclick="go('lanechange')"><span class="mi">↪️</span><span class="mt">变道</span></div>
-    <div class="mn" data-p="nav" onclick="go('nav')"><span class="mi">🗺️</span><span class="mt">导航</span></div>
-    <div class="mn" data-p="display" onclick="go('display')"><span class="mi">🖥️</span><span class="mt">显示</span></div>
-    <div class="mn" data-p="settings" onclick="go('settings')"><span class="mi">⚙️</span><span class="mt">设置</span></div>
-    <div class="mn" data-p="info" onclick="go('info')"><span class="mi">📦</span><span class="mt">其他</span></div>
-    <div class="mn" data-p="fav" onclick="go('fav')"><span class="mi">⭐</span><span class="mt">收藏</span></div>
-    <div class="mn" data-p="search" onclick="go('search')"><span class="mi">🔍</span><span class="mt">搜索</span></div>
-    <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mi">💻</span><span class="mt">终端</span></div>
-    <div class="mn" data-p="backup" onclick="go('backup')"><span class="mi">💾</span><span class="mt">备份</span></div>
-    <div class="mn" data-p="bootanim" onclick="go('bootanim')"><span class="mi">🎬</span><span class="mt">开机动画</span></div>
-    <div class="mn" data-p="perception" onclick="go('perception')"><span class="mi">🧊</span><span class="mt">感知</span></div>
-    <div class="mn" data-p="theme" onclick="go('theme')"><span class="mi">🎨</span><span class="mt">主题</span></div>
-    <div class="mn" data-p="lan" onclick="go('lan')"><span class="mi">📡</span><span class="mt">扫描</span></div>
+    <div class="mn on" data-p="dashboard" onclick="go('dashboard')"><span class="mt">概览</span></div>
+    <div class="mn" data-p="params" onclick="go('params')"><span class="mt">参数</span></div>
+    <div class="mn" data-p="terminal" onclick="go('terminal')"><span class="mt">终端</span></div>
+    <div class="mn" data-p="backup" onclick="go('backup')"><span class="mt">备份</span></div>
+    <div class="mn" data-p="deploy" onclick="go('deploy')"><span class="mt">部署</span></div>
+    <div class="mn" data-p="tools" onclick="go('tools')"><span class="mt">工具</span></div>
+    <div class="mn" data-p="about" onclick="go('about')"><span class="mt">关于</span></div>
   </div>
 </nav>
 
@@ -886,6 +901,17 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 <div class="mo" id="rebootMo">
   <div class="md"><h3>确认重启设备</h3><p>设备将立即重启，几秒后重新上线。确定？</p>
     <div class="ma"><button class="btn bs" onclick="closeMo()">取消</button><button class="btn bd" onclick="confirmReboot()">确认重启</button></div>
+  </div>
+</div>
+
+<!-- 进度推送 + 防卡：流式任务进度窗 -->
+<div class="mo prog-mo" id="progMo">
+  <div class="md prog-md">
+    <h3 id="progTitle">任务进行中</h3>
+    <div class="prog-bar"><div class="prog-bar-fill" id="progBar"></div></div>
+    <div class="prog-pct" id="progPct"></div>
+    <div class="prog-log" id="progLog"></div>
+    <div class="ma"><button class="btn bs" id="progClose" onclick="progClose()">关闭</button></div>
   </div>
 </div>
 
@@ -1047,6 +1073,43 @@ function getCat(k){
 // 隐藏项：状态/测试类（非可调设置）、只读设备信息（设备信息页已展示）
 var EXCLUDE={'modelid':1,'CompletedTrainingVersion':1,'HasAcceptedTerms':1,'SearchInput':1,'CruiseButtonTest1':1,'CruiseButtonTest2':1,'CruiseButtonTest3':1,'ExtBlinkerCtrlTest':1,'DongleId':1,'Version':1,'GitBranch':1,'GitCommit':1,'CarName':1,'BootCount':1,'HasRadar':1,'HasRelief':1,'HasSrm':1,'HasAutoResumeFromStop':1,'PandaFirmwareVersion':1,'PandaHardwareType':1,'CameraType':1,'FirmwareVersion':1,'PendingBranchFetch':1,'LastUpdateCheck':1,'UpdateAvailable':1};
 
+// 分组折叠开关（状态持久化）
+function togGrp(id){
+  var g=document.getElementById('g-'+id);if(!g)return;
+  var open=g.classList.toggle('open');
+  try{var s=JSON.parse(localStorage.getItem('c3_grp')||'{}');s[id]=open;localStorage.setItem('c3_grp',JSON.stringify(s))}catch(e){}
+}
+function restoreGrps(){
+  var s={};try{s=JSON.parse(localStorage.getItem('c3_grp')||'{}')}catch(e){}
+  Object.keys(s).forEach(function(id){
+    var g=document.getElementById('g-'+id);if(g)g.classList.toggle('open',!!s[id]);
+  });
+}
+// 全部展开 / 全部收起
+var ALL_OPEN=false;
+function togAllGrp(){
+  ALL_OPEN=!ALL_OPEN;
+  var s={};
+  document.querySelectorAll('#pgrps .pgrp').forEach(function(g){
+    g.classList.toggle('open',ALL_OPEN);
+    s[g.id.replace(/^g-/,'')]=ALL_OPEN;
+  });
+  try{localStorage.setItem('c3_grp',JSON.stringify(s))}catch(e){}
+  var b=document.getElementById('allGrpBtn');if(b)b.textContent=ALL_OPEN?'全部收起':'全部展开';
+}
+// 仅看收藏：隐藏其余分组
+var FAV_ONLY=false;
+function toggleFavFilter(){
+  FAV_ONLY=!FAV_ONLY;
+  var fav=document.getElementById('g-fav');if(fav)fav.classList.add('open');
+  document.querySelectorAll('#pgrps .pgrp').forEach(function(g){
+    if(g.id==='g-fav')return;
+    g.style.display=FAV_ONLY?'none':'';
+  });
+  var b=document.getElementById('favFilterBtn');
+  if(b){b.textContent=FAV_ONLY?'★ 显示全部':'★ 仅看收藏';b.style.borderColor=FAV_ONLY?'var(--accent)':'';b.style.color=FAV_ONLY?'var(--accent)':'';}
+}
+
 function fillSortedParams(){
   var HIDDEN=/^SoundVolume|^Audible|^Beep|^AudibleAlert/;
   var catIds=['lateral','longitudinal','curve','lanechange','nav','display','settings','info'];
@@ -1181,9 +1244,11 @@ function renderFav(){
 // === 参数极速搜索（跨全部分类）===
 function doParamSearch(q){
   var el=document.getElementById('sp-search');var cnt=document.getElementById('searchCount');
+  var grps=document.getElementById('pgrps');
   if(!el)return;
   q=(q||'').trim();
-  if(!q){el.innerHTML='<div class="empty-hint">输入关键字开始搜索<br>支持中文名 / 英文 key / 说明</div>';if(cnt)cnt.innerHTML='';return;}
+  if(!q){el.style.display='none';el.innerHTML='';if(grps)grps.style.display='';if(cnt)cnt.innerHTML='';return;}
+  el.style.display='';if(grps)grps.style.display='none';
   var keys=SP.length>0?SP:Object.keys(AP);
   var ql=q.toLowerCase();var matched=[];
   keys.forEach(function(k){
@@ -1307,7 +1372,7 @@ function onTabSwitch(id){
   if(id!=='perception')stopPerception();
   if(id==='dashboard'){loadInfo()}
   else if(id==='perception'){startPerception()}
-  else if(id==='backup'){checkAutoBackup();loadBkList();loadOpBackups();}
+  else if(id==='backup'){checkAutoBackup();loadBkList();}
   else if(id==='bootanim'){loadBgInfo();loadSplashInfo();}
   else if(id==='theme'){}
   else if(id==='lan'){loadLan()}
@@ -1633,112 +1698,6 @@ async function applyCustom(){var t=document.getElementById('cParams').value.trim
   try{var p=JSON.parse(t);var r=await fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});var d=await r.json();
   toast(d.message,d.success?'ok':'er');if(d.success){Object.assign(AP,p);CP={};fillSortedParams()}}catch(e){toast('JSON格式错误','er')}}
 
-// === 完整备份 / 恢复（/data/openpilot）===
-function pollOpTask(taskId, progEl, onDone){
-  var timer = setInterval(function(){
-    fetch('/api/op_task/'+taskId).then(function(r){return r.json()}).then(function(d){
-      if(progEl){
-        var fill = progEl.querySelector('.prog-fill');
-        var txt = progEl.querySelector('.prog-txt');
-        if(fill && txt){
-          progEl.style.display = 'block';
-          var pct = (typeof d.progress === 'number') ? d.progress : (d.done ? 100 : 0);
-          fill.style.width = pct + '%';
-          txt.textContent = (d.message || '') + (typeof d.progress === 'number' ? '  ' + pct + '%' : '');
-        } else {
-          progEl.textContent = d.message || (d.status==='running' ? '处理中...' : '');
-        }
-      }
-      if(d.done){
-        clearInterval(timer);
-        if(progEl){
-          var fill = progEl.querySelector('.prog-fill');
-          var txt = progEl.querySelector('.prog-txt');
-          if(fill && txt){ fill.style.width='100%'; txt.textContent=(d.message||'')+'  100%'; }
-          else progEl.textContent = d.message || '';
-        }
-        if(onDone) onDone(d);
-      }
-    }).catch(function(){
-      clearInterval(timer);
-      if(progEl){
-        var txt = progEl.querySelector('.prog-txt');
-        if(txt){ progEl.style.display='block'; txt.textContent='状态查询失败，请稍后手动刷新备份列表'; }
-        else progEl.textContent='状态查询失败，请稍后手动刷新备份列表';
-      }
-    });
-  }, 1500);
-}
-async function startOpBackup(){
-  if(!confirm('将打包 /data/openpilot 整体，可能耗时数分钟且占用磁盘空间，确定开始？'))return;
-  var prog=document.getElementById('opBkProg');
-  prog.style.display='block';
-  prog.querySelector('.prog-txt').textContent='正在打包...';
-  prog.querySelector('.prog-fill').style.width='0%';
-  try{
-    var r=await fetch('/api/op_backup',{method:'POST'});var d=await r.json();
-    if(!d.success){toast('备份启动失败','er');prog.style.display='none';return;}
-    pollOpTask(d.task_id, prog, function(res){
-      toast(res.message, res.status==='done'?'ok':'er');
-      if(res.status==='done') loadOpBackups();
-      if(res.status==='error') prog.style.display='none';
-    });
-  }catch(e){toast('失败','er');prog.style.display='none';}
-}
-function loadOpBackups(){
-  fetch('/api/op_backups').then(function(r){return r.json()}).then(function(d){
-    var list=document.getElementById('opBkList');var sel=document.getElementById('opBkSelect');
-    if(!list||!sel)return;
-    if(!d.backups||!d.backups.length){list.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无完整备份包</p>';sel.innerHTML='<option value="">— 暂无备份包 —</option>';return;}
-    var h='';var opts='';
-    d.backups.forEach(function(b){
-      var mb=(b.size/1024/1024).toFixed(0);
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+'</span><span style="color:var(--dim)">'+b.time+' · '+mb+'MB <a class="upd-link" onclick="dlOpBk(\''+esc(b.name)+'\')">下载</a> <a class="upd-link" style="color:var(--accent2)" onclick="delOpBk(\''+esc(b.name)+'\')">删除</a></span></div>';
-      opts+='<option value="'+esc(b.name)+'">'+esc(b.name)+' ('+mb+'MB)</option>';
-    });
-    list.innerHTML=h;sel.innerHTML='<option value="">— 请选择备份包 —</option>'+opts;
-  }).catch(function(){});
-}
-function dlOpBk(name){window.open('/api/op_backup/download/'+encodeURIComponent(name));}
-function delOpBk(name){
-  if(!confirm('确定删除备份包 '+name+' ？释放 /data 空间，此操作不可恢复'))return;
-  fetch('/api/op_backup/delete/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    toast(d.message||(d.success?'已删除':'删除失败'), d.success?'ok':'er');
-    if(d.success) loadOpBackups();
-  }).catch(function(){toast('删除失败','er');});
-}
-async function restoreOpDevice(){
-  var sel=document.getElementById('opBkSelect');var fn=sel.value;
-  if(!fn){toast('请先选择备份包','er');return;}
-  if(!confirm('将从备份包 '+fn+' 恢复整个 /data/openpilot，此操作会覆盖现有文件，确定？'))return;
-  var prog=document.getElementById('opResProg');
-  prog.style.display='block';
-  prog.querySelector('.prog-txt').textContent='正在恢复...';
-  prog.querySelector('.prog-fill').style.width='0%';
-  var reboot=document.getElementById('opReboot').checked;
-  try{
-    var r=await fetch('/api/op_restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:fn,reboot:reboot})});var d=await r.json();
-    if(!d.success){toast(d.message,'er');prog.style.display='none';return;}
-    pollOpTask(d.task_id,prog,function(res){toast(res.message,res.status==='done'?'ok':'er');if(res.status==='error')prog.style.display='none';});
-  }catch(e){toast('失败','er');prog.style.display='none';}
-}
-async function restoreOpUpload(){
-  var f=document.getElementById('opUpFile');
-  if(!f.files.length){toast('请选择本地备份包','er');return;}
-  if(!confirm('将上传并恢复该备份包到 /data/openpilot，确定？'))return;
-  var prog=document.getElementById('opResProg');
-  prog.style.display='block';
-  prog.querySelector('.prog-txt').textContent='正在上传并恢复...';
-  prog.querySelector('.prog-fill').style.width='0%';
-  var reboot=document.getElementById('opReboot').checked;
-  var fd=new FormData();fd.append('file',f.files[0]);fd.append('reboot',reboot?'1':'0');
-  try{
-    var r=await fetch('/api/op_restore_upload',{method:'POST',body:fd});var d=await r.json();
-    if(!d.success){toast(d.message,'er');prog.style.display='none';return;}
-    pollOpTask(d.task_id,prog,function(res){toast(res.message,res.status==='done'?'ok':'er');if(res.status==='error')prog.style.display='none';});
-  }catch(e){toast('失败','er');prog.style.display='none';}
-}
-
 // === 开机屏定制 ===
 async function loadBgInfo(){
   var el=document.getElementById('bgInfo');if(!el)return;
@@ -1836,6 +1795,8 @@ function esc(s){var d=document.createElement('div');d.textContent=s;return d.inn
 function loadVersion(){
   fetch('/api/version').then(function(r){return r.json()}).then(function(d){
     document.getElementById('curVer').textContent=d.version||'-';
+    var av=document.getElementById('aboutVer');if(av)av.textContent=d.version||'-';
+    var dv=document.getElementById('deployVer2');if(dv)dv.textContent=d.version||'-';
   }).catch(function(){});
 }
 function checkUpdate(){
@@ -1859,12 +1820,7 @@ function checkUpdate(){
   });
 }
 function doUpdate(){
-  if(!confirm('确定更新到最新版本？服务将自动重启。'))return;
-  toast('更新中...','in');
-  fetch('/api/update',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    if(d.success){toast('更新完成，正在重启...','ok');setTimeout(function(){location.reload()},4000);}
-    else toast(d.message,'er');
-  }).catch(function(){toast('更新失败','er')});
+  doDeployUpdate();
 }
 function toggleUpdPop(force){
   var p=document.getElementById('updPop');
@@ -1875,8 +1831,63 @@ document.addEventListener('click',function(e){
   if(p&&p.style.display==='block'&&!p.contains(e.target)&&!(e.target.classList&&e.target.classList.contains('upd-link'))){p.style.display='none';}
 });
 
+// === 进度推送 + 防卡：流式任务（POST + ReadableStream 读取 SSE） ===
+function copyText(id){var el=document.getElementById(id);if(!el)return;var t=el.textContent||el.innerText||'';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('已复制','ok')},function(){toast('复制失败','er')})}else{toast('复制失败','er')}}
+function progOpen(title){var mo=document.getElementById('progMo');mo.style.display='flex';document.getElementById('progLog').innerHTML='';document.getElementById('progTitle').textContent=title||'任务进行中';setProg(null,'准备中...');var c=document.getElementById('progClose');c.disabled=true;c.style.opacity='.5';}
+function progLog(m){var l=document.getElementById('progLog');var d=document.createElement('div');d.className='pl';d.textContent=m;l.appendChild(d);l.scrollTop=l.scrollHeight;}
+function setProg(pct,label){var bar=document.getElementById('progBar');var txt=document.getElementById('progPct');if(pct===null||pct===undefined){bar.classList.add('indet');txt.textContent=label||'';}else{bar.classList.remove('indet');bar.style.width=Math.max(0,Math.min(100,pct))+'%';txt.textContent=(label||'')+' '+pct+'%';}}
+function progDone(){var c=document.getElementById('progClose');c.disabled=false;c.style.opacity='1';var l=document.getElementById('progLog');var d=document.createElement('div');d.className='pl ok';d.textContent='✓ 完成';l.appendChild(d);l.scrollTop=l.scrollHeight;}
+function progErr(){var c=document.getElementById('progClose');c.disabled=false;c.style.opacity='1';}
+function progClose(){document.getElementById('progMo').style.display='none';}
+async function streamTask(url, body, opts){
+  opts=opts||{};
+  progOpen(opts.title||'任务进行中');
+  try{
+    var r=await fetch(url,{method:'POST',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
+    if(!r.ok){progLog('❌ HTTP '+r.status);progErr();return;}
+    var reader=r.body.getReader();var dec=new TextDecoder();var buf='';
+    while(true){
+      var x=await reader.read();if(x.done)break;
+      buf+=dec.decode(x.value,{stream:true});
+      var idx;
+      while((idx=buf.indexOf('\n\n'))>=0){
+        var chunk=buf.slice(0,idx);buf=buf.slice(idx+2);
+        var line=chunk.split('\n').find(function(l){return l.indexOf('data: ')===0;});
+        if(!line)continue;
+        var d;try{d=JSON.parse(line.slice(6));}catch(_){continue;}
+        if(d.t==='log'){progLog(d.m);}
+        else if(d.t==='progress'){setProg(d.pct,d.m);}
+        else if(d.t==='done'){progLog(d.m);progDone();if(opts.onDone)opts.onDone();}
+        else if(d.t==='error'){progLog('❌ '+d.m);progErr();}
+      }
+    }
+    var c=document.getElementById('progClose');if(c.disabled){progDone();if(opts.onDone)opts.onDone();}
+  }catch(e){progLog('❌ 连接中断：'+e.message);progErr();}
+}
+function doFullBackup(){streamTask('/api/backup_full',{},{title:'整体备份（openpilot + 参数）',onDone:loadFullBkList});}
+function doDeployUpdate(){if(!confirm('确定更新到最新版本？服务将自动重启，期间页面会短暂断开。'))return;streamTask('/api/update',{},{title:'一键部署 / 在线更新'});}
+function loadFullBkList(){
+  var el=document.getElementById('fullBkList');if(!el)return;
+  fetch('/api/backup_full/list').then(function(r){return r.json()}).then(function(d){
+    if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无整体备份包</p>';return;}
+    var h='';
+    d.backups.forEach(function(b){var mb=(b.size/1024/1024).toFixed(1);
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+'</span>'
+        +'<span style="color:var(--dim)">'+b.time+' · '+mb+'MB '
+        +'<a class="upd-link" onclick="dlFullBk(\''+esc(b.name)+'\')">下载</a> '
+        +'<a class="upd-link" style="color:var(--accent2)" onclick="delFullBk(\''+esc(b.name)+'\')">删除</a></span></div>';
+    });
+    el.innerHTML=h;
+  }).catch(function(){});
+}
+function dlFullBk(name){window.open('/api/backup_full/download/'+encodeURIComponent(name));}
+async function delFullBk(name){
+  if(!confirm('确定删除整体备份 '+name+' ？'))return;
+  try{var r=await fetch('/api/backup_full/delete/'+encodeURIComponent(name),{method:'POST'});var d=await r.json();toast(d.message||(d.success?'已删除':'删除失败'),d.success?'ok':'er');if(d.success)loadFullBkList();}catch(e){toast('删除失败','er');}
+}
+
 // === Init ===
-(function(){loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate()})();
+(function(){restoreGrps();loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate();loadFullBkList()})();
 // Load backup list on init
 setTimeout(function(){loadBkList()},2000);
 // 应用保存的皮肤主题

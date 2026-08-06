@@ -1,6 +1,6 @@
 {
-  "version": "1.0.73",
-  "changelog": "工具箱新增「局域网扫描 / 设备发现」功能：自动读出 C3 当前 IP 与网段，一键扫描同网段在线设备（IP+开放端口）并标记本机/工具箱/安卓，帮你在开机 IP 变动后快速确认地址、排查平板是否同一网，无需手动猜 IP。",
-  "tag": "v1.0.73",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.0.73/release/c3_toolbox.tar.gz"
+  "version": "1.2.0",
+  "changelog": "【进度推送 + 防卡】在线更新改为 SSE 流式：分块下载真实百分比 → 解压 → 延迟重启；整体备份回归网页端，后台 tar 打包、每 2 秒回报进度、末尾 md5 + 解包文件数双重校验。两者全程心跳保活，彻底告别「假死 / 退出码 -1」。【界面】新增「一键部署 / 在线更新」页与「关于」页，移动端导航同步为 7 项。【修复】参数设置页空白：补回收藏 / 横向 / 纵向 / 弯道 / 变道 / 导航 / 显示 / 系统设置 / 其他共 9 个分组折叠面板，新增全部展开与仅看收藏，折叠状态本地记忆。",
+  "tag": "v1.2.0",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.0/release/c3_toolbox.tar.gz"
 }

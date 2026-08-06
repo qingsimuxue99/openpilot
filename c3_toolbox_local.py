@@ -44,7 +44,6 @@ EVENT_DATA = {
     "available": False, "reason": "init",
     "left_blinker": False, "right_blinker": False, "acc_enabled": False,
     "last_event": {"type": None, "seq": 0, "ts": 0.0},
-    "collector_alive": 0.0, "total_edges": 0, "last_st": {},
 }
 
 # 工具箱版本与在线更新源
@@ -57,7 +56,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.0.73"
+VERSION = "1.2.0"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -68,12 +67,6 @@ CHECK_MIRRORS = [
 # 兼容旧引用
 UPDATE_BASE = CHECK_MIRRORS[0]
 UPDATE_MIRRORS = CHECK_MIRRORS
-
-# ============= 完整备份/恢复（/data/openpilot 整目录 tar 包）=============
-OP_BK_PREFIX = "备份恢复包openpilot_backup_"
-OP_BK_DIR = "/data"
-# 后台任务状态（备份/恢复可能耗时数分钟，前端轮询获取进度）
-OP_TASKS = {}
 
 # 启动时确保目录存在
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -817,6 +810,243 @@ def api_logstream():
                             'X-Accel-Buffering': 'no', 'Connection': 'keep-alive'})
 
 
+# ============= SSE 进度推送 + 防卡心跳（整体备份 / 在线更新等长任务） =============
+
+class SSEProgress:
+    """统一的 SSE 事件构造器。前端用 fetch+ReadableStream 读取 data:{json}，按 t 字段分支。"""
+    @staticmethod
+    def log(m):
+        return "data: " + json.dumps({"t": "log", "m": m}, ensure_ascii=False) + "\n\n"
+    @staticmethod
+    def progress(m, pct=None):
+        return "data: " + json.dumps({"t": "progress", "m": m, "pct": pct}, ensure_ascii=False) + "\n\n"
+    @staticmethod
+    def done(m):
+        return "data: " + json.dumps({"t": "done", "m": m}, ensure_ascii=False) + "\n\n"
+    @staticmethod
+    def error(m):
+        return "data: " + json.dumps({"t": "error", "m": m}, ensure_ascii=False) + "\n\n"
+
+
+def _fmt_size(n):
+    try:
+        n = float(n)
+    except Exception:
+        return "0 B"
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return ("%.1f %s" % (n, unit)) if unit != "B" else ("%d %s" % (n, unit))
+        n /= 1024
+    return "%.1f PB" % n
+
+
+def _sse_heartbeat(producer):
+    """包装一个事件生产者 generator：队列驱动，超过 3 秒无事件则注入 ': hb' 心跳注释，
+    既让前端知道连接存活（防中间网络/服务端静默掐断导致假死），又能在长任务中持续保活。"""
+    import queue as _q
+    q = _q.Queue()
+
+    def _run():
+        try:
+            for ev in producer():
+                q.put(("ev", ev))
+        except GeneratorExit:
+            pass
+        except Exception as e:
+            try:
+                q.put(("ev", SSEProgress.error("%s: %s" % (type(e).__name__, e))))
+            except Exception:
+                pass
+        finally:
+            q.put(("stop", None))
+
+    threading.Thread(target=_run, daemon=True).start()
+    while True:
+        try:
+            kind, val = q.get(timeout=3)
+        except _q.Empty:
+            yield ": hb\n\n"
+            continue
+        if kind == "stop":
+            break
+        yield val
+
+
+def _sse_headers():
+    return {
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+        'Connection': 'keep-alive',
+    }
+
+
+@app.route('/api/update', methods=['POST'])
+def api_update():
+    """在线更新（SSE 流式进度 + 心跳防卡）：检测新版本→分块下载发布包(真实进度)→解压→延迟重启。"""
+    def producer():
+        sp = SSEProgress()
+        yield sp.log("开始检查更新...")
+        try:
+            remote = fetch_remote_meta()
+            rv = remote.get('version', '0')
+            yield sp.log("远程版本 %s / 本地版本 %s" % (rv, VERSION))
+            if cmp_version(rv, VERSION) <= 0:
+                yield sp.done("已是最新版本 (%s)" % VERSION)
+                return
+            urls = resolve_tarball_urls(remote)
+            data = io.BytesIO(); got = 0; total = 0; last_pct = [-1]; last_err = None
+            for u in urls:
+                if not u:
+                    continue
+                try:
+                    req = urllib.request.Request(u, headers={'User-Agent': 'c3-toolbox-update'})
+                    resp = urllib.request.urlopen(req, timeout=120)
+                    total = int(resp.headers.get('Content-Length', '0') or 0)
+                    yield sp.progress("下载发布包... 0%", 0)
+                    while True:
+                        c = resp.read(65536)
+                        if not c:
+                            break
+                        data.write(c); got += len(c)
+                        if total:
+                            pct = int(got * 100 / total)
+                            if pct != last_pct[0]:
+                                last_pct[0] = pct
+                                yield sp.progress("下载发布包... %d%%" % pct, pct)
+                    break
+                except Exception as e:
+                    last_err = e
+            if got == 0:
+                if last_err:
+                    raise last_err
+                raise RuntimeError('无可用下载地址')
+            yield sp.progress("下载完成，解压中...", 100)
+            with tarfile.open(fileobj=io.BytesIO(data.getvalue()), mode='r:gz') as tf:
+                # Python 3.12+ 要求显式指定 filter（PEP 706）；3.11 无该参数
+                if sys.version_info >= (3, 12):
+                    tf.extractall(BASE_DIR, filter='data')
+                else:
+                    tf.extractall(BASE_DIR)
+            yield sp.log("解压完成，正在重启服务...")
+            yield sp.done("更新完成，正在重启服务...")
+            time.sleep(0.6)
+            schedule_restart()
+        except Exception as e:
+            yield sp.error("更新失败 [%s]: %s" % (type(e).__name__, e))
+    return Response(_sse_heartbeat(producer), mimetype='text/event-stream', headers=_sse_headers())
+
+
+@app.route('/api/backup_full', methods=['POST'])
+def api_backup_full():
+    """整体备份（SSE 流式进度 + 心跳防卡）：在线打包 /data/openpilot + /data/params。
+    铁律：绝不在开头 pkill openpilot——否则看门狗/热点重启设备会瞬断 SSH 会话 → 退出码 -1。
+    tar 后台执行，每 2 秒汇报已打包大小；末尾 md5 + tar -tzf 解包比对文件数校验。"""
+    def producer():
+        sp = SSEProgress()
+        try:
+            os.makedirs(BACKUP_DIR, exist_ok=True)
+            yield sp.log("分析备份范围...")
+            ts = time.strftime('%Y%m%d_%H%M%S')
+            out = os.path.join(BACKUP_DIR, "c3_full_%s.tar.gz" % ts)
+            srcs = [d for d in ("/data/openpilot", "/data/params") if os.path.isdir(d)]
+            if not srcs:
+                yield sp.error("未找到可备份目录（/data/openpilot、/data/params 均不存在）")
+                return
+            # 统计源文件数（含符号链接）作为校验分母
+            src_count = 0
+            try:
+                outp = subprocess.run("find %s -type f -o -type l | wc -l" % " ".join(srcs),
+                                      shell=True, capture_output=True, text=True, timeout=30)
+                src_count = int((outp.stdout or "").strip() or 0)
+            except Exception:
+                src_count = 0
+            yield sp.log("需备份 %d 个文件（openpilot 代码 + 参数）" % src_count)
+            # 后台 tar（不带 pkill），轮询进度
+            cmd = "tar -czf %s %s" % (out, " ".join(srcs))
+            p = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            last_sz = [-1]
+            while p.poll() is None:
+                try:
+                    sz = os.path.getsize(out)
+                except Exception:
+                    sz = 0
+                if sz != last_sz[0]:
+                    last_sz[0] = sz
+                    yield sp.progress("打包中... %s" % _fmt_size(sz), None)
+                time.sleep(2)
+            if p.returncode != 0:
+                yield sp.error("打包失败（tar 退出码 %d）" % p.returncode)
+                return
+            yield sp.progress("打包完成，校验中...", 100)
+            md5 = ""
+            try:
+                r = subprocess.run("md5sum %s" % out, shell=True, capture_output=True, text=True, timeout=30)
+                md5 = (r.stdout or "").split()[0]
+            except Exception:
+                pass
+            arc_count = 0
+            try:
+                r = subprocess.run("tar -tzf %s | wc -l" % out, shell=True, capture_output=True, text=True, timeout=60)
+                arc_count = int((r.stdout or "").strip() or 0)
+            except Exception:
+                arc_count = 0
+            if src_count and arc_count and src_count == arc_count:
+                yield sp.log("校验通过：备份含 %d 个文件，与源一致（md5 %s）" % (arc_count, md5[:8]))
+            else:
+                yield sp.log("⚠ 文件数不一致：源 %d / 包 %d（md5 %s），建议重试" % (src_count, arc_count, md5[:8]))
+            yield sp.done("整体备份完成：%s（%d 文件，%s）" % (os.path.basename(out), arc_count, _fmt_size(os.path.getsize(out))))
+        except Exception as e:
+            yield sp.error("备份失败 [%s]: %s" % (type(e).__name__, e))
+    return Response(_sse_heartbeat(producer), mimetype='text/event-stream', headers=_sse_headers())
+
+
+@app.route('/api/backup_full/download/<filename>')
+def api_download_backup_full(filename):
+    """下载整体备份包（.tar.gz）"""
+    sk = safe_key(filename)
+    if not sk.endswith('.tar.gz'):
+        return jsonify({'success': False, 'message': '仅支持 .tar.gz 备份文件'})
+    fp = os.path.join(BACKUP_DIR, sk)
+    if os.path.isfile(fp):
+        return send_from_directory(BACKUP_DIR, sk, as_attachment=True)
+    return jsonify({'success': False, 'message': '文件不存在'})
+
+
+@app.route('/api/backup_full/list')
+def api_list_backup_full():
+    """列出整体备份包（.tar.gz）"""
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+    except Exception:
+        pass
+    items = []
+    try:
+        for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            if f.endswith('.tar.gz'):
+                fp = os.path.join(BACKUP_DIR, f)
+                items.append({'name': f, 'size': os.path.getsize(fp),
+                              'time': time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(fp)))})
+    except Exception:
+        pass
+    return jsonify({'backups': items})
+
+
+@app.route('/api/backup_full/delete/<filename>', methods=['POST'])
+def api_delete_backup_full(filename):
+    """删除整体备份包（.tar.gz），防路径穿越"""
+    sk = safe_key(filename)
+    if not sk.endswith('.tar.gz'):
+        return jsonify({'success': False, 'message': '仅支持删除 .tar.gz 备份'})
+    fp = os.path.join(BACKUP_DIR, sk)
+    if os.path.isfile(fp):
+        try:
+            os.remove(fp)
+            return jsonify({'success': True, 'message': '已删除 %s' % sk})
+        except Exception as e:
+            return jsonify({'success': False, 'message': '删除失败: %s' % e})
+    return jsonify({'success': False, 'message': '备份文件不存在'})
+
+
 @app.route('/api/backup', methods=['POST'])
 def api_backup():
     params = {}
@@ -1112,205 +1342,6 @@ def api_param_diff():
         'backup_name': sk,
     })
 
-
-# ============= 完整备份/恢复（/data/openpilot 整目录）=============
-
-@app.route('/api/op_backup', methods=['POST'])
-def api_op_backup():
-    """后台打包 /data/openpilot 为 tar.gz 备份包（命名含时间戳）"""
-    ts = time.strftime('%Y-%m-%d_%H-%M-%S')
-    fname = OP_BK_PREFIX + ts + '.tar.gz'
-    out_path = os.path.join(OP_BK_DIR, fname)
-    task_id = str(int(time.time() * 1000))
-    OP_TASKS[task_id] = {'status': 'running', 'message': '正在打包 /data/openpilot ...', 'done': False}
-    def run():
-        try:
-            import tarfile
-            # 先统计总大小与文件清单，用于实时进度
-            file_list = []
-            total = 0
-            for root, dirs, files in os.walk('/data/openpilot'):
-                for fn in files:
-                    p = os.path.join(root, fn)
-                    file_list.append(p)
-                    try:
-                        total += os.path.getsize(p)
-                    except Exception:
-                        pass
-            done = 0
-            OP_TASKS[task_id] = {'status': 'running', 'message': '正在打包 /data/openpilot ...', 'done': False, 'progress': 0}
-            with tarfile.open(out_path, 'w:gz') as tar:
-                for p in file_list:
-                    try:
-                        tar.add(p, arcname=p)
-                    except Exception:
-                        pass
-                    try:
-                        done += os.path.getsize(p)
-                    except Exception:
-                        pass
-                    if total > 0:
-                        OP_TASKS[task_id]['progress'] = min(99, int(done * 100 / total))
-            if os.path.isfile(out_path):
-                sz = os.path.getsize(out_path)
-                OP_TASKS[task_id] = {
-                    'status': 'done', 'done': True, 'progress': 100,
-                    'message': f'备份完成: {fname} ({sz/1024/1024:.0f} MB)',
-                    'filename': fname, 'size': sz,
-                }
-            else:
-                OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': '备份失败：未生成文件'}
-        except Exception as e:
-            OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': f'备份异常: {e}'}
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({'success': True, 'task_id': task_id})
-
-
-@app.route('/api/op_task/<task_id>')
-def api_op_task(task_id):
-    """查询后台任务（备份/恢复）状态"""
-    t = OP_TASKS.get(task_id)
-    if not t:
-        return jsonify({'done': True, 'status': 'error', 'message': '任务不存在或已过期'})
-    return jsonify(t)
-
-
-@app.route('/api/op_backups')
-def api_op_backups():
-    """列出 /data 下所有完整备份包"""
-    items = []
-    try:
-        for f in os.listdir(OP_BK_DIR):
-            if f.startswith(OP_BK_PREFIX) and f.endswith('.tar.gz'):
-                fp = os.path.join(OP_BK_DIR, f)
-                if os.path.isfile(fp):
-                    sz = os.path.getsize(fp)
-                    mt = time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(fp)))
-                    items.append({'name': f, 'size': sz, 'time': mt})
-    except Exception:
-        pass
-    items.sort(key=lambda x: x['time'], reverse=True)
-    return jsonify({'backups': items})
-
-
-@app.route('/api/op_backup/download/<path:filename>')
-def api_op_backup_download(filename):
-    """下载完整备份包（仅允许前缀匹配的备份包，防路径穿越）"""
-    if not (filename.startswith(OP_BK_PREFIX) and filename.endswith('.tar.gz')):
-        return jsonify({'success': False, 'message': '非法文件名'}), 400
-    fp = os.path.join(OP_BK_DIR, filename)
-    if os.path.isfile(fp):
-        return send_from_directory(OP_BK_DIR, filename, as_attachment=True)
-    return jsonify({'success': False, 'message': '文件不存在'}), 404
-
-
-@app.route('/api/op_backup/delete/<path:filename>', methods=['POST'])
-def api_op_backup_delete(filename):
-    """删除设备内某个完整备份包（带前缀/后缀校验，防路径穿越；释放 /data 空间）"""
-    if not (filename.startswith(OP_BK_PREFIX) and filename.endswith('.tar.gz')):
-        return jsonify({'success': False, 'message': '非法文件名'}), 400
-    fp = os.path.join(OP_BK_DIR, filename)
-    if not os.path.isfile(fp):
-        return jsonify({'success': False, 'message': '备份包不存在'}), 404
-    try:
-        sz = os.path.getsize(fp)
-        os.remove(fp)
-        return jsonify({'success': True, 'message': '已删除: %s (释放 %d MB)' % (filename, sz // 1024 // 1024)})
-    except Exception as e:
-        return jsonify({'success': False, 'message': '删除失败: %s' % str(e)}), 500
-
-
-def _restore_package(pkg_path, reboot_after, task_id):
-    """实际的恢复逻辑：停 openpilot → 解包到 / → 可选重启。在后台线程执行。"""
-    try:
-        import tarfile
-        # 先停 openpilot，避免运行中文件被覆盖导致不一致（不影响工具箱本身）
-        subprocess.run("pkill -f manager.py", shell=True, timeout=5)
-        time.sleep(2)
-        # 统计总大小
-        total = 0
-        members = []
-        with tarfile.open(pkg_path, 'r:*') as tar:
-            try:
-                tar.extraction_filter = (lambda m, path: m)
-            except Exception:
-                pass
-            members = tar.getmembers()
-            for m in members:
-                total += m.size
-        done = 0
-        OP_TASKS[task_id] = {'status': 'running', 'message': '正在解压恢复 /data/openpilot ...', 'done': False, 'progress': 0}
-        with tarfile.open(pkg_path, 'r:*') as tar:
-            try:
-                tar.extraction_filter = (lambda m, path: m)
-            except Exception:
-                pass
-            for m in members:
-                try:
-                    tar.extract(m, '/')
-                except Exception:
-                    pass
-                done += m.size
-                if total > 0:
-                    OP_TASKS[task_id]['progress'] = min(99, int(done * 100 / total))
-        try:
-            os.remove(pkg_path)  # 上传的临时包用完后清理
-        except Exception:
-            pass
-        msg = '恢复完成: ' + os.path.basename(pkg_path)
-        if reboot_after:
-            msg += '，设备即将重启...'
-            OP_TASKS[task_id] = {'status': 'done', 'done': True, 'progress': 100, 'message': msg}
-            time.sleep(1)
-            subprocess.Popen(["sudo", "reboot"])
-        else:
-            OP_TASKS[task_id] = {
-                'status': 'done', 'done': True, 'progress': 100,
-                'message': msg + '（建议手动重启设备使 openpilot 重新加载）',
-            }
-    except subprocess.TimeoutExpired:
-        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': '恢复超时（>30 分钟）'}
-    except Exception as e:
-        OP_TASKS[task_id] = {'status': 'error', 'done': True, 'progress': 100, 'message': f'恢复异常: {e}'}
-
-
-@app.route('/api/op_restore', methods=['POST'])
-def api_op_restore():
-    """从设备内已有备份包恢复"""
-    data = request.json or {}
-    fname = data.get('filename', '')
-    if not (isinstance(fname, str) and fname.startswith(OP_BK_PREFIX) and fname.endswith('.tar.gz')):
-        return jsonify({'success': False, 'message': '非法的备份包名称'})
-    pkg = os.path.join(OP_BK_DIR, fname)
-    if not os.path.isfile(pkg):
-        return jsonify({'success': False, 'message': '备份包不存在'})
-    reboot_after = bool(data.get('reboot', False))
-    task_id = str(int(time.time() * 1000))
-    OP_TASKS[task_id] = {'status': 'running', 'message': f'正在恢复: {fname}', 'done': False}
-    threading.Thread(target=_restore_package, args=(pkg, reboot_after, task_id), daemon=True).start()
-    return jsonify({'success': True, 'task_id': task_id})
-
-
-@app.route('/api/op_restore_upload', methods=['POST'])
-def api_op_restore_upload():
-    """上传本地备份包并恢复"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': '未收到文件'})
-    f = request.files['file']
-    if not (f.filename.endswith('.tar.gz') or f.filename.endswith('.tgz')):
-        return jsonify({'success': False, 'message': '仅支持 .tar.gz / .tgz 备份包'})
-    tmp = os.path.join(OP_BK_DIR, OP_BK_PREFIX + 'upload_' + str(int(time.time() * 1000)) + '.tar.gz')
-    try:
-        f.save(tmp)
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'保存上传文件失败: {e}'})
-    reboot_after = request.form.get('reboot', 'false') in ('1', 'true', 'True')
-    task_id = str(int(time.time() * 1000))
-    OP_TASKS[task_id] = {'status': 'running', 'message': '正在从上传的备份包恢复...', 'done': False}
-    threading.Thread(target=_restore_package, args=(tmp, reboot_after, task_id), daemon=True).start()
-    return jsonify({'success': True, 'task_id': task_id})
-
-
 # ============= 开机屏定制（第一屏 splash / 第二屏背景图）=============
 
 BG_PATH = '/usr/comma/bg.jpg'
@@ -1605,27 +1636,11 @@ def _event_collector():
                 d.update(st)
                 d['available'] = True
                 d['reason'] = 'ok'
-                d['collector_alive'] = time.time()
-                d['last_st'] = st
                 if edges:
                     seq += 1
-                    d['total_edges'] = d.get('total_edges', 0) + 1
                     d['last_event'] = {"type": edges[-1], "seq": seq, "ts": time.time()}
-                    try:
-                        with open('/data/c3_toolbox/event_debug.log', 'a') as _ef:
-                            _ef.write("%s edge=%s total=%d st=%s\n" % (
-                                time.strftime('%Y-%m-%d %H:%M:%S'), edges[-1],
-                                d['total_edges'], st))
-                    except Exception:
-                        pass
                 EVENT_DATA = d
-        except Exception as e:
-            with EVENT_LOCK:
-                d = dict(EVENT_DATA)
-                d['available'] = True
-                d['reason'] = 'update_err:%s' % e
-                EVENT_DATA = d
-            print("[事件采集] sm.update 异常（已重试）：%s" % e)
+        except Exception:
             time.sleep(0.5)
 
 
@@ -1666,7 +1681,6 @@ def api_voice_test_event():
     with EVENT_LOCK:
         d = dict(EVENT_DATA)
         cur_seq = (d.get('last_event') or {}).get('seq', 0) + 1
-        d['total_edges'] = d.get('total_edges', 0) + 1
         d['last_event'] = {'type': t, 'seq': cur_seq, 'ts': time.time(), 'test': True}
         EVENT_DATA = d
     return jsonify({'success': True, 'type': t, 'seq': cur_seq,
@@ -1805,6 +1819,7 @@ def api_voice_import():
         return jsonify({'success': False, 'message': '导入失败：%s' % e})
     return jsonify({'success': True, 'imported': imported, 'message': '已导入 %d 条语音' % imported})
 
+
 # ============= 局域网扫描 / 设备发现 =============
 # 纯 Python socket 扫描，不依赖 nmap；并发 + 整体超时，避免长时间阻塞请求线程。
 import socket as _lsocket
@@ -1867,6 +1882,7 @@ def _scan_lan(subnets, ports=None, per_host_timeout=0.15, overall_timeout=15):
     """并发扫描给定网段下所有主机的开放端口，返回设备列表 [{ip,ports,is_self}]。"""
     if ports is None:
         ports = SCAN_PORTS
+    import threading
     hosts = []
     for s in subnets:
         for i in range(1, 255):
@@ -1941,7 +1957,6 @@ def api_scan_lan():
         return jsonify({'success': False, 'message': '扫描失败: %s' % e, 'devices': [], 'subnets': subnets})
 
 
-
 if __name__ == '__main__':
     PORT = 5588
     # 确保目录存在
@@ -1975,38 +1990,3 @@ if __name__ == '__main__':
     # 启动原车事件采集线程（转向 / ACC / 倒车 / 减速；无 cereal 时 available:false，不播报）
     threading.Thread(target=_event_collector, daemon=True).start()
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
-
-
-@app.route('/manifest.webmanifest')
-def api_manifest():
-    # PWA 清单：让用户把工具箱「添加到主屏幕」当独立 APP 打开，
-    # 独立模式下浏览器允许音频自动播放 —— 实现「连接即播报、无需任何点击」。
-    m = {
-        "name": "C3工具箱",
-        "short_name": "C3工具箱",
-        "description": "comma c3 工具箱 · 语音互动",
-        "start_url": "/",
-        "scope": "/",
-        "display": "standalone",
-        "orientation": "any",
-        "background_color": "#0b0e14",
-        "theme_color": "#0b0e14",
-        "icons": [{"src": "/icon.png", "sizes": "192x192", "type": "image/png"}]
-    }
-    resp = Response(json.dumps(m, ensure_ascii=False), mimetype='application/manifest+json')
-    resp.headers['Cache-Control'] = 'no-cache'
-    return resp
-
-
-@app.route('/icon.png')
-def api_icon():
-    p = os.path.join(BASE_DIR, 'icon.png')
-    try:
-        with open(p, 'rb') as f:
-            data = f.read()
-    except Exception:
-        return ('', 404)
-    resp = Response(data, mimetype='image/png')
-    resp.headers['Cache-Control'] = 'no-cache'
-    resp.headers['Content-Length'] = str(len(data))
-    return resp
