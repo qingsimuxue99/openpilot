@@ -82,8 +82,8 @@ def enable_connect(started, params, CP: car.CarParams) -> bool:
 procs = [
   DaemonProcess("manage_athenad", "system.athena.manage_athenad", "AthenadPid"),
 
-  NativeProcess("loggerd", "system/loggerd", ["./loggerd"], logging),
-  NativeProcess("encoderd", "system/loggerd", ["./encoderd"], logging),
+  # 行车日志录制已关闭: NativeProcess("loggerd", "system/loggerd", ["./loggerd"], logging),
+  # 行车日志录制已关闭: NativeProcess("encoderd", "system/loggerd", ["./encoderd"], logging),
   NativeProcess("stream_encoderd", "system/loggerd", ["./encoderd", "--stream"], notcar),
   PythonProcess("logmessaged", "system.logmessaged", always_run),
 
