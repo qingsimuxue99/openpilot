@@ -376,6 +376,11 @@ class CarrotLearner:
           self.steer_overrides = int(data.get("steer_overrides", 0))
           self.adjust_count = int(data.get("adjust_count", 0))
           self.instability = float(data.get("instability", 1.0))
+          # 重启后保持"上次学习器写入值", 使手动修改检测跨重启有效
+          # (用户手动改过 -> 重启后不会被学习器覆盖回基线/默认)
+          for k, v in data.get("last_written", {}).items():
+            if k in KNOB_SPECS:
+              self.last_written[k] = int(v)
     except Exception as e:
       cloudlog.exception(f"carrot_learner: load state failed: {e}")
 
@@ -392,6 +397,7 @@ class CarrotLearner:
         "steer_overrides": self.steer_overrides,
         "adjust_count": self.adjust_count,
         "instability": round(self.instability, 4),
+        "last_written": {k: int(v) for k, v in self.last_written.items()},
         "updated_at": int(time.time()),
       }
       tmp = STATE_PATH + ".tmp"
