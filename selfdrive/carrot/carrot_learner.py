@@ -841,6 +841,15 @@ class CarrotLearner:
         self.last_written[k] = cur
         self._log_change(k, cur, cur, "手动修改重置基线", ctx=ctx)
         continue
+      # 兜底: 该参数从未被学习器写过(无 last_written 记录), 但当前值既不是学习目标也不等于基线
+      #       -> 用户手动改过(或恢复默认了), 以当前值为基线保留, 不再被覆盖
+      if k not in self.last_written and cur != eff and cur != base:
+        self.baseline[k] = cur
+        self.offset[k] = {}
+        self.ema[k] = {}
+        self.last_written[k] = cur
+        self._log_change(k, cur, cur, "手动修改重置基线(首次)", ctx=ctx)
+        continue
       if eff != cur:
         self.params.put_int(k, eff)
         self.last_written[k] = eff
