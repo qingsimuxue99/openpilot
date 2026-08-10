@@ -550,6 +550,30 @@
     </message>
 </context>
 <context>
+    <name>DrivingModelPanel</name>
+    <message>
+        <source>CONFIRM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>切换到 %1?
+将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>模型列表 (%1 个)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>暂无本地模型</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>  ✓</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ExperimentalModeButton</name>
     <message>
         <source>EXPERIMENTAL MODE ON</source>
@@ -1027,6 +1051,10 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>功能</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>模型</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

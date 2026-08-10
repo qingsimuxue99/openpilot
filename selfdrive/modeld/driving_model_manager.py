@@ -195,9 +195,12 @@ def cmd_download(target):
   dl_dir = DOWNLOAD_DIR / sn.lower()
   dl_dir.mkdir(parents=True, exist_ok=True)
 
-  # 计算新编号
+  # 计算新编号 (跳过已占用编号, 防止同号目录冲突导致加载错位)
   local = list_local()
-  next_idx = max([m['idx'] for m in local] + [-1]) + 1
+  used_idx = set(m['idx'] for m in local)
+  next_idx = max(used_idx) + 1 if used_idx else 0
+  while next_idx in used_idx:
+    next_idx += 1
   target_dir = MODELS_DIR / f'{next_idx}-{sn.lower()}'
 
   print(f'下载模型 [{sn}] -> {target_dir.name} ({len(chunks)} chunks)')

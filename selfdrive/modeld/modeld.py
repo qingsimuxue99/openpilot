@@ -419,12 +419,17 @@ def get_model_paths():
     except Exception:
       modelid = -1
 
-  # 根据 modelid 获取模型文件夹名
-  if modelid < 0 or modelid >= len(MODEL_NAMES):
-    base_path = default_base  # 默认模型
-  else:
-    model_name = MODEL_NAMES[modelid]
-    base_path = default_base / model_name
+  # 根据 modelid 获取模型文件夹:
+  # 优先按编号精确匹配 models/{modelid}-* 目录 (动态下载的模型编号可能不连续/有重复,
+  # 不能用 MODEL_NAMES 数组索引, 否则编号与索引错位会加载错模型)
+  base_path = default_base
+  if modelid >= 0:
+    _m = sorted(default_base.glob(f"{modelid}-*"))
+    if _m:
+      base_path = _m[0]
+    elif modelid < len(MODEL_NAMES):
+      # 兜底: 老目录(无编号前缀)用 MODEL_NAMES 索引
+      base_path = default_base / MODEL_NAMES[modelid]
 
   # SP 合并模型: 目录含 driving_tinygrad.pkl 时走 SP 格式
   sp_pkl = base_path / "driving_tinygrad.pkl"

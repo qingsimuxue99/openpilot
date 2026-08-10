@@ -3,14 +3,9 @@
 #include <QVBoxLayout>
 #include "selfdrive/ui/qt/widgets/controls.h"
 
-class QTimer;
-class QLabel;
-
-// 驾驶模型选择器: 参考「选择车型」框架 — 蓝色大按钮入口 + 弹窗选择
-// 1) 当前模型: 点击弹出本地模型列表选择切换
-// 2) 在线模型: 点击弹出在线模型库选择下载 (最新在前, 已安装的过滤)
-// 3) 删除模型: 点击弹出本地模型列表选择删除 (当前激活项不可删)
-// 4) 信息卡: 本地模型/磁盘占用/下载进度, QTimer 每 2s 实时刷新进度
+// 驾驶模型选择器 (纯本地): 打开显示本地全部模型列表 (SP/CP 前缀标注)
+// 点击模型 → 确认 → 写 modelid → 重启设备生效
+// 不做在线下载/删除/磁盘占用/进度显示
 class DrivingModelPanel : public QWidget {
   Q_OBJECT
 public:
@@ -20,6 +15,4 @@ public:
 private:
   void refresh();
   QVBoxLayout *layout_ = nullptr;
-  QTimer *timer_ = nullptr;
-  QLabel *progress_ctl_ = nullptr;
 };
