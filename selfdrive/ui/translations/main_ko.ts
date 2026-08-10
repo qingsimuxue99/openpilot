@@ -195,6 +195,10 @@
         <source>回到 offroad(熄火/退出驾驶)后自动生成驾驶习惯体检报告并存盘, 随时可看。关闭后仅在手动点[生成并查看体检报告]时生成。</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>模型选择</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmationDialog</name>
@@ -650,30 +654,6 @@
     </message>
 </context>
 <context>
-    <name>DrivingModelPanel</name>
-    <message>
-        <source>CONFIRM</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>切换到 %1?
-将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>模型列表 (%1 个)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>暂无本地模型</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>  ✓</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>ExperimentalModeButton</name>
     <message>
         <source>EXPERIMENTAL MODE ON</source>
@@ -1087,6 +1067,44 @@ Firehose Mode allows you to maximize your training data uploads to improve openp
         <source>carrotpilot</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>  ✓</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>切换到 %1?
+将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CONFIRM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>模型列表</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>关闭</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>刷新</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>—— SP 模型下载 (点击下载) ——</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>下载 SP 模型 %1?
+(后台下载, 行内显示进度, 完成后自动更新)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>5 个 SP 模型均已下载</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>Reset</name>
@@ -1173,10 +1191,6 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>功能</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>模型</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

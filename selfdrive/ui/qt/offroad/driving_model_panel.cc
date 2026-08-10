@@ -2,20 +2,21 @@
 
 #include <cstdio>
 #include <string>
-#include <functional>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QMap>
+#include <QSet>
 #include <QLabel>
 #include <QPushButton>
-#include <QVBoxLayout>
+#include <QButtonGroup>
 #include <QHBoxLayout>
-#include <QScrollArea>
+#include <QTimer>
 #include <QScrollBar>
-#include <QTouchEvent>
-#include <QEvent>
+#include <QRegularExpression>
+#include "common/util.h"
 #include "selfdrive/ui/qt/widgets/input.h"
+#include "selfdrive/ui/qt/widgets/scrollview.h"
 
 // 执行模型管理器命令, 返回 stdout
 static QString run_mgr(const QString &args) {
@@ -26,94 +27,21 @@ static QString run_mgr(const QString &args) {
   return QString::fromStdString(out);
 }
 
-// ===== 模型行: 普通 QWidget(非 QAbstractButton) -> 触摸整屏可滑 =====
-// 点击由 FollowScrollArea 在 TouchEnd 未滑动时直接调用 triggerClick() (不走鼠标合成事件, c3 触摸下最稳)
-class ModelRow : public QWidget {
-public:
-  std::function<void(int, const QString&)> on_click;
-  ModelRow(const QString &text, int idx, bool active, QWidget *parent = nullptr) : QWidget(parent), idx_(idx), text_(text) {
-    setProperty("clickable", true);   // FollowScrollArea 点击命中标记
-    setObjectName("model_row");
-    setFixedHeight(88);
-    setStyleSheet(QString("QWidget#model_row { background-color:%1; border-radius:12px; }")
-                  .arg(active ? "#2C2CE2" : "#2B2B2B"));
-    QHBoxLayout *h = new QHBoxLayout(this);
-    h->setContentsMargins(20, 0, 20, 0);
-    QLabel *lbl = new QLabel(text, this);
-    lbl->setStyleSheet("color:white; font-size:38px; background:transparent; border:none;");
-    h->addWidget(lbl);
-  }
-  void triggerClick() {
-    if (on_click) on_click(idx_, text_);
-  }
-private:
-  int idx_;
-  QString text_;
-};
+// 后台启动下载 (nohup, 不阻塞 UI); 进度写入 /tmp/model_dl_progress
+static void startDownload(const QString &name) {
+  std::string cmd = "cd /data/openpilot && nohup /usr/local/venv/bin/python selfdrive/modeld/driving_model_manager.py download "
+                  + name.toStdString() + " >> /tmp/sp_dl.log 2>&1 &";
+  system(cmd.c_str());
+}
 
-// ===== 1:1 跟手滚动区 (二级弹窗内独立使用, 参考自学习记录框架, 增强版) =====
-// 整屏可滑: TouchBegin 一律跟踪; 位移 > 12px 判定为滑动并直接驱动滚动条 (跟手、零惯性);
-// 未滑动(TouchEnd) 视为点击: 沿命中控件向上找 clickable 行, 直接调用 triggerClick()。
-class FollowScrollArea : public QScrollArea {
-  QPoint m_last;
-  bool m_tracking = false;
-  bool m_dragging = false;
-public:
-  explicit FollowScrollArea(QWidget *content, QWidget *parent = nullptr) : QScrollArea(parent) {
-    setWidget(content);
-    setWidgetResizable(true);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setFrameShape(QFrame::NoFrame);
-    if (viewport()) viewport()->setStyleSheet("background-color:transparent;");
-    content->setStyleSheet("background-color:transparent;");
-  }
-  bool viewportEvent(QEvent *ev) override {
-    switch (ev->type()) {
-      case QEvent::TouchBegin: {
-        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
-        if (te->touchPoints().isEmpty()) return QScrollArea::viewportEvent(ev);
-        m_last = te->touchPoints().first().pos().toPoint();
-        m_tracking = true; m_dragging = false;
-        return true;
-      }
-      case QEvent::TouchUpdate: {
-        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
-        if (!m_tracking || te->touchPoints().isEmpty()) return QScrollArea::viewportEvent(ev);
-        QPoint p = te->touchPoints().first().pos().toPoint();
-        int dy = p.y() - m_last.y();
-        m_last = p;
-        if (!m_dragging) {
-          if (qAbs(dy) < 12) return true;   // 阈值内: 点击待定, 继续吞
-          m_dragging = true;                 // 超过阈值: 进入滚动
-        }
-        verticalScrollBar()->setValue(verticalScrollBar()->value() - dy);
-        return true;
-      }
-      case QEvent::TouchEnd: {
-        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
-        if (m_tracking && !m_dragging && !te->touchPoints().isEmpty()) {
-          // 点击: 沿命中控件向上找 clickable 行, 直接触发 (不依赖鼠标合成事件)
-          QPointF gp = te->touchPoints().first().screenPos();
-          QWidget *hit = widget() ? widget()->childAt(widget()->mapFromGlobal(gp.toPoint())) : nullptr;
-          while (hit && hit != widget() && !hit->property("clickable").toBool()) hit = hit->parentWidget();
-          if (ModelRow *row = dynamic_cast<ModelRow*>(hit)) row->triggerClick();
-        }
-        m_tracking = false; m_dragging = false;
-        return true;
-      }
-      case QEvent::TouchCancel:
-        m_tracking = false; m_dragging = false;
-        return QScrollArea::viewportEvent(ev);
-      default:
-        return QScrollArea::viewportEvent(ev);
-    }
-  }
-};
+// 仅这 5 个验证过的 SP 模型可下载
+static const QStringList SP_DL_LIST = {"wmiv12", "tr16", "ltr14", "wmiv9", "tr15"};
+static QString g_downloading;   // 当前后台下载中的模型名 (小写), 空=空闲
 
-// ===== 构建弹窗内模型列表 =====
-static void buildModelList(QWidget *listW, QWidget *parent) {
-  QLayout *old = listW->layout();
+// ===== 构建弹窗列表: 本地模型(点击切换) + 5 个 SP 可下载(点击下载, 行内进度) =====
+static void buildModelList(QWidget *listWidget, QWidget *top) {
+  // 清空旧内容
+  QLayout *old = listWidget->layout();
   if (old) {
     QLayoutItem *it;
     while ((it = old->takeAt(0)) != nullptr) {
@@ -123,25 +51,29 @@ static void buildModelList(QWidget *listW, QWidget *parent) {
     }
     delete old;
   }
-  listW->setStyleSheet("background-color:#141414;");
-  QVBoxLayout *vbox = new QVBoxLayout(listW);
-  vbox->setContentsMargins(12, 12, 12, 12);
-  vbox->setSpacing(8);
+  QVBoxLayout *listLayout = new QVBoxLayout(listWidget);
+  listLayout->setContentsMargins(0, 0, 0, 0);
+  listLayout->setSpacing(10);
+  listWidget->setStyleSheet(R"(
+    QPushButton {
+      height: 88px; padding: 0px 20px; text-align: left;
+      font-size: 36px; font-weight: 400;
+      border-radius: 12px; border: none;
+      background-color: #2B2B2B; color: #FFFFFF;
+    }
+    QPushButton:checked { background-color: #2C2CE2; }
+    QPushButton:pressed { background-color: #1F1FD0; }
+  )");
 
+  // ---- 本地模型 ----
   QString list_json = run_mgr("list --json");
   QJsonObject lo = QJsonDocument::fromJson(list_json.toUtf8()).object();
   QJsonArray models = lo.value("models").toArray();
 
-  if (models.isEmpty()) {
-    QLabel *empty = new QLabel(QObject::tr("暂无本地模型"), listW);
-    empty->setStyleSheet("font-size:38px; color:#9A9A9A;");
-    vbox->addWidget(empty);
-    return;
-  }
-
   struct Row { QString text; int idx; bool active; };
   QList<Row> rows;
-  QMap<QString,int> idx_map;  // text -> idx (去重防同名)
+  QMap<QString,int> idx_map;
+  QSet<QString> localLower;   // 本地模型名 (小写)
   for (const auto &v : models) {
     QJsonObject m = v.toObject();
     int idx = m.value("idx").toInt();
@@ -149,13 +81,13 @@ static void buildModelList(QWidget *listW, QWidget *parent) {
     QString type = m.value("type").toString();
     QString size = m.value("size_str").toString();
     bool active = m.value("active").toBool();
+    localLower.insert(name.toLower());
     QString prefix = (type == "SP") ? "SP: " : "CP: ";
     QString text = QString("%1%2 (%3)%4").arg(prefix).arg(name).arg(size).arg(active ? QObject::tr("  ✓") : "");
-    if (idx_map.contains(text)) continue;  // 同名同型去重
+    if (idx_map.contains(text)) continue;
     idx_map[text] = idx;
     rows.append({text, idx, active});
   }
-  // 排序: SP 组在前, 组内按名称; 当前激活项提到组内最前
   std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b) {
     bool a_sp = a.text.startsWith("SP:");
     bool b_sp = b.text.startsWith("SP:");
@@ -164,32 +96,98 @@ static void buildModelList(QWidget *listW, QWidget *parent) {
     return a.text < b.text;
   });
 
+  QButtonGroup *group = new QButtonGroup(listWidget);
+  group->setExclusive(true);
+  int current_idx = -1;
+
   for (const auto &r : rows) {
-    ModelRow *row = new ModelRow(r.text, r.idx, r.active, listW);
-    row->on_click = [listW, parent](int idx, const QString &text) {
-      if (ConfirmationDialog::confirm(QObject::tr("切换到 %1?\n将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作").arg(text), QObject::tr("CONFIRM"), parent)) {
-        ConfirmationDialog::alert(run_mgr(QString("switch %1").arg(idx)), parent);
-        buildModelList(listW, parent);
+    QPushButton *btn = new QPushButton(r.text, listWidget);
+    btn->setCheckable(true);
+    btn->setChecked(r.active);
+    if (r.active) current_idx = r.idx;
+    QObject::connect(btn, &QPushButton::clicked, [=](bool checked) {
+      if (checked && r.idx != current_idx) {
+        if (ConfirmationDialog::confirm(QObject::tr("切换到 %1?\n将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作").arg(r.text), QObject::tr("CONFIRM"), top)) {
+          ConfirmationDialog::alert(run_mgr(QString("switch %1").arg(r.idx)), top);
+        } else {
+          btn->setChecked(false);
+          group->buttons().at(0)->setChecked(true);
+        }
       }
-    };
-    vbox->addWidget(row);
+    });
+    group->addButton(btn);
+    listLayout->addWidget(btn);
   }
-  vbox->addStretch();
+
+  // ---- 5 个验证过的 SP 模型: 未下载的可点击下载 (行内实时进度) ----
+  QLabel *sep = new QLabel(QObject::tr("—— SP 模型下载 (点击下载) ——"), listWidget);
+  sep->setAlignment(Qt::AlignCenter);
+  sep->setStyleSheet("font-size:28px; color:#8E8E93; margin:12px 0 4px 0;");
+  listLayout->addWidget(sep);
+
+  bool anyToDl = false;
+  for (const QString &sn : SP_DL_LIST) {
+    if (localLower.contains(sn)) continue;  // 已下载跳过
+    anyToDl = true;
+    QString disp = sn.toUpper();
+    QPushButton *dlBtn = new QPushButton(QString("SP: %1  ⬇ 下载").arg(disp), listWidget);
+    dlBtn->setStyleSheet(R"(
+      QPushButton {
+        height: 88px; padding: 0px 20px; text-align: left;
+        font-size: 36px; font-weight: 400;
+        border-radius: 12px; border: none;
+        background-color: #3D3D5C; color: #FFFFFF;
+      }
+      QPushButton:disabled { background-color: #2A2A3C; color: #888899; }
+      QPushButton:pressed { background-color: #2C2CE2; }
+    )");
+    if (!g_downloading.isEmpty()) dlBtn->setEnabled(false);  // 已有下载进行中
+    QObject::connect(dlBtn, &QPushButton::clicked, [=]() {
+      if (!g_downloading.isEmpty()) return;
+      if (ConfirmationDialog::confirm(QObject::tr("下载 SP 模型 %1?\n(后台下载, 行内显示进度, 完成后自动更新)").arg(disp), QObject::tr("CONFIRM"), top)) {
+        g_downloading = sn;
+        startDownload(sn);
+        dlBtn->setEnabled(false);
+        dlBtn->setText(QString("SP: %1  ⬇ 下载中 0%").arg(disp));
+        // 轮询进度: 1.5s 一次, 读 /tmp/model_dl_progress; 完成(本地列表出现)后自动重建
+        QTimer *t = new QTimer(listWidget);
+        t->setInterval(1500);
+        QObject::connect(t, &QTimer::timeout, listWidget, [=]() {
+          if (g_downloading != sn) { t->stop(); t->deleteLater(); return; }
+          std::string prog = util::read_file("/tmp/model_dl_progress");
+          QRegularExpression re("(\\d+)\\s*%");
+          QRegularExpressionMatch m = re.match(QString::fromStdString(prog));
+          if (m.hasMatch()) {
+            int pct = m.captured(1).toInt();
+            dlBtn->setText(QString("SP: %1  ⬇ 下载中 %2%").arg(disp).arg(pct));
+          }
+          // 完成检测: 本地模型列表已出现该模型
+          QString lj = run_mgr("list --json");
+          if (lj.contains(sn, Qt::CaseInsensitive)) {
+            g_downloading.clear();
+            t->stop(); t->deleteLater();
+            buildModelList(listWidget, top);   // 自动刷新 (该模型进入已安装区)
+          }
+        });
+        t->start();
+      }
+    });
+    listLayout->addWidget(dlBtn);
+  }
+  if (!anyToDl) {
+    QLabel *done = new QLabel(QObject::tr("5 个 SP 模型均已下载"), listWidget);
+    done->setAlignment(Qt::AlignCenter);
+    done->setStyleSheet("font-size:32px; color:#8BD450; margin:8px 0;");
+    listLayout->addWidget(done);
+  }
+  listLayout->addStretch(1);
 }
 
-// ===== 全屏 overlay 二级弹窗 (参考自学习记录框架; 非 QDialog, 避免 c3 竖屏崩溃) =====
-// 弹窗内列表独立滚动, 不嵌套设置页外层 ScrollView
+// ===== 全屏 overlay 二级弹窗 (非 QDialog, 避免 c3 竖屏崩溃) =====
 void showModelOverlay(QWidget *top) {
   if (!top) return;
-  QWidget *overlay = top->findChild<QWidget*>("model_overlay");
-  if (overlay) {
-    if (QWidget *listW = overlay->findChild<QWidget*>("model_list")) buildModelList(listW, top);
-    overlay->setGeometry(top->rect());
-    overlay->show();
-    overlay->raise();
-    return;
-  }
-  overlay = new QWidget(top);
+  if (QWidget *old = top->findChild<QWidget*>("model_overlay")) delete old;
+  QWidget *overlay = new QWidget(top);
   overlay->setObjectName("model_overlay");
   overlay->setGeometry(top->rect());
   overlay->setStyleSheet(R"(
@@ -212,20 +210,28 @@ void showModelOverlay(QWidget *top) {
   titleLbl->setStyleSheet("font-size:36px; font-weight:bold; color:white;");
   vbox->addWidget(titleLbl);
 
-  QWidget *listW = new QWidget();
-  listW->setObjectName("model_list");
-  buildModelList(listW, top);
-  FollowScrollArea *sv = new FollowScrollArea(listW, panel);
+  QWidget *listWidget = new QWidget(panel);
+  buildModelList(listWidget, top);
+  ScrollView *sv = new ScrollView(listWidget, panel);
+  sv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   sv->setStyleSheet("background-color:#141414; border-radius:12px;");
   vbox->addWidget(sv, 1);
 
+  // 底部: 刷新 + 关闭
+  QHBoxLayout *btnRow = new QHBoxLayout();
+  btnRow->setSpacing(20);
+  QPushButton *refreshBtn = new QPushButton(QObject::tr("刷新"), panel);
+  refreshBtn->setStyleSheet("height:100px; font-size:36px; background-color:#2f4f7f; color:white; border-radius:18px; border:none;");
+  QObject::connect(refreshBtn, &QPushButton::clicked, top, [top]() { showModelOverlay(top); });
+  btnRow->addWidget(refreshBtn, 1);
   QPushButton *closeBtn = new QPushButton(QObject::tr("关闭"), panel);
   closeBtn->setStyleSheet("height:100px; font-size:36px; background-color:#393939; color:white; border-radius:18px; border:none;");
   QObject::connect(closeBtn, &QPushButton::clicked, overlay, [overlay, top](bool) {
     overlay->hide();
     if (top) { top->raise(); top->activateWindow(); }
   });
-  vbox->addWidget(closeBtn);
+  btnRow->addWidget(closeBtn, 1);
+  vbox->addLayout(btnRow);
 
   overlay->show();
 }
