@@ -92,13 +92,21 @@ def main() -> None:
 
       # Handle missing internal panda
       if no_internal_panda_count > 0:
-        if no_internal_panda_count == 3:
-          cloudlog.info("No pandas found, putting internal panda into DFU")
-          HARDWARE.recover_internal_panda()
-        else:
-          cloudlog.info("No pandas found, resetting internal panda")
-          HARDWARE.reset_internal_panda()
-        time.sleep(3)  # wait to come back up
+        cloudlog.info("No pandas found, resetting internal panda")
+        HARDWARE.reset_internal_panda()
+        # The internal panda takes a few seconds to boot its app after a reset.
+        # Wait for it to come back in normal mode before deciding to flash.
+        panda_serials: list[str] = []
+        for _ in range(16):
+          panda_serials = Panda.list()
+          if len(panda_serials) == 1:
+            try:
+              with Panda(panda_serials[0]) as p:
+                if not p.bootstub:
+                  break
+            except Exception:
+              pass
+          time.sleep(0.5)
 
       # Flash all Pandas in DFU mode
       dfu_serials = PandaDFU.list()

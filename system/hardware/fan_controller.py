@@ -21,6 +21,14 @@ class TiciFanController(BaseFanController):
     self.controller = PIDController(k_p=0, k_i=4e-3, k_f=1, rate=(1 / DT_HW))
 
   def update(self, cur_temp: float, ignition: bool) -> int:
+    # 全速风扇: 待机界面双击温度/风扇卡切换 (CarrotFanFullSpeed=1 时直接 100%)
+    try:
+      from openpilot.common.params import Params
+      if Params().get_bool("CarrotFanFullSpeed"):
+        self.last_ignition = ignition
+        return 100
+    except Exception:
+      pass
     self.controller.neg_limit = -(100 if ignition else 30)
     self.controller.pos_limit = -(30 if ignition else 0)
 
