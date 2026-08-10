@@ -7,10 +7,12 @@
 #include <QJsonArray>
 #include <QMap>
 #include <QLabel>
-#include <QListWidget>
-#include <QListWidgetItem>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QTouchEvent>
+#include <QEvent>
 #include "selfdrive/ui/qt/widgets/input.h"
-#include "selfdrive/ui/qt/widgets/scrollview.h"
 
 // 执行模型管理器命令, 返回 stdout
 static QString run_mgr(const QString &args) {
@@ -20,6 +22,54 @@ static QString run_mgr(const QString &args) {
   if (fp) { char buf[1024]; while (fgets(buf, sizeof(buf), fp)) out += buf; pclose(fp); }
   return QString::fromStdString(out);
 }
+
+// ===== 1:1 跟手滚动区 (参考自学习记录框架): 直接驱动滚动条, 零惯性、无 QScroller;
+// 关键: 在 QScrollArea::viewportEvent 内处理触摸(而非外部 installEventFilter 吞事件), c3 eglfs 下不崩。
+// 仅对落在"非交互控件"区域的触摸做 1:1 平移; 落在按钮(QAbstractButton)上的触摸放行给子控件(可正常点按)。
+class FollowScrollArea : public QScrollArea {
+  QPoint m_last;
+  bool m_drag = false;
+  bool m_pressedInteractive = false;
+public:
+  explicit FollowScrollArea(QWidget *content, QWidget *parent = nullptr) : QScrollArea(parent) {
+    setWidget(content);
+    setWidgetResizable(true);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setFrameShape(QFrame::NoFrame);
+    if (viewport()) viewport()->setStyleSheet("background-color:transparent;");
+    content->setStyleSheet("background-color:transparent;");
+  }
+  bool viewportEvent(QEvent *ev) override {
+    switch (ev->type()) {
+      case QEvent::TouchBegin: {
+        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
+        if (te->touchPoints().isEmpty()) return QScrollArea::viewportEvent(ev);
+        QPointF gp = te->touchPoints().first().screenPos();
+        QWidget *hit = widget() ? widget()->childAt(widget()->mapFromGlobal(gp.toPoint())) : nullptr;
+        m_pressedInteractive = (hit != nullptr && (hit->inherits("QAbstractButton") || hit->inherits("QAbstractSlider")));
+        m_drag = !m_pressedInteractive;
+        m_last = te->touchPoints().first().pos().toPoint();
+        return m_drag ? true : QScrollArea::viewportEvent(ev);
+      }
+      case QEvent::TouchUpdate: {
+        QTouchEvent *te = static_cast<QTouchEvent*>(ev);
+        if (!m_drag || te->touchPoints().isEmpty()) return QScrollArea::viewportEvent(ev);
+        QPoint p = te->touchPoints().first().pos().toPoint();
+        int dy = p.y() - m_last.y();
+        m_last = p;
+        verticalScrollBar()->setValue(verticalScrollBar()->value() - dy);
+        return true;
+      }
+      case QEvent::TouchEnd:
+      case QEvent::TouchCancel:
+        m_drag = false; m_pressedInteractive = false;
+        return QScrollArea::viewportEvent(ev);
+      default:
+        return QScrollArea::viewportEvent(ev);
+    }
+  }
+};
 
 DrivingModelPanel::DrivingModelPanel(QWidget *parent) : QWidget(parent) {
   layout_ = new QVBoxLayout(this);
@@ -55,16 +105,7 @@ void DrivingModelPanel::refresh() {
     return;
   }
 
-  // 模型列表: SP 在前 / CP 在后, 同类型按名称排序; 当前激活项带 ✓ 标记
-  QListWidget *list = new QListWidget(this);
-  list->setStyleSheet(R"(
-    QListWidget { background: transparent; border: none; outline: none; }
-    QListWidget::item { padding: 12px 16px; margin: 4px 0px; border-radius: 12px;
-                        background-color: #2B2B2B; color: #FFFFFF; font-size: 38px; }
-    QListWidget::item:selected { background-color: #2C2CE2; }
-  )");
-  list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
+  // 模型列表: SP 在前 / CP 在后, 同类型按名称排序; 当前激活项高亮 + ✓ 标记
   struct Row { QString text; int idx; bool active; };
   QList<Row> rows;
   QMap<QString,int> idx_map;  // text -> idx (去重防同名)
@@ -90,21 +131,33 @@ void DrivingModelPanel::refresh() {
     return a.text < b.text;
   });
 
+  // 内容容器: 按钮行 (参考自学习记录框架, 每行是 QPushButton, 触摸点按正常 + 空白处滑动跟手)
+  QWidget *content = new QWidget(this);
+  content->setObjectName("model_list_content");
+  content->setStyleSheet("QWidget#model_list_content { background-color:transparent; }");
+  QVBoxLayout *vbox = new QVBoxLayout(content);
+  vbox->setContentsMargins(0, 0, 0, 0);
+  vbox->setSpacing(6);
+
   for (const auto &r : rows) {
-    auto *item = new QListWidgetItem(r.text);
-    item->setData(Qt::UserRole, r.idx);
-    list->addItem(item);
+    auto *btn = new QPushButton(r.text, content);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setStyleSheet(QString(
+      "QPushButton { text-align:left; padding: 14px 16px; margin: 2px 0px; border-radius: 12px;"
+      " background-color: %1; color: #FFFFFF; font-size: 38px; border: none; }"
+      "QPushButton:pressed { background-color: #1F1FD0; }"
+    ).arg(r.active ? "#2C2CE2" : "#2B2B2B"));
+    QObject::connect(btn, &QPushButton::clicked, this, [this, r]() {
+      if (ConfirmationDialog::confirm(tr("切换到 %1?\n将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作").arg(r.text), tr("CONFIRM"), this)) {
+        ConfirmationDialog::alert(run_mgr(QString("switch %1").arg(r.idx)), this);
+        refresh();
+      }
+    });
+    vbox->addWidget(btn);
   }
-  list->setMinimumHeight(qMin(rows.size() * 72 + 8, 720));
+  vbox->addStretch();
 
-  QObject::connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
-    int idx = item->data(Qt::UserRole).toInt();
-    if (idx < 0) return;
-    if (ConfirmationDialog::confirm(tr("切换到 %1?\n将重启设备 (约 1-2 分钟, 完整加载新模型), 建议停车时操作").arg(item->text()), tr("CONFIRM"), this)) {
-      ConfirmationDialog::alert(run_mgr(QString("switch %1").arg(idx)), this);
-      refresh();
-    }
-  });
-
-  layout_->addWidget(new ScrollView(list, this));
+  // 1:1 跟手滚动 (参考自学习记录框架, 不用 ScrollView)
+  FollowScrollArea *sv = new FollowScrollArea(content, this);
+  layout_->addWidget(sv, 1);
 }
