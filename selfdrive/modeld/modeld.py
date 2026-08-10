@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
 import os
+import sys
+
+# ==== SP 驾驶模型支持 (modelid >= 9 时启用 SP tinygrad fork + SP 合并模型格式) ====
+_SP_MODEL = False
+try:
+  from openpilot.common.params import Params as _P
+  _mi = _P().get("modelid")
+  if _mi is not None and _mi.isdigit() and int(_mi) >= 9:
+    _SP_MODEL = True
+except Exception:
+  pass
+if _SP_MODEL:
+  _sp_tg = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tinygrad_sp')
+  sys.path.insert(0, _sp_tg)
+
 from openpilot.system.hardware import TICI
 os.environ['DEV'] = 'QCOM' if TICI else 'LLVM'
 USBGPU = "USBGPU" in os.environ
@@ -37,6 +52,16 @@ from openpilot.selfdrive.modeld.runners.tinygrad_helpers import qcom_tensor_from
 PROCESS_NAME = "selfdrive.modeld.modeld"
 SEND_RAW_PRED = os.getenv('SEND_RAW_PRED')
 
+SP_PKL_PATH = None  # SP 合并模型路径 (modelid>=9 时由 get_model_paths 设置)
+
+def _log_modeld_error(tag, exc):
+  # 模型加载/运行失败记录到 /data/modeld_error.log (上车测试排障用)
+  try:
+    import traceback as _tb
+    with open('/data/modeld_error.log', 'a') as _f:
+      _f.write(chr(10) + chr(10) + "[%s] %s: %s" + chr(10) + "%s" + chr(10) % (time.strftime('%Y-%m-%d %H:%M:%S'), tag, exc, _tb.format_exc()))
+  except Exception:
+    pass
 VISION_PKL_PATH = Path(__file__).parent / 'models/driving_vision_tinygrad.pkl'
 POLICY_PKL_PATH = Path(__file__).parent / 'models/driving_policy_tinygrad.pkl'
 VISION_METADATA_PATH = Path(__file__).parent / 'models/driving_vision_metadata.pkl'
@@ -147,6 +172,23 @@ class ModelState:
   prev_desire: np.ndarray  # for tracking the rising edge of the pulse
 
   def __init__(self, context: CLContext):
+    global _SP_MODEL
+    if _SP_MODEL:
+      try:
+        self._init_sp(context)
+        return
+      except Exception as e:
+        _log_modeld_error("SP model load failed, fallback to default", e)
+        cloudlog.error(f"[modeld] SP model load failed, fallback to default: {e}")
+        try:
+          from openpilot.common.params import Params
+          Params().remove("modelid")
+        except Exception:
+          pass
+        _SP_MODEL = False
+        # SP 分支的 get_model_paths 返回 (sp_pkl, None, None, None), 回退 CP 前必须重取真实路径
+        global VISION_PKL_PATH, POLICY_PKL_PATH, VISION_METADATA_PATH, POLICY_METADATA_PATH
+        VISION_PKL_PATH, POLICY_PKL_PATH, VISION_METADATA_PATH, POLICY_METADATA_PATH = get_model_paths()
     with open(VISION_METADATA_PATH, 'rb') as f:
       vision_metadata = pickle.load(f)
       self.vision_input_shapes =  vision_metadata['input_shapes']
@@ -189,6 +231,8 @@ class ModelState:
 
   def run(self, bufs: dict[str, VisionBuf], transforms: dict[str, np.ndarray],
                 inputs: dict[str, np.ndarray], prepare_only: bool) -> dict[str, np.ndarray] | None:
+    if _SP_MODEL:
+      return self._run_sp(bufs, transforms, inputs, prepare_only)
     # Model decides when action is completed, so desire input is just a pulse triggered on rising edge
     inputs['desire_pulse'][0] = 0
     new_desire = np.where(inputs['desire_pulse'] - self.prev_desire > .99, inputs['desire_pulse'], 0)
@@ -226,19 +270,140 @@ class ModelState:
 
     return combined_outputs_dict
 
+  # ===================== SP 合并模型支持 =====================
+  def _init_sp(self, context: CLContext):
+    cloudlog.warning(f"[modeld] SP combined model: {SP_PKL_PATH}")
+    with open(SP_PKL_PATH, 'rb') as f:
+      jits = pickle.load(f)
+    md = jits['metadata']
+    if 'model' in md:
+      raise ValueError("[modeld] SP supercombo 合并类型模型暂不支持, 请使用 split 类型")
+    vm, pm = md['vision'], md['policy']
+    self.vision_input_shapes = vm['input_shapes']
+    self.vision_input_names = [k for k in vm['input_shapes'] if 'img' in k]
+    self.vision_output_slices = vm['output_slices']
+    self.policy_input_shapes = pm['input_shapes']
+    self.policy_output_slices = pm['output_slices']
+    vision_output_size = vm['output_shapes']['outputs'][1]
+    policy_output_size = pm['output_shapes']['outputs'][1]
+
+    from tinygrad.device import Device
+    from tinygrad.tensor import Tensor
+    self.DEV = Device.DEFAULT
+    self.WARP_DEV = 'CPU' if USBGPU else self.DEV
+    self._run_policy = jits[(1928, 1208)]['run_policy']
+    self._warp_enqueue = jits[(1928, 1208)]['warp_enqueue']
+    self._road_key = next(k for k in self.vision_input_names if 'big' not in k)
+    self._wide_key = next(k for k in self.vision_input_names if 'big' in k)
+
+    # 构造输入队列 (移植 SP generate_queues_and_npy, unpacked 模式)
+    img_shape = vm['input_shapes'][self._road_key]
+    n_frames = img_shape[1] // 6
+    fb = pm['input_shapes'].get('features_buffer')
+    frame_skip = 1 if (fb is None or fb[1] >= 99) else 4
+    img_buf_shape = (frame_skip * (n_frames - 1) + 1, 6, img_shape[2], img_shape[3])
+    self._sp_desire_key = next((k for k in pm['input_shapes'] if k.startswith('desire')), None)
+    if self._sp_desire_key is None:
+      raise ValueError('[modeld] SP model missing desire input')
+    desire_shape = pm['input_shapes'][self._sp_desire_key]
+    desire_q_shape = (frame_skip * desire_shape[1], desire_shape[0], desire_shape[2])
+
+    npy_arrays = {
+      'desire': np.zeros(desire_shape[2], dtype=np.float32),  # JIT 参数名固定 'desire' (与 metadata 键名无关)
+      'tfm': np.zeros((3, 3), dtype=np.float32),
+      'big_tfm': np.zeros((3, 3), dtype=np.float32),
+    }
+    for k, shape in pm['input_shapes'].items():
+      if k not in npy_arrays and 'img' not in k and k not in ('features_buffer', self._sp_desire_key):
+        npy_arrays[k] = np.zeros(shape, dtype=np.float32)
+
+    queues = {
+      'img_q': Tensor(np.zeros(img_buf_shape, dtype=np.uint8), device=self.DEV).contiguous().realize(),
+      'big_img_q': Tensor(np.zeros(img_buf_shape, dtype=np.uint8), device=self.DEV).contiguous().realize(),
+      'desire_q': Tensor(np.zeros(desire_q_shape, dtype=np.float32), device=self.DEV).contiguous().realize(),
+    }
+    if fb is not None:
+      feat_q_shape = (frame_skip * (fb[1] - 1) + 1, fb[0], fb[2])
+      queues['feat_q'] = Tensor(np.zeros(feat_q_shape, dtype=np.float32), device=self.DEV).contiguous().realize()
+    queues.update({k: Tensor(v, device='NPY').realize() for k, v in npy_arrays.items()})
+
+    self.queues = queues
+    self.numpy_inputs = npy_arrays
+    self.vision_output = np.zeros(vision_output_size, dtype=np.float32)
+    self.policy_output = np.zeros(policy_output_size, dtype=np.float32)
+    self.prev_desire = np.zeros(ModelConstants.DESIRE_LEN, dtype=np.float32)
+    self.parser = Parser()
+    self._blob_cache = {}
+    self.full_frames = {}
+    cloudlog.warning(f"[modeld] SP model loaded: vision={vision_output_size} policy={policy_output_size}")
+
+  def _run_sp(self, bufs: dict[str, VisionBuf], transforms: dict[str, np.ndarray],
+              inputs: dict[str, np.ndarray], prepare_only: bool) -> dict[str, np.ndarray] | None:
+    try:
+      return self._run_sp_inner(bufs, transforms, inputs, prepare_only)
+    except Exception as e:
+      _log_modeld_error("SP model run failed", e)
+      cloudlog.error(f"[modeld] SP model run failed: {e}")
+      return None
+
+  def _run_sp_inner(self, bufs: dict[str, VisionBuf], transforms: dict[str, np.ndarray],
+                    inputs: dict[str, np.ndarray], prepare_only: bool) -> dict[str, np.ndarray] | None:
+    for key in self.vision_input_names:
+      ptr = np.frombuffer(bufs[key].data, dtype=np.uint8).ctypes.data
+      yuv_size = bufs[key].width * bufs[key].height * 3 // 2
+      cache_key = (key, ptr)
+      if cache_key not in self._blob_cache:
+        self._blob_cache[cache_key] = Tensor.from_blob(ptr, (yuv_size,), dtype='uint8', device=self.WARP_DEV)
+      self.full_frames[key] = self._blob_cache[cache_key]
+
+    # desire pulse (SP: 单帧 one-hot + 上升沿检测; JIT 参数名固定 'desire')
+    self.numpy_inputs['desire'][:] = np.where(inputs['desire_pulse'] - self.prev_desire > .99, inputs['desire_pulse'], 0)
+    self.prev_desire[:] = inputs['desire_pulse']
+    for key in ('traffic_convention', 'lateral_control_params'):
+      if key in self.numpy_inputs and key in inputs:
+        self.numpy_inputs[key][:] = inputs[key]
+    self.numpy_inputs['tfm'][:, :] = transforms[self._road_key].reshape(3, 3)
+    self.numpy_inputs['big_tfm'][:, :] = transforms[self._wide_key].reshape(3, 3)
+
+    if prepare_only:
+      self._warp_enqueue(**self.queues, frame=self.full_frames[self._road_key], big_frame=self.full_frames[self._wide_key])
+      return None
+
+    raw = self._run_policy(**self.queues, frame=self.full_frames[self._road_key], big_frame=self.full_frames[self._wide_key])
+
+    vision_output = raw[0].numpy().flatten()
+    policy_output = raw[1].numpy().flatten()
+    vision_sliced = {k: vision_output[np.newaxis, v] for k, v in self.vision_output_slices.items()}
+    policy_sliced = {k: policy_output[np.newaxis, v] for k, v in self.policy_output_slices.items()}
+    # 合并解析 (Parser 为合并输出设计: parse_vision_outputs 需 lead/lead_prob 在 policy 部分)
+    outputs = self.parser.parse_outputs({**vision_sliced, **policy_sliced})
+
+    if SEND_RAW_PRED:
+      outputs['raw_pred'] = np.concatenate([vision_output.copy(), policy_output.copy()])
+
+    return outputs
+
 #new
-# 模型文件夹名称数组
-MODEL_NAMES = [
-  "0-tr16",      # modelid = 0
-  "1-dtr",       # modelid = 1
-  "2-firehose",  # modelid = 2
-  "3-gwm",
-  "4-pp",
-  "5-ds",
-  "6-dsv2",
-  "7-wmi",
-  "8-cd210",
-]
+# 模型文件夹名称数组 (动态扫描 models/ 目录, 支持任意数量 CP/SP 模型)
+def _scan_model_names():
+  names = []
+  _mdir = Path(__file__).parent / 'models'
+  try:
+    _dirs = [d for d in _mdir.iterdir() if d.is_dir() and d.name[0].isdigit()]
+    def _key(d):
+      try:
+        return int(d.name.split('-')[0])
+      except ValueError:
+        return 10**9
+    for d in sorted(_dirs, key=_key):
+      names.append(d.name)
+  except Exception:
+    pass
+  if not names:
+    names = ['0-tr16']
+  return names
+
+MODEL_NAMES = _scan_model_names()
 
 def get_model_paths():
   params = Params()
@@ -260,6 +425,14 @@ def get_model_paths():
   else:
     model_name = MODEL_NAMES[modelid]
     base_path = default_base / model_name
+
+  # SP 合并模型: 目录含 driving_tinygrad.pkl 时走 SP 格式
+  sp_pkl = base_path / "driving_tinygrad.pkl"
+  if sp_pkl.exists():
+    global SP_PKL_PATH
+    SP_PKL_PATH = sp_pkl
+    print(f"[modeld] SP combined model: {sp_pkl}")
+    return sp_pkl, None, None, None
 
   # 构造四个路径
   vision_pkl_path = base_path / "driving_vision_tinygrad.pkl"

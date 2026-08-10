@@ -40,6 +40,7 @@
 #include "selfdrive/ui/qt/widgets/prime.h"
 #include "selfdrive/ui/qt/widgets/scrollview.h"
 #include "selfdrive/ui/qt/offroad/developer_panel.h"
+#include "selfdrive/ui/qt/offroad/driving_model_panel.h"
 #include "selfdrive/ui/qt/widgets/input.h"
 #include "selfdrive/ui/qt/offroad/firehose.h"
 
@@ -1135,6 +1136,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
   panels.append({ tr("萝卜"), new CarrotPanel(this) });
   dev_panel_ = new DeveloperPanel(this);
   panels.append({ tr("开发"), dev_panel_ });
+  panels.append({ tr("模型"), new DrivingModelPanel(this) });
 
   nav_btns = new QButtonGroup(this);
   for (auto &[name, panel] : panels) {
@@ -1493,7 +1495,6 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
 
 
   startToggles->addItem(selectCarBtn);
-  startToggles->addItem(new CValueControl("modelid", "模型选择(-1)", "-1:默认模型,0:TR16,1:DTR,2:Firehose,3:GWM,4:PP,5:DS,6:DSv2,7:WMI,8:CD210,重启后生效!", -1, 100, 1));
   startToggles->addItem(new CValueControl("HyundaiCameraSCC", "现代: 摄像头SCC(0)", "1:连接SCC的CAN线到摄像头, 2:同步定速状态, 3:原厂长控，不是用摄像头实现SCC的均设置为0", -1, 100, 1));
   startToggles->addItem(new CValueControl("CanfdHDA2", "CANFD: HDA2 模式", "1:HDA2, 2:HDA2+盲点监测, 一般非CanFD车型设置为0", 0, 2, 1));
   startToggles->addItem(new CValueControl("EnableRadarTracks", "启用雷达追踪(1)", "1:启用雷达追踪, -1,2:禁用 (始终使用HKG SCC雷达)，胜达设置为1, 改变值后需要重启车辆", -1, 3, 1));
@@ -2080,6 +2081,7 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new ParamControl("dp_ui_rainbow", tr("彩虹路径"), tr("将行驶路径显示为彩虹色动态渐变效果"), "", this));
   featToggles->addItem(new CValueControl("dp_ui_rainbow_speed", "彩虹流动速度(10)", "彩虹色沿路径流动的快慢; 数值越大流动越快, 越小越舒缓; 需先开启[彩虹路径]", 1, 50, 1));
   featToggles->addItem(new CValueControl("dp_ui_rainbow_brightness", "彩虹亮度(70)%", "彩虹路径的颜色亮度百分比; 数值越大越鲜亮, 越小越暗淡通透; 需先开启[彩虹路径]", 10, 100, 5));
+  featToggles->addItem(new CValueControl("dp_ui_rainbow_width", "彩虹宽度(110)%", "彩虹路径的显示宽度百分比; 数值越大路径越宽, 越小越细; 需先开启[彩虹路径]", 30, 200, 5));
 
   // === 广角/长焦摄像头切换(模式 + 迟滞速度, 单位 km/h, 可调; 放在功能标签最后) ===
   featToggles->addItem(new CValueControl("CarrotWideCamMode", "广角摄像头模式", "0:自动切换(迟滞速度见下方两项), 1:仅长焦(road主摄), 2:仅广角(wide)", 0, 2, 1));

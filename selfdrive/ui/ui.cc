@@ -80,6 +80,8 @@ void ui_update_params(UIState *s) {
   s->scene.dp_ui_rainbow_speed = (rainbow_speed <= 0) ? 10 : std::clamp(rainbow_speed, 1, 50);
   int rainbow_brightness = params.getInt("dp_ui_rainbow_brightness");
   s->scene.dp_ui_rainbow_brightness = (rainbow_brightness <= 0) ? 70 : std::clamp(rainbow_brightness, 10, 100);
+  int rainbow_width = params.getInt("dp_ui_rainbow_width");
+  s->scene.dp_ui_rainbow_width = (rainbow_width <= 0) ? 110 : std::clamp(rainbow_width, 30, 200) / 100.0f;
 }
 
 void UIState::updateStatus() {

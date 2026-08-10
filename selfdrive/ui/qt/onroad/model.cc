@@ -130,7 +130,7 @@ void ModelRenderer::drawPath(QPainter &painter, const cereal::ModelDataV2::Reade
     }
     int max_idx = get_path_length_idx(model_position, max_w);
     QPolygonF wide_vertices;
-    mapLineToPolygon(model_position, DP_RAINBOW_PATH_WIDTH, path_offset_z, &wide_vertices, max_idx, false);
+    mapLineToPolygon(model_position, uiState()->scene.dp_ui_rainbow_width, path_offset_z, &wide_vertices, max_idx, false);
 
     painter.setBrush(bg);
     painter.drawPolygon(wide_vertices);

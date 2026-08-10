@@ -20,7 +20,7 @@ private:
   static constexpr float DP_RAINBOW_BRIGHTNESS = 0.7f;         // [DP] 明度 0~1，越小越暗
   static constexpr int   DP_RAINBOW_GRADIENT_SAMPLES = 80;
   static constexpr int   DP_RAINBOW_HUE_SECTORS = 6;
-  static constexpr float DP_RAINBOW_PATH_WIDTH = 1.1f;         // [DP] 彩虹路径宽度（原始0.9）
+  static constexpr float DP_RAINBOW_PATH_WIDTH = 1.1f;         // [DP] 默认宽度, 运行时由 dp_ui_rainbow_width 覆盖
 
 public:
   bool mapToScreen(float in_x, float in_y, float in_z, QPointF *out);

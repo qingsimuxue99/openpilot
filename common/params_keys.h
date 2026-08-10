@@ -343,6 +343,7 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"TFollowGap3Base", PERSISTENT},
     {"TFollowGap4Base", PERSISTENT},
     {"dp_ui_rainbow_brightness", PERSISTENT},
+    {"dp_ui_rainbow_width", PERSISTENT},
     {"dp_ui_rainbow_speed", PERSISTENT},
     //new
     {"SameSpiCamFilter", PERSISTENT},
