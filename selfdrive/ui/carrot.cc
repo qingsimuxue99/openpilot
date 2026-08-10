@@ -734,8 +734,8 @@ public:
         int disp_y = y + 105;// 向上移动90px;
         bool draw_dist = false;
         float disp_size = 90;
-        if (softHoldActive || brakeHoldActive || carrotCruise) {
-            sprintf(str, "%s", (brakeHoldActive) ? "自动驻车已激活" : (softHoldActive) ? "轻刹": "胡萝卜巡航");
+        if (carrotCruise) {
+            sprintf(str, "%s", "胡萝卜巡航");
             ui_draw_text(s, x, disp_y, str, disp_size, COLOR_ORANGE_ALPHA(210), BOLD);
         }
         else if (longActive) {
@@ -3054,6 +3054,7 @@ public:
 
         // 更新设备信息
         makeDeviceInfo(s);
+        SubMaster& sm = *(s->sm);
 
         // 信息条贴着屏幕下边框，底部留3px不覆盖
         const int bar_margin_bottom = 3;
@@ -3067,10 +3068,10 @@ public:
         char str[96];
         const int font_size = 36;
 
-        // 计算5等分区域宽度
-        int item_w = s->fb_w / 5;
-        int center_x[5];
-        for (int i = 0; i < 5; i++) {
+        // 计算6等分区域宽度
+        int item_w = s->fb_w / 6;
+        int center_x[6];
+        for (int i = 0; i < 6; i++) {
             center_x[i] = item_w * i + item_w / 2;
         }
         int text_y = bar_y + bar_h / 2 + font_size / 2 - 4;
@@ -3105,25 +3106,34 @@ public:
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         ui_draw_text(s, center_x[0], text_y, str, font_size, lead_color, BOLD);
 
-        // --- 第2项：CPU使用率（数值变色）---
+        // --- 第2项：连接（同 UDP 端口客户端数，实时）---
+        int ext_state = 0;
+        if (sm.alive("carrotMan")) {
+            ext_state = sm["carrotMan"].getCarrotMan().getExtState();
+        }
+        NVGcolor link_color = ext_state > 0 ? COLOR_GREEN_ALPHA(210) : COLOR_WHITE_ALPHA(180);
+        sprintf(str, "%d", ext_state);
+        draw_label_value(center_x[1], "连接 ", str, link_color);
+
+        // --- 第3项：CPU使用率（数值变色）---
         float cpu_usage_val = cpuUsage;
         NVGcolor cpu_usage_color;
         if (cpu_usage_val >= 90.0f) cpu_usage_color = COLOR_RED;
         else if (cpu_usage_val >= 70.0f) cpu_usage_color = COLOR_ORANGE;
         else cpu_usage_color = COLOR_GREEN;
         sprintf(str, "%.0f%%", cpu_usage_val);
-        draw_label_value(center_x[1], "CPU使用率 ", str, cpu_usage_color);
+        draw_label_value(center_x[2], "CPU使用率 ", str, cpu_usage_color);
 
-        // --- 第3项：CPU温度（数值变色）---
+        // --- 第4项：CPU温度（数值变色）---
         float cpu_temp_val = cpuTemp;
         NVGcolor cpu_temp_color;
         if (cpu_temp_val >= 90.0f) cpu_temp_color = COLOR_RED;
         else if (cpu_temp_val >= 75.0f) cpu_temp_color = COLOR_ORANGE;
         else cpu_temp_color = COLOR_GREEN;
         sprintf(str, "%.0f°C", cpu_temp_val);
-        draw_label_value(center_x[2], "CPU温度 ", str, cpu_temp_color);
+        draw_label_value(center_x[3], "CPU温度 ", str, cpu_temp_color);
 
-        // --- 第4项：内存占用（数值变色）---
+        // --- 第5项：内存占用（数值变色）---
         float mem_val = (float)memoryUsage;
         NVGcolor mem_color;
         if (mem_val >= 90.0f) mem_color = COLOR_RED;
@@ -3131,9 +3141,9 @@ public:
         else if (mem_val >= 60.0f) mem_color = COLOR_YELLOW;
         else mem_color = COLOR_GREEN;
         sprintf(str, "%d%%", memoryUsage);
-        draw_label_value(center_x[3], "内存占用 ", str, mem_color);
+        draw_label_value(center_x[4], "内存占用 ", str, mem_color);
 
-        // --- 第5项：剩余存储（数值变色）---
+        // --- 第6项：剩余存储（数值变色）---
         float disk_val = freeSpace;
         NVGcolor disk_color;
         if (disk_val <= 5.0f) disk_color = COLOR_RED;
@@ -3141,7 +3151,7 @@ public:
         else if (disk_val <= 30.0f) disk_color = COLOR_YELLOW;
         else disk_color = COLOR_GREEN;
         sprintf(str, "%.0f%%", disk_val);
-        draw_label_value(center_x[4], "剩余存储 ", str, disk_color);
+        draw_label_value(center_x[5], "剩余存储 ", str, disk_color);
     }
 
     void drawBottomBarOnBorder(NVGcontext* vg, int w, int h, UIState* s) {
@@ -3474,40 +3484,39 @@ public:
         ui_fill_rect(vg, { x_st, 0, x_ed - x_st, 30 }, COLOR_ORANGE_ALPHA(200), 15);
 
 
-        // char top[256] = "", top_left[256] = "", top_right[256] = "";
-        // char bottom[256] = "", bottom_left[256] = "", bottom_right[256] = "";
+        char top_left[256] = "", top_right[256] = "";
 
-        // Params params = Params();
+        Params params = Params();
         QString str;
 
         // top
         // str = QString::fromStdString(car_state.getLogCarrot());
         // sprintf(top, "%s", str.toStdString().c_str());
         // top_right
-        // const auto live_delay = sm["liveDelay"].getLiveDelay();
-        // const auto live_torque_params = sm["liveTorqueParameters"].getLiveTorqueParameters();
-        // const auto live_params = sm["liveParameters"].getLiveParameters();
-        // str.sprintf("LD[%.0f%%,%.2f],LT[%.0f%%,%s](%.2f/%.2f), SR(%.1f,%.1f)",
-        //     (float)live_delay.getCalPerc(), live_delay.getLateralDelay(),
-        //     (float)live_torque_params.getCalPerc(), live_torque_params.getLiveValid() ? "ON" : "OFF",
-        //     live_torque_params.getLatAccelFactorFiltered(), live_torque_params.getFrictionCoefficientFiltered(),
-        //     live_params.getSteerRatio(), params.getFloat("CustomSR")/10.0);
-        // sprintf(top_right, "%s", str.toStdString().c_str());
+        const auto live_delay = sm["liveDelay"].getLiveDelay();
+        const auto live_torque_params = sm["liveTorqueParameters"].getLiveTorqueParameters();
+        const auto live_params = sm["liveParameters"].getLiveParameters();
+        str.sprintf("LD[%.0f%%,%.2f],LT[%.0f%%,%s](%.2f/%.2f), SR(%.1f,%.1f)",
+            (float)live_delay.getCalPerc(), live_delay.getLateralDelay(),
+            (float)live_torque_params.getCalPerc(), live_torque_params.getLiveValid() ? "ON" : "OFF",
+            live_torque_params.getLatAccelFactorFiltered(), live_torque_params.getFrictionCoefficientFiltered(),
+            live_params.getSteerRatio(), params.getFloat("CustomSR")/10.0);
+        sprintf(top_right, "%s", str.toStdString().c_str());
 
         //top_left
-        // QString carName = QString::fromStdString(params.get("CarName"));
-        // bool longitudinal_control = sm["carParams"].getCarParams().getOpenpilotLongitudinalControl();
-        // if (params.getInt("HyundaiCameraSCC") > 0) {
-        //     carName += "(CAMERA SCC)";
-        // }
-        // else if (longitudinal_control) {
-        //     carName += " - OP Long";
-        // }
-        // QString NNFFModelName = QString::fromStdString(params.get("NNFFModelName"));
-        // if (NNFFModelName.length() > 0) {
-        //     carName += ",NNFF";
-        // }
-        // sprintf(top_left, "%s", carName.toStdString().c_str());
+        QString carName = QString::fromStdString(params.get("CarName"));
+        bool longitudinal_control = sm["carParams"].getCarParams().getOpenpilotLongitudinalControl();
+        if (params.getInt("HyundaiCameraSCC") > 0) {
+            carName += "(CAMERA SCC)";
+        }
+        else if (longitudinal_control) {
+            carName += " - OP Long";
+        }
+        QString NNFFModelName = QString::fromStdString(params.get("NNFFModelName"));
+        if (NNFFModelName.length() > 0) {
+            carName += ",NNFF";
+        }
+        sprintf(top_left, "%s", carName.toStdString().c_str());
 
         // bottom
         char bottom[256] = "";
@@ -3516,9 +3525,7 @@ public:
         strcpy(bottom, str.toStdString().c_str());
 
         // bottom_left
-        // QString gitBranch = QString::fromStdString(params.get("GitBranch"));
-        // sprintf(bottom_left, "%s", gitBranch.toStdString().c_str());
-        char bottom_left[256] = "";
+        char bottom_left[256] = "CP-Dev晚風0806";
 
         // bottom_right
         // Params params_memory = Params("/dev/shm/params");
@@ -3536,17 +3543,17 @@ public:
         // nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
         // ui_draw_text_vg(vg, w / 2, 0, top, 30, COLOR_WHITE, BOLD);
         // top left
-        // nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-        // ui_draw_text_vg(vg, text_margin, 0, top_left, 30, COLOR_WHITE, BOLD);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        ui_draw_text_vg(vg, text_margin, 0, top_left, 30, COLOR_WHITE, BOLD);
         // top right
-        // nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
-        // ui_draw_text_vg(vg, w - text_margin, 0, top_right, 30, COLOR_WHITE, BOLD);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+        ui_draw_text_vg(vg, w - text_margin, 0, top_right, 30, COLOR_WHITE, BOLD);
         // bottom
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         ui_draw_text_vg(vg, w / 2, h, bottom, 30, COLOR_WHITE, BOLD);
         // bottom left
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        ui_draw_text_vg(vg, text_margin, h, bottom_left, 30, COLOR_WHITE, BOLD);
+        ui_draw_text_vg(vg, 20, h, bottom_left, 30, COLOR_WHITE, BOLD);
         // bottom right
         // nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
         // ui_draw_text_vg(vg, w- text_margin, h, bottom_right, 30, COLOR_WHITE, BOLD);

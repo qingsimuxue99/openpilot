@@ -72,6 +72,8 @@ typedef struct UIScene {
 
   // DP Rainbow Path
   bool dp_ui_rainbow = false;
+  int dp_ui_rainbow_speed = 10;        // 彩虹流动速度 1~50, 越大越快 (10 = 原固定速度)
+  int dp_ui_rainbow_brightness = 70;   // 彩虹亮度百分比 10~100 (70 = 原固定亮度 0.7)
 
   bool carrot_experimental_mode = false;
 

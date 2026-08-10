@@ -3,9 +3,16 @@
 #include "selfdrive/ui/qt/widgets/controls.h"
 
 DeveloperPanel::DeveloperPanel(SettingsWindow *parent) : ListWidget(parent) {
-  // SSH keys
-  addItem(new SshToggle());
-  addItem(new SshControl());
+  // SSH keys (商用授权: 未激活时隐藏, 点「开发」标签 6 次后由 unlockSsh 显示)
+  ssh_toggle_ = new SshToggle();
+  ssh_control_ = new SshControl();
+  addItem(ssh_toggle_);
+  addItem(ssh_control_);
+  ssh_shown_ = (Params().get("CarrotSshShow") == "1");
+  if (!ssh_shown_) {
+    ssh_toggle_->setVisible(false);
+    ssh_control_->setVisible(false);
+  }
 
   experimentalLongitudinalToggle = new ParamControl(
     "AlphaLongitudinalEnabled",
@@ -72,4 +79,11 @@ void DeveloperPanel::updateToggles(bool _offroad) {
 
 void DeveloperPanel::showEvent(QShowEvent *event) {
   updateToggles(offroad);
+}
+
+// 商用授权: 点「开发」标签满 6 次后解锁, 显示 SSH 项(卖家售后后门)
+void DeveloperPanel::unlockSsh() {
+  ssh_shown_ = true;
+  if (ssh_toggle_) ssh_toggle_->setVisible(true);
+  if (ssh_control_) ssh_control_->setVisible(true);
 }

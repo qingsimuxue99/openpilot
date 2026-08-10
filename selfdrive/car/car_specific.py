@@ -257,7 +257,8 @@ class CarSpecificEvents:
           if self.silent_steer_warning > 20:
             events.add(EventName.steerTempUnavailableSilent)
         else:
-          events.add(EventName.steerTempUnavailable)
+          if not (CS.gasPressed or CS.steeringPressed):
+            events.add(EventName.steerTempUnavailable)
     else:
       self.no_steer_warning = False
       self.silent_steer_warning = 0

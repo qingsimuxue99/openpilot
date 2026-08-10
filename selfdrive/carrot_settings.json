@@ -2,6 +2,84 @@
   "apilot": 20220111,
   "params": [
     {
+      "group": "기능",
+      "name": "AvoidObstacle",
+      "title": "장애물회피(0)",
+      "descr": "측면 장애물(대형차/정차/콘) 조기 회피 오프셋. 모델경로(modelV2) 기반, 레이더 불필요",
+      "egroup": "AVOID",
+      "etitle": "Obstacle Avoidance(0)",
+      "edescr": "Lateral obstacle early avoidance offset. Vision-based (modelV2.path), no radar needed",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "unit": 1
+    },
+    {
+      "group": "기능",
+      "name": "AvoidTriggerDist",
+      "title": "회피 시작거리(40)m",
+      "descr": "장애물이 이 종방향 거리 안에 들어오면 조기 오프셋 시작",
+      "egroup": "AVOID",
+      "etitle": "Avoid Trigger Distance(40)m",
+      "edescr": "Start early offset once obstacle is within this longitudinal distance",
+      "min": 10,
+      "max": 80,
+      "default": 40,
+      "unit": 5
+    },
+    {
+      "group": "기능",
+      "name": "AvoidOffsetLimit",
+      "title": "회피 최대오프셋(50)cm",
+      "descr": "경로를 최대 몇 cm 평행이동할지 (도로가장자리 소프트제한 포함)",
+      "egroup": "AVOID",
+      "etitle": "Avoid Max Offset(50)cm",
+      "edescr": "Max parallel path shift in cm (incl. road-edge soft limit)",
+      "min": 5,
+      "max": 100,
+      "default": 50,
+      "unit": 5
+    },
+    {
+      "group": "기능",
+      "name": "AvoidSafeGap",
+      "title": "회피 안전간격(30)cm",
+      "descr": "장애물과 유지할 최소 횡방향 간격",
+      "egroup": "AVOID",
+      "etitle": "Avoid Safe Gap(30)cm",
+      "edescr": "Min lateral gap kept from obstacle",
+      "min": 10,
+      "max": 80,
+      "default": 30,
+      "unit": 5
+    },
+    {
+      "group": "기능",
+      "name": "AvoidEdgeMargin",
+      "title": "도로가장자리 여유(30)cm",
+      "descr": "회피 시 길가장자리/대향차선에서 유지할 여유(소프트제한)",
+      "egroup": "AVOID",
+      "etitle": "Road Edge Margin(30)cm",
+      "edescr": "Margin kept from road edge/opposing lane during avoidance (soft limit)",
+      "min": 5,
+      "max": 80,
+      "default": 30,
+      "unit": 5
+    },
+    {
+      "group": "기능",
+      "name": "AvoidMinPassWidth",
+      "title": "끼임최소복도(80)cm",
+      "descr": "양측 끼임 시 가용 중심복도([L,R]범위)가 이보다 좁으면 감속/정지. 차량폭 아님 복도폭 기준",
+      "egroup": "AVOID",
+      "etitle": "Squeeze Min Corridor(80)cm",
+      "edescr": "When squeezed both sides, if available center corridor ([L,R] range) narrower than this, trigger slowdown/stop. This is corridor width, not vehicle width",
+      "min": 30,
+      "max": 160,
+      "default": 80,
+      "unit": 10
+    },
+    {
       "group": "조향일반",
       "name": "PathOffset",
       "title": "차선치우침 좌우보정(0)",
@@ -1041,7 +1119,6 @@
       "default": 0,
       "unit": 1
     },
-
     {
       "group": "화면",
       "name": "ShowDebugUI",
@@ -1587,6 +1664,19 @@
       "max": 100,
       "default": 0,
       "unit": 5
+    },
+    {
+      "group": "차량간격",
+      "name": "DynamicTFollowCutOut",
+      "title": "전방차량 컷아웃 처리(100%)",
+      "descr": "옆차선으로 빠져나가는 선행차를 미리 놓아줌",
+      "egroup": "FDIST",
+      "etitle": "Dynamic TFollow CutOut(100%)",
+      "edescr": "Release lead earlier when it changes lane out",
+      "min": 0,
+      "max": 100,
+      "default": 100,
+      "unit": 1
     },
     {
       "group": "감속제어",

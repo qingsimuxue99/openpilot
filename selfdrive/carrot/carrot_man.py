@@ -197,6 +197,30 @@ class CarrotMan:
     self.sm = messaging.SubMaster(['deviceState', 'carState', 'controlsState', 'longitudinalPlan', 'modelV2', 'selfdriveState', 'carControl', 'navRouteNavd', 'liveLocationKalman', 'navInstruction', 'radarState'])
     self.pm = messaging.PubMaster(['carrotMan', "navRoute", "navInstructionCarrot"])
 
+    # ===== 商用授权校验 (核心逻辑在混淆的 auth_core.py; 失败仅降级, 绝不影响行车安全) =====
+    self.license_ok = False
+    self.license_level = 0
+    self.license_reason = "not-checked"
+    self.license_used = 0
+    self.license_count = 0
+    self.license_remaining = 0
+    self.ssh_show = False
+    self.license_token = ""
+    try:
+      from openpilot.selfdrive.carrot.auth_core import evaluate
+      _lic = evaluate()
+      self.license_ok = _lic["ok"]
+      self.license_level = _lic["level"]
+      self.license_reason = _lic["reason"]
+      self.license_used = _lic["used"]
+      self.license_count = _lic["count"]
+      self.license_remaining = _lic["remain"]
+      self.ssh_show = _lic["ssh_show"]
+      self.license_token = _lic["token"]
+      print(f"CarrotMan license: ok={self.license_ok} level={self.license_level} reason={self.license_reason} used={self.license_used}/{self.license_count} 剩余={self.license_remaining} ssh={self.ssh_show}")
+    except Exception as e:
+      print(f"CarrotMan license check degraded: {e}")
+    self._lic_enforce_cnt = 0
     self.carrot_serv = CarrotServ()
     self.web_interface = WebInterface(self, port=8088)
     self.web_interface_thread = threading.Thread(target=self.web_interface.start_web_server, args=[])
@@ -850,6 +874,15 @@ class CarrotMan:
     print("#########carrot_cmd_zmq: thread started...")
     while True:
       try:
+        # === 商用授权: 未授权时周期强制关闭付费功能参数(逻辑在混淆 auth_core, 买家无法改) ===
+        if self._lic_enforce_cnt % 10 == 0:   # ~1s 一次
+          try:
+            from openpilot.selfdrive.carrot.auth_core import enforce_paid_features
+            enforce_paid_features()
+          except Exception:
+            pass
+        self._lic_enforce_cnt += 1
+
         socks = dict(poller.poll(100))
 
         if socket in socks and socks[socket] == zmq.POLLIN:

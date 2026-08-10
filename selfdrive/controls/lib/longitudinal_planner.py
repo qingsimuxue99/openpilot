@@ -229,6 +229,10 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
 
     long_control_off = sm['controlsState'].longControlState == LongCtrlState.off
     force_slow_decel = sm['controlsState'].forceDecel
+    # 障碍物走廊过窄(夹心无法通过)标志, 由 lateral_planner 实时写入 Params
+    avoid_narrow = bool(self.sys_params.get_int("AvoidNarrowCorridor"))
+    # 避让激活标志(单侧偏移中), 由 lateral_planner 实时写入 Params
+    avoid_active = bool(self.sys_params.get_int("AvoidActive"))
 
     # Reset current state when not engaged, or user is controlling the speed
     reset_state = long_control_off if self.CP.openpilotLongitudinalControl else not sm['selfdriveState'].enabled
@@ -270,7 +274,15 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
       accel_limits_turns[1] = min(accel_limits_turns[1], clipped_accel_coast_interp)
 
     if force_slow_decel:
+      # 系统级强制减速（如车距极近）: 仍直接 v_cruise=0, 这是明确的停止意图
       v_cruise = 0.0
+    elif avoid_narrow:
+      # 横向推断"夹心窄廊": 不强行锁 0 (避免锁死 ACC), 仅减速到 5km/h 慢行尝试,
+      # 是否真正停车由 carrot 的 xState 状态机与 shouldStop 决定
+      v_cruise = min(v_cruise, 5.0 / 3.6)
+    elif avoid_active and v_cruise > 0.0:
+      # 避让激活时纵向轻减速(~15%), 提升侧向避让余量、降低碰撞风险
+      v_cruise *= 0.85
     # clip limits, cannot init MPC outside of bounds
     accel_limits_turns[0] = min(accel_limits_turns[0], self.a_desired + 0.05)
     accel_limits_turns[1] = max(accel_limits_turns[1], self.a_desired - 0.05)
@@ -325,6 +337,10 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
       output_a_target = min(output_a_target_mpc, output_a_target_e2e)
       output_v_target_now = min(output_v_target_mpc, output_v_target_now_e2e)
       self.output_should_stop = output_should_stop_e2e or output_should_stop_mpc
+
+    # 走廊过窄: 标记应停车(配合 v_cruise=低速让 mpc 减速停车意图更明确), 不强制 0
+    if avoid_narrow:
+      self.output_should_stop = True
 
     #for idx in range(2):
     #  accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)

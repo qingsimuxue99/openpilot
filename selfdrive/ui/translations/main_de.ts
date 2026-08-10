@@ -88,6 +88,13 @@
     </message>
 </context>
 <context>
+    <name>AnnotatedCameraWidget</name>
+    <message>
+        <source>STOPPED</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>CarrotPanel</name>
     <message>
         <source>开始</source>
@@ -135,6 +142,29 @@
     </message>
     <message>
         <source>基于奖励/惩罚机制, 在行驶中根据您的踩油门/踩刹车/接管等行为, 自动微调跟车距离、加速性、舒适制动、停车距离等参数, 使其贴合您的驾驶习惯。仅在系统激活时学习, 所有参数均在安全范围内平缓调整。</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>轨迹</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>基于奖励/惩罚机制, 在系统激活时根据您的踩油门/踩刹车/接管等行为, 自动微调以下参数, 使其贴合您的驾驶习惯;
+所有参数均默认开启自学习、且在安全范围内平缓调整, 无需逐项设置:
+· 跟车距离  TFollowGap 1~4 档
+· 加速性    CruiseMaxVals 0~6
+· 舒适制动  ComfortBrake
+· 停车距离  StopDistanceCarrot
+· 弯道降速  AutoCurveSpeedAggressiveness / H (含弯道相关自学习)
+· 转向手感  LatMpcSteeringRateCost</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>离车自动体检</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>回到 offroad(熄火/退出驾驶)后自动生成驾驶习惯体检报告并存盘, 随时可看。关闭后仅在手动点[生成并查看体检报告]时生成。</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -430,6 +460,58 @@
     </message>
     <message>
         <source>Reboot &amp; Disengage to Calibration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>授权激活码</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>输入</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>激活码已清除, 当前为基础版</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>剩余激活次数</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>读取中</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Onroad/Offroad Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go Offroad</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Are you sure you want to switch mode?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CONFIRM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go Onroad</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>已激活，剩余 </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> 次</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>未激活 / 次数用完，请购买激活码</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -945,6 +1027,10 @@ This may take up to a minute.</source>
         <source>开发</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>功能</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>Setup</name>
@@ -1061,7 +1147,7 @@ This may take up to a minute.</source>
     <message>
         <source>CONNECT</source>
         <translatorcomment>This is a brand/service name for comma connect, don&apos;t translate</translatorcomment>
-        <translation>CONNECT</translation>
+        <translation type="vanished">CONNECT</translation>
     </message>
     <message>
         <source>OFFLINE</source>
@@ -1069,7 +1155,7 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>ONLINE</source>
-        <translation>ONLINE</translation>
+        <translation type="vanished">ONLINE</translation>
     </message>
     <message>
         <source>ERROR</source>
@@ -1093,15 +1179,15 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>VEHICLE</source>
-        <translation>FAHRZEUG</translation>
+        <translation type="vanished">FAHRZEUG</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation>KEIN</translation>
+        <translation type="vanished">KEIN</translation>
     </message>
     <message>
         <source>PANDA</source>
-        <translation>PANDA</translation>
+        <translation type="vanished">PANDA</translation>
     </message>
     <message>
         <source>--</source>
@@ -1132,27 +1218,15 @@ This may take up to a minute.</source>
         <translation>5G</translation>
     </message>
     <message>
-        <source>永远在线</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>温度</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>很热</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>凉爽</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>还行</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>扫码打开工具箱</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>确定要重启设备吗？</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>重启</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1229,26 +1303,6 @@ This may take up to a minute.</source>
     </message>
     <message>
         <source>never</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Onroad/Offroad Mode</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Go Offroad</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Are you sure you want to switch mode?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CONFIRM</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Go Onroad</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -5,20 +5,15 @@
 #include <QFrame>
 #include <QTimer>
 #include <QMap>
+#include <QMouseEvent>
 
 #include "selfdrive/ui/ui.h"
 #include "selfdrive/ui/qt/network/networking.h"
-
-typedef QPair<QPair<QString, QString>, QColor> ItemStatus;
-Q_DECLARE_METATYPE(ItemStatus);
+#include "selfdrive/ui/qt/widgets/input.h"
+#include "system/hardware/tici/hardware.h"
 
 class Sidebar : public QFrame {
   Q_OBJECT
-  Q_PROPERTY(ItemStatus connectStatus MEMBER connect_status NOTIFY valueChanged);
-  Q_PROPERTY(ItemStatus pandaStatus MEMBER panda_status NOTIFY valueChanged);
-  Q_PROPERTY(ItemStatus tempStatus MEMBER temp_status NOTIFY valueChanged);
-  Q_PROPERTY(QString netType MEMBER net_type NOTIFY valueChanged);
-  Q_PROPERTY(int netStrength MEMBER net_strength NOTIFY valueChanged);
 
 public:
   explicit Sidebar(QWidget* parent = 0);
@@ -35,7 +30,10 @@ protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
-  void drawMetric(QPainter &p, const QPair<QString, QString> &label, QColor c, int y);
+  void mouseDoubleClickEvent(QMouseEvent *event) override;
+  void drawMetric(QPainter &p, const QRect &rect, const QString &l1, const QString &l2,
+                  QColor border, QColor bg, float borderW,
+                  bool secondGreen = false, bool secondBold = false);
 
   QPixmap home_img, flag_img, settings_img, c3x_img, qr_img;
   QTimer *qrTimer = nullptr;
@@ -52,13 +50,23 @@ protected:
 
   const QRect home_btn = QRect(60, 860, 180, 180);
   const QRect settings_btn = QRect(50, 35, 200, 117);
-  const QColor good_color = QColor(255, 255, 255);
-  const QColor warning_color = QColor(218, 202, 37);
-  const QColor danger_color = QColor(201, 34, 49);
+  const QColor white_border = QColor(255, 255, 255, 0x55);
+  const QColor warn_color = QColor(0xff, 0xc2, 0x33);
+  const QColor danger_color = QColor(0xff, 0x4d, 0x4d);
+  const QColor green_color = QColor(0x7e, 0xd9, 0x57);
 
-  ItemStatus connect_status, panda_status, temp_status;
-  QString net_type;
+  QString net_type, ip_addr;
   int net_strength = 0;
+
+  float cpu_temp = 0, cpu_usage = 0;
+  int mem_usage = 0;
+  float mem_total_gb = 7.4f;
+  int fan_rpm = 0;
+  float voltage = 0;
+  bool fan_full = false;
+  bool panda_online = true;
+
+  QRect temp_rect, panda_rect, mem_rect, fan_rect;
 
 private:
   std::unique_ptr<PubMaster> pm;

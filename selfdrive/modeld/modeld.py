@@ -295,7 +295,11 @@ def main(demo=False):
   if not USBGPU:
     # USB GPU currently saturates a core so can't do this yet,
     # also need to move the aux USB interrupts for good timings
-    config_realtime_process(7, 54)
+    try:
+      config_realtime_process(7, 54)
+    except Exception as _e:
+      # isolcpus=6,7 的核心可能处于 offline (CPU hotplug), 容错降级继续运行
+      cloudlog.warning(f"[modeld] realtime config failed (core offline?): {_e}")
 
   st = time.monotonic()
   cloudlog.warning("setting up CL context")

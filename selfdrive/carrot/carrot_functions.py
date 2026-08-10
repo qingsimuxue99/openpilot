@@ -88,6 +88,12 @@ class CarrotPlanner:
     self.myDrivingMode = DrivingMode(self.params.get_int("MyDrivingMode"))
     self.myDrivingMode_last = self.myDrivingMode
     self.myDrivingMode_disable_auto = False
+
+    # 前车切出(cut-out)处理强度 (0=关) 与检测状态
+    self.dynamicTFollowCutOut = 0.0
+    self.lead_yRel_smooth = 0.0
+    self.lead_yRel_rate = 0.0
+    self.lead_yRel_prev = 0.0
     self.myEcoModeFactor = 0.9
     self.mySafeModeFactor = 0.8
     self.myHighModeFactor = 1.2
@@ -142,6 +148,7 @@ class CarrotPlanner:
     self.frame += 1
     self.params_count += 1
     if self.params_count % 10 == 0:
+      self.dynamicTFollowCutOut = self.params.get_float("DynamicTFollowCutOut") / 100.
       myDrivingMode = DrivingMode(self.params.get_int("MyDrivingMode"))
       if myDrivingMode != self.myDrivingMode_last:
         self.myDrivingMode_disable_auto = True
@@ -186,24 +193,33 @@ class CarrotPlanner:
         self.red_light_dist_offset = 0
       self.params_count = 0
 
+  def get_steering_rate_cost(self, base_cost):
+    # 方案四: 驾驶模式场景包 —— 在个性化转向手感上叠加模式倍率 (纯内存, 不写回 Params)
+    _MODE_STEER = {1: 1.20, 2: 1.30, 3: 1.0, 4: 0.85}  # eco/safe 更平顺(大代价), high 更灵敏(小代价)
+    mode_f = _MODE_STEER.get(self.myDrivingMode.value, 1.0)
+    return base_cost * mode_f
+
   def get_carrot_accel(self, v_ego):
     cruiseMaxVals = [self.cruiseMaxVals0, self.cruiseMaxVals1, self.cruiseMaxVals2, self.cruiseMaxVals3, self.cruiseMaxVals4, self.cruiseMaxVals5, self.cruiseMaxVals6]
     factor = self.myHighModeFactor if self.myDrivingMode == DrivingMode.High else self.mySafeFactor
     return np.interp(v_ego, A_CRUISE_MAX_BP_CARROT, cruiseMaxVals) * factor
 
   def get_T_FOLLOW(self, personality=log.LongitudinalPersonality.standard):
+    # 方案四: 驾驶模式场景包 —— 在"已学习/个性化"跟车距离上叠加模式倍率 (纯内存, 不写回 Params, 避免与学习器冲突)
+    _MODE_TFOLLOW = {1: 1.15, 2: 1.30, 3: 1.0, 4: 0.85}  # eco/safe 更远更稳, high 更贴更冲
+    mode_f = _MODE_TFOLLOW.get(self.myDrivingMode.value, 1.0)
     if personality==log.LongitudinalPersonality.moreRelaxed:
       self.jerk_factor = 1.0
-      return self.tFollowGap4
+      return self.tFollowGap4 * mode_f
     elif personality==log.LongitudinalPersonality.relaxed:
       self.jerk_factor = 1.0
-      return self.tFollowGap3
+      return self.tFollowGap3 * mode_f
     elif personality==log.LongitudinalPersonality.standard:
       self.jerk_factor = 1.0 if self.myDrivingMode == DrivingMode.Safe else 0.7
-      return self.tFollowGap2
+      return self.tFollowGap2 * mode_f
     elif personality==log.LongitudinalPersonality.aggressive:
       self.jerk_factor = 1.0 if self.myDrivingMode == DrivingMode.Safe else 0.5
-      return self.tFollowGap1
+      return self.tFollowGap1 * mode_f
     else:
       raise NotImplementedError("Longitudinal personality not supported")
 
@@ -250,6 +266,25 @@ class CarrotPlanner:
           # v2：jerk_factor_apply恢复到接近1.0，允许更aggressive的加速度变化
           self.jerk_factor_apply = self.jerk_factor * np.interp(accel_strength, [0.2, 1.0, 3.0], [0.95, 1.0, 1.1])
         # ===== 加塞场景优化v2结束 =====
+
+        # ===== 前车切出(cut-out)处理：前车横向离开本车道时, 提前松开跟车距离 =====
+        # 平滑前车横向位置与变化率 (yRel: 相对本车道中心线的横向偏移, 米)
+        self.lead_yRel_smooth = 0.9 * self.lead_yRel_smooth + 0.1 * lead.yRel
+        self.lead_yRel_rate = 0.9 * self.lead_yRel_rate + 0.1 * (lead.yRel - self.lead_yRel_prev) / DT_MDL
+        self.lead_yRel_prev = lead.yRel
+
+        if self.dynamicTFollowCutOut > 0.0 and self.desireState <= 0.9:
+          # 横向幅度已可观 且 正在主动远离 -> 判定为切出 (避免弯道稳态偏移误触发: 需有变化率)
+          leaving = (abs(self.lead_yRel_smooth) > 0.3) and (abs(self.lead_yRel_rate) > 0.15)
+          if leaving:
+            leave_strength = np.clip(abs(self.lead_yRel_rate), 0.15, 2.0)
+            # 离开越果断, 释放越多跟车距离 (最多释放约 1.0s 时间间隙)
+            release_factor = np.interp(leave_strength, [0.15, 0.5, 1.0, 2.0], [0.4, 0.7, 0.9, 1.0])
+            cutout_release = 1.0 * release_factor * self.dynamicTFollowCutOut
+            t_follow = max(t_follow - cutout_release, 0.5)  # 下限 0.5s, 防负值
+            # 切出时不要保持"贴前车"的 aggressive jerk, 恢复常规, 让车自然提速
+            self.jerk_factor_apply = max(self.jerk_factor_apply, self.jerk_factor)
+        # ===== 前车切出(cut-out)处理结束 =====
 
         t_follow += gap_dist_adjust
         if gap_dist_adjust < 0:
@@ -302,7 +337,7 @@ class CarrotPlanner:
 
     if self.stopSignCount * DT_MDL > 0.0:
       self.trafficState = TrafficState.red
-    elif self.startSignCount * DT_MDL > 0.2:
+    elif self.startSignCount * DT_MDL > 0.5:  # 优化: 绿灯 0.5s 连续帧确认才起步 (防误起步冲灯)
       self.trafficState = TrafficState.green
     else:
       self.trafficState = TrafficState.off

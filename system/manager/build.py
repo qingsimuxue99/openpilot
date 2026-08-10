@@ -28,7 +28,22 @@ def build(spinner: Spinner, dirty: bool = False, minimal: bool = False) -> None:
 
   if AGNOS:
     HARDWARE.set_power_save(False)
-    os.sched_setaffinity(0, range(8))  # ensure we can use the isolcpus cores
+    # 上线全部核心: comma 系统在低电压(5V供电/未插车)时可能 hotplug 拔掉 core 4-7,
+    # 导致 nproc 只有 4 且 setaffinity(8) 失败。这里先尝试全部上线, 让编译用满 8 核。
+    try:
+      for _c in range(4, 8):
+        subprocess.run(["sudo", "-n", "sh", "-c", f"echo 1 > /sys/devices/system/cpu/cpu{_c}/online"],
+                       check=False, capture_output=True)
+    except Exception:
+      pass
+    try:
+      os.sched_setaffinity(0, range(8))  # ensure we can use the isolcpus cores
+    except OSError:
+      # 核心仍离线(例如热插拔不可用), 降级到当前在线核心, 不阻断编译
+      try:
+        os.sched_setaffinity(0, os.sched_getaffinity(0))
+      except Exception:
+        pass
 
   # building with all cores can result in using too
   # much memory, so retry with less parallelism

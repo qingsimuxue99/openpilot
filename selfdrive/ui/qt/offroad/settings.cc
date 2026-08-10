@@ -1,8 +1,13 @@
 #include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <string>
 #include <tuple>
 #include <vector>
+#include <algorithm>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <thread> //차선캘리
 
 #include <QDebug>
@@ -35,6 +40,7 @@
 #include "selfdrive/ui/qt/widgets/prime.h"
 #include "selfdrive/ui/qt/widgets/scrollview.h"
 #include "selfdrive/ui/qt/offroad/developer_panel.h"
+#include "selfdrive/ui/qt/widgets/input.h"
 #include "selfdrive/ui/qt/offroad/firehose.h"
 
 // ===== 通用触摸滚动: 直接驱动滚动条, 1:1 跟手(带阻尼), 零惯性; 同时接住 c3 的 QTouchEvent 与合成鼠标 =====
@@ -94,6 +100,148 @@ public:
     }
   }
 };
+
+// 功能页分组小标题
+static QWidget* sectionHeader(const QString& text) {
+  QLabel *h = new QLabel(text);
+  h->setStyleSheet("QLabel { color:#7fd0ff; font-size:30px; font-weight:bold; padding:20px 16px 8px 16px; background-color:transparent; }");
+  return h;
+}
+
+// 驾驶习惯体检报告: 历史翻看(最新一份 + reports/ 归档), 可上/下翻
+static std::vector<std::string> g_ai_report_files;  // 报告绝对路径, 0=最新
+static int g_ai_report_idx = 0;                      // 当前查看索引
+static QLabel *g_ai_page_lbl = nullptr;              // 分页标签(浮层内)
+
+static void aiReportCollect() {
+  g_ai_report_files.clear();
+  struct stat st;
+  std::string live = "/data/openpilot/selfdrive/carrot/carrot_ai_report.txt";
+  bool live_ok = (stat(live.c_str(), &st) == 0);
+  std::string dir = "/data/openpilot/selfdrive/carrot/reports";
+  DIR *d = opendir(dir.c_str());
+  if (d) {
+    struct dirent *e;
+    while ((e = readdir(d)) != nullptr) {
+      std::string nm = e->d_name;
+      if (nm.rfind("report_", 0) == 0 && nm.size() > 4 && nm.substr(nm.size() - 4) == ".txt") {
+        g_ai_report_files.push_back(dir + "/" + nm);
+      }
+    }
+    closedir(d);
+  }
+  if (live_ok) g_ai_report_files.push_back(live);
+  std::sort(g_ai_report_files.begin(), g_ai_report_files.end(), [](const std::string &a, const std::string &b) {
+    struct stat sa, sb; stat(a.c_str(), &sa); stat(b.c_str(), &sb);
+    return sa.st_mtime > sb.st_mtime;
+  });
+  // 同一次生成会同时写 live 与最新归档, mtime 接近的去重, 避免重复项
+  std::vector<std::string> uniq;
+  for (auto &f : g_ai_report_files) {
+    struct stat fs; stat(f.c_str(), &fs);
+    if (!uniq.empty()) {
+      struct stat ps; stat(uniq.back().c_str(), &ps);
+      if (std::abs((double)fs.st_mtime - (double)ps.st_mtime) < 2.0) continue;
+    }
+    uniq.push_back(f);
+  }
+  g_ai_report_files = uniq;
+  if (g_ai_report_idx < 0 || g_ai_report_idx >= (int)g_ai_report_files.size()) g_ai_report_idx = 0;
+}
+
+static void rebuildAiReport(QWidget *body) {
+  aiReportCollect();
+  QLayout *old = body->layout();
+  if (old) {
+    QLayoutItem *it;
+    while ((it = old->takeAt(0)) != nullptr) {
+      QWidget *w = it->widget();
+      delete it;
+      if (w) w->deleteLater();
+    }
+    delete old;
+  }
+  body->setStyleSheet("background-color:#141414;");
+  QVBoxLayout *vbox = new QVBoxLayout(body);
+  vbox->setContentsMargins(24, 24, 24, 24);
+  vbox->setSpacing(12);
+  QLabel *lbl = new QLabel(body);
+  lbl->setWordWrap(true);
+  lbl->setStyleSheet("font-size:26px; color:#e0e0e0; background-color:#141414;");
+  if (g_ai_report_files.empty()) {
+    lbl->setText("暂无体检报告。\n\n设备离车(回到 offroad)后或挂 P 档时会自动生成并存盘; 也可点[重新生成]立即刷新(需系统已激活行驶过一段时间)。");
+  } else {
+    if (g_ai_report_idx < 0 || g_ai_report_idx >= (int)g_ai_report_files.size()) g_ai_report_idx = 0;
+    std::string path = g_ai_report_files[g_ai_report_idx];
+    std::string txt = util::read_file(path);
+    if (txt.empty()) txt = util::read_file("../carrot/carrot_ai_report.txt");
+    if (txt.empty()) {
+      lbl->setText("(该报告文件读取为空, 可能已损坏或尚未生成)");
+    } else {
+      lbl->setText(QString::fromStdString(txt));
+    }
+  }
+  vbox->addWidget(lbl);
+  if (g_ai_page_lbl) {
+    if (g_ai_report_files.empty()) g_ai_page_lbl->setText("共 0 份");
+    else g_ai_page_lbl->setText(QString("第 %1 / %2 份").arg(g_ai_report_idx + 1).arg((int)g_ai_report_files.size()));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 参数含义速查表: 每个可调参数「是什么 + 调大什么效果 + 调小什么效果」。
+//
+// 「自动调参记录」(学习器学出来的) 与「AI 调参建议」(云端 AI 提的) 两个列表
+// 共用这同一份文案, 保证同一参数在任何界面里的解释完全一致, 不会各说各的。
+//
+// 单位换算依据 selfdrive/carrot/carrot_functions.py 里参数的实际取值方式,
+// 参数名/分组语义与 selfdrive/carrot/carrot_learner.py 的 KNOB_SPECS 对齐。
+// 返回 RichText 字符串, 供 QLabel 直接显示 (调大=绿, 调小=橙, 与 delta 配色一致)。
+// ---------------------------------------------------------------------------
+static QString knobExplain(const QString &p) {
+  const QString UP   = "<span style='color:#8bd450;'>调大</span>";
+  const QString DOWN = "<span style='color:#ff9f4a;'>调小</span>";
+
+  // 跟车距离: TFollowGap1~4, 值/100 = 秒。对应方向盘距离键循环的 4 个档位。
+  if (p.startsWith("TFollowGap")) {
+    return "跟车时距, 值&divide;100 = 秒 (如 130 = 1.30 秒)&mdash;&mdash;与前车保持几秒的车距。<br>"
+           + UP   + " = 跟车更远, 更从容安全, 但容易被加塞<br>"
+           + DOWN + " = 跟车更近, 不易被插队, 但留给刹车的余量变少";
+  }
+  // 加速性: CruiseMaxVals0~6, 值/100 = m/s^2, 按车速分 7 段插值。
+  if (p.startsWith("CruiseMaxVals")) {
+    return "该车速段允许的最大加速度, 值&divide;100 = m/s&sup2; (如 160 = 1.6 m/s&sup2;)。<br>"
+           + UP   + " = 起步/提速更有劲更跟脚, 但乘坐冲劲大、费油<br>"
+           + DOWN + " = 加速更平缓省油舒适, 但会觉得肉、容易被别车";
+  }
+  // 舒适制动: ComfortBrake, 值/100 = m/s^2 (学习器注释: 值越大刹得越果断/越早)。
+  if (p == "ComfortBrake") {
+    return "常规跟车减速时允许的制动强度, 值&divide;100 = m/s&sup2; (如 240 = 2.4 m/s&sup2;)。<br>"
+           + UP   + " = 刹车更果断、介入更早, 制动干脆留余量大<br>"
+           + DOWN + " = 刹车更柔和线性乘坐舒适, 但可能靠得较近才减速";
+  }
+  // 停车距离: StopDistanceCarrot, 单位 cm。
+  if (p == "StopDistanceCarrot") {
+    return "跟停后与前车保持的距离, 单位 cm (如 600 = 6.0 米)。<br>"
+           + UP   + " = 停得更靠后, 更宽松安全, 但可能被加塞<br>"
+           + DOWN + " = 停得更贴近前车, 队列更紧凑, 但压迫感强";
+  }
+  // 弯道过弯系数: AutoCurveSpeedAggressiveness(H), 允许的过弯横向加速度系数。
+  if (p.startsWith("AutoCurveSpeedAggressiveness")) {
+    const bool hw = p.endsWith("H");
+    return QString("弯道自动降速的激进度&mdash;&mdash;允许多大的过弯横向 G (%1)。<br>")
+             .arg(hw ? "高速路段" : "普通路段")
+           + UP   + " = 过弯少减速甚至不减速, 更快更跟脚, 但侧倾明显、湿滑路面风险大<br>"
+           + DOWN + " = 入弯提前多减速, 过弯更稳更安全, 但通过速度慢、显得保守";
+  }
+  // 转向手感: LatMpcSteeringRateCost, 横向 MPC 对方向盘动作速率的代价权重。
+  if (p == "LatMpcSteeringRateCost") {
+    return "横向控制对「方向盘转动快慢」的代价权重&mdash;&mdash;数值越高越不愿意快打方向。<br>"
+           + UP   + " = 转向更平顺柔和、动作少不画龙, 但切弯/避让可能迟钝<br>"
+           + DOWN + " = 转向更积极灵敏跟手、贴线准, 但方向盘动作频繁易画龙";
+  }
+  return QString();   // 未收录的参数不显示说明行, 不硬编造
+}
 
 // 构建自动调参记录弹窗的可勾选列表（学习记录本身可勾选应用/撤销）
 // 直接把内容塞进 listW(一个 QWidget), 每次打开都重建以反映最新 json。
@@ -201,6 +349,17 @@ static void rebuildAutoTuneList(QWidget *listW) {
     line3->setWordWrap(true);
     info->addWidget(line3);
 
+    // 参数含义说明: 这个参数是什么、调大调小分别什么效果 (与 AI 建议列表共用同一份文案)
+    QString expl = knobExplain(e.value("param").toString());
+    if (!expl.isEmpty()) {
+      QLabel *line4 = new QLabel(expl, row);
+      line4->setStyleSheet("font-size:27px; color:#7e7e83; background-color:#1c1c1c;"
+                           "border-left:4px solid #3a3a3a; padding:12px 14px; margin-top:6px;");
+      line4->setTextFormat(Qt::RichText);
+      line4->setWordWrap(true);
+      info->addWidget(line4);
+    }
+
     hbox->addLayout(info, 1);
 
     QCheckBox *cb = new QCheckBox(row);
@@ -226,6 +385,179 @@ static void rebuildAutoTuneList(QWidget *listW) {
       sep->setStyleSheet("background-color:#333333;");
       vbox->addWidget(sep);
     }
+  }
+}
+
+
+// ============================================================================
+//  「AI 调参建议」列表 —— 与上面的「自动调参记录」是两套完全独立的东西
+//
+//    自动调参记录: 学习器自己学出来的  -> carrot_learn_changes.json
+//                  默认全部勾选(保留), 取消勾选=回退
+//    AI 调参建议:  云端 AI 提的候选    -> carrot_ai_suggestions.json
+//                  默认全部不勾选, 勾选=采纳。AI 建议绝不会自动生效。
+//
+//  参数说明文案复用同一个 knobExplain(), 保证两个列表里对同一参数的解释一字不差。
+// ============================================================================
+static void rebuildAiSuggestList(QWidget *listW) {
+  QLayout *old = listW->layout();
+  if (old) {
+    QLayoutItem *it;
+    while ((it = old->takeAt(0)) != nullptr) {
+      QWidget *w = it->widget();
+      delete it;
+      if (w) w->deleteLater();
+    }
+    delete old;
+  }
+  listW->setStyleSheet("background-color:#141414;");
+  QVBoxLayout *vbox = new QVBoxLayout(listW);
+  vbox->setContentsMargins(0, 0, 0, 0);
+  vbox->setSpacing(18);
+
+  std::string txt = util::read_file("../carrot/carrot_ai_suggestions.json");
+  if (txt.empty()) txt = util::read_file("/data/openpilot/selfdrive/carrot/carrot_ai_suggestions.json");
+
+  QLabel *titleLbl = new QLabel("AI 调参建议", listW);
+  titleLbl->setStyleSheet("font-size:36px; font-weight:bold; color:#ffffff; margin:4px 0 12px 0;");
+  vbox->addWidget(titleLbl);
+
+  if (txt.empty()) {
+    QLabel *empty = new QLabel(
+      "暂无 AI 建议。\n\n请先到[生成并查看云端AI分析]跑一次云端分析(需已配置 AI 密钥)。"
+      "分析完成后, AI 提出的可执行调参建议会出现在这里, 由你逐条勾选决定是否采纳。", listW);
+    empty->setWordWrap(true);
+    empty->setStyleSheet("font-size:32px; color:#bbbbbb;");
+    vbox->addWidget(empty);
+    return;
+  }
+
+  QJsonParseError perr;
+  QJsonDocument doc = QJsonDocument::fromJson(QByteArray(txt.data(), (int)txt.size()), &perr);
+  if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+    QLabel *err = new QLabel("建议文件解析失败: " + perr.errorString(), listW);
+    err->setStyleSheet("font-size:32px; color:#ff9f4a;");
+    vbox->addWidget(err);
+    return;
+  }
+
+  QJsonObject root = doc.object();
+  QJsonArray items = root.value("items").toArray();
+
+  QLabel *srcLbl = new QLabel(QString("来源: %1 / %2 &nbsp;&nbsp; 生成于 %3")
+                                .arg(root.value("provider").toString("?"))
+                                .arg(root.value("model").toString("?"))
+                                .arg(root.value("ts").toString("?")), listW);
+  srcLbl->setTextFormat(Qt::RichText);
+  srcLbl->setWordWrap(true);
+  srcLbl->setStyleSheet("font-size:30px; color:#8e8e93;");
+  vbox->addWidget(srcLbl);
+
+  QLabel *warnLbl = new QLabel(
+    "这些是 <b>AI 的建议</b>, 不是学习器学出来的, <b>永远不会自动生效</b>。<br>"
+    "勾选 = 采纳这条并写入参数; 点[应用所选]才真正生效。已应用的条目可勾选后点[撤销所选]还原。<br>"
+    "每条都已经过白名单 / 安全区 / 单次幅度(&plusmn;15%) 三重校验, 但最终请你自己判断是否合理。", listW);
+  warnLbl->setTextFormat(Qt::RichText);
+  warnLbl->setWordWrap(true);
+  warnLbl->setStyleSheet("font-size:28px; color:#e0b050; background-color:#2a2418;"
+                         "border-left:5px solid #b08020; padding:14px 16px; margin:10px 0 6px 0;");
+  vbox->addWidget(warnLbl);
+
+  if (items.isEmpty()) {
+    QLabel *empty = new QLabel("本次分析没有产生通过校验的建议 (数据不足, 或 AI 给出的数值都不合规已被拦截)。", listW);
+    empty->setWordWrap(true);
+    empty->setStyleSheet("font-size:32px; color:#bbbbbb;");
+    vbox->addWidget(empty);
+  }
+
+  for (int i = 0; i < items.size(); i++) {
+    QJsonObject e = items.at(i).toObject();
+    int cur_v = e.value("cur").toInt();
+    int new_v = e.value("new").toInt();
+    int delta = e.value("delta").toInt(new_v - cur_v);
+    bool applied = e.value("applied").toBool(false);
+    QString color = delta > 0 ? "#8bd450" : "#ff9f4a";
+
+    QWidget *row = new QWidget(listW);
+    row->setStyleSheet("QWidget { background-color:transparent; }");
+    QHBoxLayout *hbox = new QHBoxLayout(row);
+    hbox->setContentsMargins(16, 18, 20, 18);
+    hbox->setSpacing(16);
+
+    QVBoxLayout *info = new QVBoxLayout();
+    info->setSpacing(8);
+
+    QLabel *line1 = new QLabel(
+      QString("#%1 &nbsp; %2%3").arg(e.value("id").toInt(i + 1)).arg(e.value("param").toString())
+        .arg(applied ? QString("&nbsp;&nbsp;<span style='color:#8bd450;'>[已应用 %1]</span>")
+                         .arg(e.value("applied_ts").toString()) : QString()), row);
+    line1->setStyleSheet("font-size:30px; color:#dddddd;");
+    line1->setTextFormat(Qt::RichText);
+    line1->setWordWrap(true);
+    info->addWidget(line1);
+
+    QLabel *line2 = new QLabel(
+      QString("%1: <b>%2 &rarr; %3</b> <span style='color:%4;'>(%5%6)</span>")
+        .arg(e.value("label").toString(e.value("param").toString()))
+        .arg(cur_v).arg(new_v).arg(color).arg(delta > 0 ? "+" : "").arg(delta), row);
+    line2->setStyleSheet("font-size:36px; color:#ffffff;");
+    line2->setTextFormat(Qt::RichText);
+    line2->setWordWrap(true);
+    info->addWidget(line2);
+
+    QString reason = e.value("reason").toString();
+    QLabel *line3 = new QLabel(QString("AI 理由: %1").arg(reason.isEmpty() ? "(未给出)" : reason), row);
+    line3->setStyleSheet("font-size:30px; color:#9a9a9a;");
+    line3->setWordWrap(true);
+    info->addWidget(line3);
+
+    // 参数含义说明 —— 与「自动调参记录」共用同一份文案 (knobExplain)
+    QString expl = knobExplain(e.value("param").toString());
+    if (!expl.isEmpty()) {
+      QLabel *line4 = new QLabel(expl, row);
+      line4->setStyleSheet("font-size:27px; color:#7e7e83; background-color:#1c1c1c;"
+                           "border-left:4px solid #3a3a3a; padding:12px 14px; margin-top:6px;");
+      line4->setTextFormat(Qt::RichText);
+      line4->setWordWrap(true);
+      info->addWidget(line4);
+    }
+
+    hbox->addLayout(info, 1);
+
+    QCheckBox *cb = new QCheckBox(row);
+    cb->setChecked(false);                       // 关键: AI 建议默认一律不勾选
+    cb->setProperty("ai_param", e.value("param").toString());
+    cb->setProperty("ai_cur", cur_v);
+    cb->setProperty("ai_new", new_v);
+    cb->setProperty("ai_applied", applied);
+    cb->setProperty("ai_from", e.value("applied_from").toInt(cur_v));
+    cb->setStyleSheet(
+      "QCheckBox { spacing:0; }"
+      "QCheckBox::indicator { width:40px; height:40px; border:3px solid #888; border-radius:9px; background:#3a3a3a; }"
+      "QCheckBox::indicator:checked { background:#2f7fbf; border:3px solid #2f7fbf; }"   // 蓝色, 与学习记录的绿色区分
+    );
+    hbox->addWidget(cb, 0, Qt::AlignVCenter);
+
+    vbox->addWidget(row);
+
+    if (i < items.size() - 1) {
+      QFrame *sep = new QFrame(listW);
+      sep->setFixedHeight(2);
+      sep->setStyleSheet("background-color:#333333;");
+      vbox->addWidget(sep);
+    }
+  }
+
+  // 被拦截的不合规建议 (透明化, 让用户知道 AI 提过但被挡了什么)
+  QJsonArray rejected = root.value("rejected").toArray();
+  if (!rejected.isEmpty()) {
+    QStringList rl;
+    for (const QJsonValue &v : rejected) rl << v.toString();
+    QLabel *rjLbl = new QLabel(QString("AI 原始输出的 %1 处问题 (已拦截或自动收到安全边界):\n  · %2")
+                                 .arg(rejected.size()).arg(rl.join("\n  · ")), listW);
+    rjLbl->setWordWrap(true);
+    rjLbl->setStyleSheet("font-size:27px; color:#7e7e83; margin-top:18px;");
+    vbox->addWidget(rjLbl);
   }
 }
 
@@ -448,7 +780,60 @@ void TogglesPanel::updateToggles() {
 
 DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   setSpacing(50);
+
+  // === 商用授权激活码(设备页第一位; 绑定设备序列号; 复用 InputDialog 屏幕键盘, c3 可用) ===
+  ButtonControl *licBtn = new ButtonControl(tr("授权激活码"), tr("输入"),
+    "点击[输入]后用屏幕键盘粘贴卖家发给你的激活码。找卖家购买时需提供你的设备序列号(下方 Serial 项)。激活成功后付费功能开启; 到期自动回退基础版, 不影响行车安全。");
+  connect(licBtn, &ButtonControl::clicked, [this]() {
+    std::string kcur = params.get("CarrotActivationCode");
+    QString cur = kcur.empty() ? QString() : QString::fromStdString(kcur);
+    QString serial = QString::fromStdString(params.get("HardwareSerial"));
+    QString v = InputDialog::getText(QString("输入授权激活码"), this,
+      QString("粘贴卖家发给你的激活码(区分大小写)。\n本机序列号: ") + serial + QString("\n留空则清除激活码(退回基础版)。"), false, -1, cur);
+    if (v.isNull()) return;
+    std::string s = v.trimmed().toStdString();
+    while (!s.empty() && (s.back()=='\n' || s.back()=='\r' || s.back()==' ')) s.pop_back();
+    while (!s.empty() && (s.front()=='\n' || s.front()=='\r' || s.front()==' ')) s.erase(s.begin());
+    params.put("CarrotActivationCode", s);
+    if (s.empty()) {
+      ConfirmationDialog::alert(tr("激活码已清除, 当前为基础版"), this);
+      return;
+    }
+    // 写临时文件后调用 license.py 校验(避免激活码出现在命令行)
+    std::string code_path = "/tmp/carrot_act_code.txt";
+    { std::ofstream ofs(code_path); ofs << s; }
+    std::string cmd = "cd /data/openpilot && PYTHONPATH=/data/openpilot /usr/local/venv/bin/python selfdrive/carrot/license.py --check-code " + code_path + " 2>&1";
+    FILE *fp = popen(cmd.c_str(), "r");
+    std::string out;
+    if (fp) { char buf[512]; while (fgets(buf, sizeof(buf), fp)) out += buf; pclose(fp); }
+    ConfirmationDialog::alert(QString::fromStdString(out), this);
+  });
+  addItem(licBtn);
+
+  // === 商用授权: 剩余激活次数显示 (showEvent 刷新) ===
+  lic_remain_lbl_ = new LabelControl(tr("剩余激活次数"), tr("读取中"));
+  addItem(lic_remain_lbl_);
+
+  // on/off road mode switch: 置于设备页首位, Dongle ID 次之
+  onOffRoadBtn = new ButtonControl(tr("Onroad/Offroad Mode"), tr("Go Offroad"));
+  connect(onOffRoadBtn, &ButtonControl::clicked, [=]() {
+    if (ConfirmationDialog::confirm(tr("Are you sure you want to switch mode?"), tr("CONFIRM"), this)) {
+      bool val = params.getBool("device_go_off_road");
+      params.putBool("device_go_off_road", !val);
+      updateOnOffRoadBtn();
+    }
+  });
+  addItem(onOffRoadBtn);
+
   addItem(new LabelControl(tr("Dongle ID"), getDongleId().value_or(tr("N/A"))));
+
+  onoffroad_watch = new ParamWatcher(this);
+  onoffroad_watch->addParam("device_go_off_road");
+  QObject::connect(onoffroad_watch, &ParamWatcher::paramChanged, [=](const QString &param_name, const QString &param_value) {
+    updateOnOffRoadBtn();
+  });
+  updateOnOffRoadBtn();
+
   addItem(new LabelControl(tr("Serial"), params.get("HardwareSerial").c_str()));
 
   // power buttons
@@ -530,13 +915,42 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   });
   QObject::connect(uiState(), &UIState::offroadTransition, [=](bool offroad) {
     for (auto btn : findChildren<ButtonControl *>()) {
-      if (btn != pair_device) {
+      if (btn != pair_device && btn != onOffRoadBtn) {
         btn->setEnabled(offroad);
       }
     }
     translateBtn->setEnabled(true);
+    // the onroad/offroad switch must stay usable while onroad
+    if (onOffRoadBtn != nullptr) {
+      onOffRoadBtn->setEnabled(true);
+      updateOnOffRoadBtn();
+    }
   });
 
+}
+
+void DevicePanel::updateOnOffRoadBtn() {
+  if (onOffRoadBtn == nullptr) return;
+  if (params.getBool("device_go_off_road")) {
+    onOffRoadBtn->setText(tr("Go Onroad"));
+  } else {
+    onOffRoadBtn->setText(tr("Go Offroad"));
+  }
+}
+
+void DevicePanel::showEvent(QShowEvent *event) {
+  ListWidget::showEvent(event);
+  updateOnOffRoadBtn();
+  // 商用授权: 刷新剩余激活次数显示
+  if (lic_remain_lbl_) {
+    bool act = (params.get("CarrotLicStatus") == "1");
+    std::string remain = params.get("CarrotLicRemain");
+    if (act) {
+      lic_remain_lbl_->setText(tr("已激活，剩余 ") + QString::fromStdString(remain) + tr(" 次"));
+    } else {
+      lic_remain_lbl_->setText(tr("未激活 / 次数用完，请购买激活码"));
+    }
+  }
 }
 
 void DevicePanel::updateCalibDescription() {
@@ -708,6 +1122,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 
   QList<QPair<QString, QWidget *>> panels = {
     {tr("Device"), device},
+    { tr("功能"), new CarrotPanel(this, 1) },
     {tr("Network"), networking},
     {tr("Toggles"), toggles},
   };
@@ -718,7 +1133,8 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
     panels.append({tr("Firehose"), new FirehosePanel(this)});
   }
   panels.append({ tr("萝卜"), new CarrotPanel(this) });
-  panels.append({ tr("开发"), new DeveloperPanel(this) });
+  dev_panel_ = new DeveloperPanel(this);
+  panels.append({ tr("开发"), dev_panel_ });
 
   nav_btns = new QButtonGroup(this);
   for (auto &[name, panel] : panels) {
@@ -754,6 +1170,21 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
       btn->setChecked(true);
       panel_widget->setCurrentWidget(w);
     });
+
+    // 商用授权: 点「开发」标签文字累计 6 次解锁 SSH 显示; 点其他标签清零(不跨菜单累计)
+    if (name == tr("开发")) {
+      QObject::connect(btn, &QPushButton::clicked, [this]() {
+        dev_click_count_++;
+        if (dev_panel_ && dev_click_count_ >= 6) {
+          dev_click_count_ = 0;
+          dev_panel_->unlockSsh();
+        }
+      });
+    } else {
+      QObject::connect(btn, &QPushButton::clicked, [this]() {
+        dev_click_count_ = 0;
+      });
+    }
   }
   sidebar_layout->setContentsMargins(50, 50, 100, 50);
 
@@ -801,12 +1232,14 @@ static QStringList get_list(const char* path) {
   return stringList;
 }
 
-CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
+CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
+  panelMode = mode;
   main_layout = new QStackedLayout(this);
   homeScreen = new QWidget(this);
   carrotLayout = new QVBoxLayout(homeScreen);
   carrotLayout->setMargin(10);
 
+  if (panelMode == 0) {   // 一级「功能」面板为单页, 不显示标签按钮栏
   QHBoxLayout* select_layout = new QHBoxLayout();
   select_layout->setSpacing(10);
 
@@ -859,9 +1292,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     updateButtonStyles();
   });
 
-  QPushButton* feat_btn = new QPushButton(tr("功能"));
-  feat_btn->setObjectName("feat_btn");
-  QObject::connect(feat_btn, &QPushButton::clicked, this, [this]() {
+  QPushButton* track_btn = new QPushButton(tr("轨迹"));
+  track_btn->setObjectName("track_btn");
+  QObject::connect(track_btn, &QPushButton::clicked, this, [this]() {
     this->currentCarrotIndex = 6;
     this->togglesCarrot(6);
     updateButtonStyles();
@@ -876,12 +1309,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   select_layout->addWidget(speed_btn);
   select_layout->addWidget(latLong_btn);
   select_layout->addWidget(disp_btn);
-  select_layout->addWidget(feat_btn);
+  select_layout->addWidget(track_btn);
   carrotLayout->addLayout(select_layout, 0);
+  }
 
   QWidget* toggles = new QWidget();
   QVBoxLayout* toggles_layout = new QVBoxLayout(toggles);
 
+  if (panelMode == 0) {
   cruiseToggles = new ListWidget(this);
   cruiseToggles->addItem(new CValueControl("CruiseButtonMode", "按钮：定速巡航模式", "0:普通,1:用户1,2:用户2", 0, 2, 1));
   cruiseToggles->addItem(new CValueControl("CancelButtonMode", "按钮：取消模式", "0:长按,1:长按+车道保持", 0, 1, 1));
@@ -890,10 +1325,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "按钮：定速单位(高级)", "1:公里/小时, 2:英里/小时", 1, 20, 1));
   cruiseToggles->addItem(new CValueControl("CruiseEcoControl", "定速：节能控制(4km/h)", "临时提高设定速度以提高燃油效率", 0, 10, 1));
   cruiseToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "定速：自动提速至道路限速(0%)", "巡航设定速度自动提升到道路限制的百分比x%，设定速度=道路限速*x%", 0, 200, 10));
-  cruiseToggles->addItem(new CValueControl("TFollowGap1", "跟车时间GAP1(110)x0.01s", "", 70, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TFollowGap2", "跟车时间GAP2(120)x0.01s", "", 70, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TFollowGap3", "跟车时间GAP3(160)x0.01s", "", 70, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TFollowGap4", "跟车时间GAP4(180)x0.01s", "", 70, 300, 5));
+  cruiseToggles->addItem(new CValueControl("TFollowGap1", "跟车时间GAP1 x0.01s", "学习器基线单独显示在右侧", 70, 300, 5, "TFollowGap1Base"));
+  cruiseToggles->addItem(new CValueControl("TFollowGap2", "跟车时间GAP2 x0.01s", "学习器基线单独显示在右侧", 70, 300, 5, "TFollowGap2Base"));
+  cruiseToggles->addItem(new CValueControl("TFollowGap3", "跟车时间GAP3 x0.01s", "学习器基线单独显示在右侧", 70, 300, 5, "TFollowGap3Base"));
+  cruiseToggles->addItem(new CValueControl("TFollowGap4", "跟车时间GAP4 x0.01s", "学习器基线单独显示在右侧", 70, 300, 5, "TFollowGap4Base"));
   cruiseToggles->addItem(new CValueControl("DynamicTFollow", "动态跟车GAP控制", "", 0, 100, 5));
   cruiseToggles->addItem(new CValueControl("DynamicTFollowLC", "动态跟车GAP控制(变道)", "", 0, 100, 5));
   cruiseToggles->addItem(new CValueControl("MyDrivingMode", "驾驶模式选择", "1:经济,2:安全,3:普通,4:激进", 1, 4, 1));
@@ -971,19 +1406,11 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new CValueControl("ShowDebugUI", "调试信息", "", 0, 2, 1));
   dispToggles->addItem(new CValueControl("ShowTpms", "胎压信息", "", 0, 3, 1));
   dispToggles->addItem(new CValueControl("ShowDateTime", "时间信息", "0:无,1:时间/日期,2:仅时间,3:仅日期", 0, 3, 1));
-  dispToggles->addItem(new CValueControl("ShowPathEnd", "轨迹终点", "0:无,1:显示", 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDeviceState", "设备状态", "0:无,1:显示", 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowLaneInfo", "车道信息", "-1:无,0:轨迹,1:轨迹+车道线,2:轨迹+车道线+路沿", -1, 2, 1));
   dispToggles->addItem(new CValueControl("ShowRadarInfo", "雷达信息", "0:无,1:显示,2:相对位置,3:静止车辆", 0, 3, 1));
   dispToggles->addItem(new CValueControl("ShowRouteInfo", "路线信息", "0:无,1:显示", 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowPlotMode", "调试图表", "", 0, 10, 1));
   dispToggles->addItem(new CValueControl("ShowCustomBrightness", "亮度比例", "", 0, 100, 10));
-  dispToggles->addItem(new CValueControl("ShowPathColorCruiseOff", "轨迹颜色：未开启巡航", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
-  dispToggles->addItem(new CValueControl("ShowPathMode", "轨迹模式：无车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
-  dispToggles->addItem(new CValueControl("ShowPathColor", "轨迹颜色：无车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
-  dispToggles->addItem(new CValueControl("ShowPathModeLane", "轨迹模式：有车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
-  dispToggles->addItem(new CValueControl("ShowPathColorLane", "轨迹颜色：有车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
-  dispToggles->addItem(new CValueControl("ShowPathWidth", "轨迹宽度比例(100%)", "", 10, 200, 10));
 
   //dispToggles->addItem(new CValueControl("ShowHudMode", "Display Mode", "0:Frog,1:APilot,2:Bottom,3:Top,4:Left,5:Left-Bottom", 0, 5, 1));
   //dispToggles->addItem(new CValueControl("ShowSteerRotate", "Handle rotate", "0:None,1:Rotate", 0, 1, 1));
@@ -995,185 +1422,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   //dispToggles->addItem(new CValueControl("ShowGapInfo", "GAP Info", "0:None,1:Display", -1, 1, 1));
   //dispToggles->addItem(new CValueControl("ShowDmInfo", "DM Info", "0:None,1:Display,-1:Disable(Reboot)", -1, 1, 1));
 
-  featToggles = new ListWidget(this);
-  // 学习状态实时显示: 读取 carrot_learner.py 写入的 CarrotLearningStatus(仅系统激活后才会更新)
-  QLabel *learnStatusLbl = new QLabel(this);
-  learnStatusLbl->setObjectName("learnStatusLbl");
-  learnStatusLbl->setWordWrap(true);
-  learnStatusLbl->setStyleSheet("QLabel { color:#cfcfcf; font-size:26px; padding:8px 16px; background-color:transparent; }");
-  learnStatusLbl->setText("学习状态: 读取中…");
-  featToggles->addItem(learnStatusLbl);
-  {
-    QTimer *stTimer = new QTimer(this);
-    QObject::connect(stTimer, &QTimer::timeout, [learnStatusLbl]() {
-      std::string v = Params().get("CarrotLearningStatus");
-      QString txt = v.empty() ? QString("未运行/无数据") : QString::fromStdString(v);
-      learnStatusLbl->setText("学习状态: " + txt);
-    });
-    stTimer->start(1500);
-  }
-  featToggles->addItem(new ParamControl("CarrotLearningEnabled", tr("驾驶习惯自学习"), tr("基于奖励/惩罚机制, 在行驶中根据您的踩油门/踩刹车/接管等行为, 自动微调跟车距离、加速性、舒适制动、停车距离等参数, 使其贴合您的驾驶习惯。仅在系统激活时学习, 所有参数均在安全范围内平缓调整。"), "", this));
-  featToggles->addItem(new CValueControl("CarrotLearningRate", "自学习强度(5)", "学习/调整的速度, 越大收敛越快但越激进, 越小越稳健。范围1-10, 推荐5", 1, 10, 1));
-  featToggles->addItem(new CValueControl("CarrotLearningCurve", "弯道自学习(1)", "0:关闭, 1:开启。开启后在过弯中根据您的踩油门/踩刹车行为自动微调弯道降速的横向加速度系数(普通路/高速分别学习): 弯中踩刹车=进弯太快->多降速; 弯中踩油门=降速太肉->少降速。仅在总开关[驾驶习惯自学习]开启时生效", 0, 1, 1));
-  featToggles->addItem(new CValueControl("CarrotLearningSteer", "转向手感自学习(1)", "0:关闭, 1:开启。根据方向盘行为自动微调转向松紧(横向MPC转向速率代价): 直道方向盘反复小摆(画龙)=太灵敏->更平顺; 您同向扶盘帮转=转得太肉->更灵敏。不触碰转向比等物理标定(系统已自学), 仅在总开关[驾驶习惯自学习]开启时生效", 0, 1, 1));
-  // 自学习一键重置: 改成"按钮 + 二次确认浮层", 既清楚又防误触
-  // 确认后才置 CarrotLearningReset=1, 由 carrot_learner.py 检测并执行重置(自动归零, 并在学习记录留一条"一键重置")
-  // 注意: 不用 QMessageBox(它是 QDialog 子类, c3 上会锁竖屏崩溃); 沿用学习记录浮层的安全模式(只 hide 不复删除)
-  // 自学习重置已移入"自动调参记录"弹窗: 由该弹窗内[重置学习数据]按钮触发 showResetConfirm 二次确认(见文件下方静态函数)。
-  // 自动调参记录: 把学习记录本身做成可勾选列表(勾选=保留新值, 取消=回退旧值), 底部并列四个操作按钮。
-  // 覆盖层 overlay(非 QDialog, 避免 c3 竖屏崩溃); 列表滚动用自写 FollowScrollArea(1:1 跟手、零惯性, 不用 QScroller, c3 不崩)。
-  auto tuneBtn = new ButtonControl("自动调参记录", "查看",
-    "查看自学习生成的参数调整记录。每条记录后可勾选: 勾选=保留这条学习的新值, 取消勾选=回退到旧值。点[应用所选]后由学习器生效。底部[重置学习数据]可一键清空。");
-  connect(tuneBtn, &ButtonControl::clicked, [=]() {
-    QWidget *top = this->window();
-    QWidget *overlay = top->findChild<QWidget*>("autotune_overlay");
-    QWidget *listW = nullptr;
-    if (overlay) {
-      listW = overlay->findChild<QWidget*>("autotune_list");
-      if (listW) rebuildAutoTuneList(listW);
-      overlay->setGeometry(top->rect());
-      overlay->show();
-      overlay->raise();
-      return;
-    }
-    // 用覆盖层 widget 而非 QDialog: c3 上 QDialog 会被 Android 窗口管理器当作独立 Activity 弹出,
-    // 方向锁成竖屏、尺寸受限 -> UI 看门狗重启。overlay 铺满全屏从根上消除旋转/尺寸受限与崩溃。
-    overlay = new QWidget(top);
-    overlay->setObjectName("autotune_overlay");
-    overlay->setGeometry(top->rect());
-    overlay->setStyleSheet(R"(
-      QWidget#autotune_overlay { background-color: rgba(0,0,0,0.85); }
-      QWidget#autotune_panel { background-color: #1e1e1e; border-radius: 28px; }
-    )");
-
-    QWidget *panel = new QWidget(overlay);
-    panel->setObjectName("autotune_panel");
-    int margin = 60;
-    panel->setFixedSize(top->width() - 2 * margin, top->height() - 2 * margin);
-    panel->move(margin, margin);
-
-    QVBoxLayout *vbox = new QVBoxLayout(panel);
-    vbox->setContentsMargins(36, 36, 36, 36);
-    vbox->setSpacing(20);
-
-    QLabel *titleLbl = new QLabel("自动调参记录", panel);
-    titleLbl->setAlignment(Qt::AlignCenter);
-    titleLbl->setStyleSheet("font-size:36px; font-weight:bold; color:white;");
-    vbox->addWidget(titleLbl);
-
-    QWidget *listWgt = new QWidget();
-    listWgt->setObjectName("autotune_list");
-    rebuildAutoTuneList(listWgt);
-    FollowScrollArea *sv = new FollowScrollArea(listWgt, panel);
-    sv->setStyleSheet("background-color:#141414; border-radius:12px;");
-    vbox->addWidget(sv, 1);
-
-    // 底部按钮区: 全选 / 应用所选 / 关闭 / 重置学习数据，四个按钮平均宽度并列一排
-    QHBoxLayout *btnRow = new QHBoxLayout();
-    btnRow->setSpacing(20);
-
-    QPushButton *selAllBtn = new QPushButton("全选", panel);
-    selAllBtn->setStyleSheet("height:110px; font-size:34px; background-color:#2f4f7f; color:white; border-radius:18px;");
-    QObject::connect(selAllBtn, &QPushButton::clicked, listWgt, [selAllBtn, listWgt](bool) {
-      bool anyUnchecked = false;
-      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
-        if (!cb->isChecked()) { anyUnchecked = true; break; }
-      }
-      bool target = anyUnchecked;
-      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) cb->setChecked(target);
-      selAllBtn->setText(target ? "取消全选" : "全选");
-    });
-
-    QPushButton *applyBtn = new QPushButton("应用所选", panel);
-    applyBtn->setStyleSheet("height:110px; font-size:34px; background-color:#2f7f4f; color:white; border-radius:18px;");
-    QObject::connect(applyBtn, &QPushButton::clicked, listWgt, [listWgt, applyBtn](bool) {
-      QJsonArray applyArr, revertArr;
-      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
-        QJsonObject base;
-        base["param"] = cb->property("rec_param").toString();
-        base["ctx"]   = cb->property("rec_ctx").toString();
-        base["old"]   = cb->property("rec_old").toInt();
-        base["new"]   = cb->property("rec_new").toInt();
-        if (cb->isChecked()) {
-          QJsonObject a;
-          a["key"] = base["param"].toString();
-          a["ctx_key"] = base["ctx"].toString();
-          a["new_value"] = base["new"].toInt();
-          applyArr.append(a);
-        } else {
-          revertArr.append(base);
-        }
-      }
-      QJsonDocument ad(applyArr), rd(revertArr);
-      QByteArray ab = ad.toJson(QJsonDocument::Compact);
-      QByteArray rb = rd.toJson(QJsonDocument::Compact);
-      Params().put("CarrotLearningApplyList", std::string(ab.constData(), ab.size()));
-      Params().put("CarrotLearningRevertList", std::string(rb.constData(), rb.size()));
-      rebuildAutoTuneList(listWgt);
-      applyBtn->setText("已提交 ✓");
-      QTimer::singleShot(1500, applyBtn, [applyBtn]() { applyBtn->setText("应用所选"); });
-    });
-
-    QPushButton *closeBtn = new QPushButton("关闭", panel);
-    closeBtn->setStyleSheet("height:110px; font-size:34px; background-color:#393939; color:white; border-radius:18px;");
-    QObject::connect(closeBtn, &QPushButton::clicked, overlay, [overlay, top](bool) {
-      overlay->hide();
-      if (top) { top->raise(); top->activateWindow(); }
-    });
-
-    QPushButton *deleteBtn = new QPushButton("删除", panel);
-    deleteBtn->setStyleSheet("height:110px; font-size:34px; background-color:#a85a2a; color:white; border-radius:18px;");
-    QObject::connect(deleteBtn, &QPushButton::clicked, listWgt, [listWgt, deleteBtn](bool) {
-      QJsonArray delArr;
-      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
-        if (cb->isChecked()) {
-          QJsonObject o;
-          o["seq"]    = cb->property("rec_seq").toInt();
-          o["param"]  = cb->property("rec_param").toString();
-          o["ctx"]    = cb->property("rec_ctx").toString();
-          o["old"]    = cb->property("rec_old").toInt();
-          o["new"]    = cb->property("rec_new").toInt();
-          delArr.append(o);
-        }
-      }
-      if (delArr.isEmpty()) {
-        deleteBtn->setText("请先勾选");
-        QTimer::singleShot(1500, deleteBtn, [deleteBtn]() { deleteBtn->setText("删除"); });
-        return;
-      }
-      QJsonDocument dd(delArr);
-      QByteArray db = dd.toJson(QJsonDocument::Compact);
-      Params().put("CarrotLearningDeleteList", std::string(db.constData(), db.size()));
-      // 等 Python 端处理完再刷新列表(延迟刷新)
-      QTimer::singleShot(1200, listWgt, [listWgt]() { rebuildAutoTuneList(listWgt); });
-      deleteBtn->setText("已删除 ✓");
-      QTimer::singleShot(1500, deleteBtn, [deleteBtn]() { deleteBtn->setText("删除"); });
-    });
-
-    QPushButton *resetBtnIn = new QPushButton("重置学习数据", panel);
-    resetBtnIn->setStyleSheet("height:110px; font-size:34px; background-color:#7a2f2f; color:white; border-radius:18px;");
-    QObject::connect(resetBtnIn, &QPushButton::clicked, [top](bool) { showResetConfirm(top); });
-
-    btnRow->addWidget(selAllBtn, 1);
-    btnRow->addWidget(applyBtn, 1);
-    btnRow->addWidget(closeBtn, 1);
-    btnRow->addWidget(deleteBtn, 1);
-    btnRow->addWidget(resetBtnIn, 1);
-    vbox->addLayout(btnRow);
-
-    overlay->show();
-  });
-  featToggles->addItem(tuneBtn);
-  featToggles->addItem(new CValueControl("CarrotLearningReview", "自动调参审查模式(0)", "1:学习器只记录参数变化、不自动写入,由你在[自动调参记录]里勾选应用;0:学习器自动应用学习记录", 0, 1, 1));
-
-  // 自学习重置入口已移入"自动调参记录"弹窗内(见 showResetConfirm)。
-  featToggles->addItem(new CValueControl("AutoLaneCorrection", "自动居中纠偏(2)", "0:关闭, 1:实时纠偏, 2:实时纠偏+学习固定偏差(自动保持车道居中)", 0, 2, 1));
-  featToggles->addItem(new CValueControl("AutoLaneCorrectionGain", "纠偏强度(40)", "纠偏增益, 越大回中越快; 画龙时调小, 回中慢时调大", 0, 100, 1));
-  featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
-  featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
-  featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
-  featToggles->addItem(new ParamControl("dp_ui_rainbow", tr("彩虹路径"), tr("将行驶路径显示为彩虹色动态渐变效果"), "", this));
-
+  // === 轨迹标签: 由原「显示」标签迁入, 占据原「功能」标签位置 ===
+  trackToggles = new ListWidget(this);
+  trackToggles->addItem(new CValueControl("ShowPathEnd", "轨迹终点", "0:无,1:显示", 0, 1, 1));
+  trackToggles->addItem(new CValueControl("ShowLaneInfo", "车道信息", "-1:无,0:轨迹,1:轨迹+车道线,2:轨迹+车道线+路沿", -1, 2, 1));
+  trackToggles->addItem(new CValueControl("ShowPathColorCruiseOff", "轨迹颜色：未开启巡航", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
+  trackToggles->addItem(new CValueControl("ShowPathMode", "轨迹模式：无车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
+  trackToggles->addItem(new CValueControl("ShowPathColor", "轨迹颜色：无车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
+  trackToggles->addItem(new CValueControl("ShowPathModeLane", "轨迹模式：有车道线", "0:普通(推荐),1,2:矩形,3,4:^^,5,6:推荐,7,8:^^,9,10,11,12:平滑^^", 0, 15, 1));
+  trackToggles->addItem(new CValueControl("ShowPathColorLane", "轨迹颜色：有车道线", "(+10:描边)0:红,1:橙,2:黄,3:绿,4:蓝,5:靛青,6:紫,7:棕,8:白,9:黑", 0, 19, 1));
+  trackToggles->addItem(new CValueControl("ShowPathWidth", "轨迹宽度比例(100%)", "", 10, 200, 10));
 
   startToggles = new ListWidget(this);
   QString selected = QString::fromStdString(Params().get("CarSelected3"));
@@ -1336,10 +1594,503 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   toggles_layout->addWidget(cruiseToggles);
   toggles_layout->addWidget(latLongToggles);
   toggles_layout->addWidget(dispToggles);
-  toggles_layout->addWidget(featToggles);
+  toggles_layout->addWidget(trackToggles);
   toggles_layout->addWidget(startToggles);
   toggles_layout->addWidget(speedToggles);
   toggles_layout->addWidget(navToggles);
+  } else {
+  featToggles = new ListWidget(this);
+  // 学习状态实时显示: 读取 carrot_learner.py 写入的 CarrotLearningStatus(仅系统激活后才会更新)
+  QLabel *learnStatusLbl = new QLabel(this);
+  learnStatusLbl->setObjectName("learnStatusLbl");
+  learnStatusLbl->setWordWrap(true);
+  learnStatusLbl->setStyleSheet("QLabel { color:#cfcfcf; font-size:26px; padding:8px 16px; background-color:transparent; }");
+  learnStatusLbl->setText("学习状态: 读取中…");
+  featToggles->addItem(learnStatusLbl);
+  {
+    QTimer *stTimer = new QTimer(this);
+    QObject::connect(stTimer, &QTimer::timeout, [learnStatusLbl]() {
+      std::string v = Params().get("CarrotLearningStatus");
+      QString txt = v.empty() ? QString("未运行/无数据") : QString::fromStdString(v);
+      learnStatusLbl->setText("学习状态: " + txt);
+    });
+    stTimer->start(1500);
+  }
+  featToggles->addItem(sectionHeader("驾驶习惯自学习"));
+  featToggles->addItem(new ParamControl("CarrotLearningEnabled", tr("驾驶习惯自学习"), tr(
+      "基于奖励/惩罚机制, 在系统激活时根据您的踩油门/踩刹车/接管等行为, 自动微调以下参数, 使其贴合您的驾驶习惯;\n"
+      "所有参数均默认开启自学习、且在安全范围内平缓调整, 无需逐项设置:\n"
+      "· 跟车距离  TFollowGap 1~4 档\n"
+      "· 加速性    CruiseMaxVals 0~6\n"
+      "· 舒适制动  ComfortBrake\n"
+      "· 停车距离  StopDistanceCarrot\n"
+      "· 弯道降速  AutoCurveSpeedAggressiveness / H (含弯道相关自学习)\n"
+      "· 转向手感  LatMpcSteeringRateCost"),
+      "", this));
+  // 自学习一键重置: 改成"按钮 + 二次确认浮层", 既清楚又防误触
+  // 确认后才置 CarrotLearningReset=1, 由 carrot_learner.py 检测并执行重置(自动归零, 并在学习记录留一条"一键重置")
+  // 注意: 不用 QMessageBox(它是 QDialog 子类, c3 上会锁竖屏崩溃); 沿用学习记录浮层的安全模式(只 hide 不复删除)
+  // 自学习重置已移入"自动调参记录"弹窗: 由该弹窗内[重置学习数据]按钮触发 showResetConfirm 二次确认(见文件下方静态函数)。
+  // 自动调参记录: 把学习记录本身做成可勾选列表(勾选=保留新值, 取消=回退旧值), 底部并列四个操作按钮。
+  // 覆盖层 overlay(非 QDialog, 避免 c3 竖屏崩溃); 列表滚动用自写 FollowScrollArea(1:1 跟手、零惯性, 不用 QScroller, c3 不崩)。
+  auto tuneBtn = new ButtonControl("自学习记录", "查看",
+    "查看自学习生成的参数调整记录。每条记录后可勾选: 勾选=保留这条学习的新值, 取消勾选=回退到旧值。点[应用所选]后由学习器生效。底部[重置学习数据]可一键清空。");
+  connect(tuneBtn, &ButtonControl::clicked, [=]() {
+    QWidget *top = this->window();
+    QWidget *overlay = top->findChild<QWidget*>("autotune_overlay");
+    QWidget *listW = nullptr;
+    if (overlay) {
+      listW = overlay->findChild<QWidget*>("autotune_list");
+      if (listW) rebuildAutoTuneList(listW);
+      overlay->setGeometry(top->rect());
+      overlay->show();
+      overlay->raise();
+      return;
+    }
+    // 用覆盖层 widget 而非 QDialog: c3 上 QDialog 会被 Android 窗口管理器当作独立 Activity 弹出,
+    // 方向锁成竖屏、尺寸受限 -> UI 看门狗重启。overlay 铺满全屏从根上消除旋转/尺寸受限与崩溃。
+    overlay = new QWidget(top);
+    overlay->setObjectName("autotune_overlay");
+    overlay->setGeometry(top->rect());
+    overlay->setStyleSheet(R"(
+      QWidget#autotune_overlay { background-color: rgba(0,0,0,0.85); }
+      QWidget#autotune_panel { background-color: #1e1e1e; border-radius: 28px; }
+    )");
+
+    QWidget *panel = new QWidget(overlay);
+    panel->setObjectName("autotune_panel");
+    int margin = 60;
+    panel->setFixedSize(top->width() - 2 * margin, top->height() - 2 * margin);
+    panel->move(margin, margin);
+
+    QVBoxLayout *vbox = new QVBoxLayout(panel);
+    vbox->setContentsMargins(36, 36, 36, 36);
+    vbox->setSpacing(20);
+
+    QLabel *titleLbl = new QLabel("自学习记录", panel);
+    titleLbl->setAlignment(Qt::AlignCenter);
+    titleLbl->setStyleSheet("font-size:36px; font-weight:bold; color:white;");
+    vbox->addWidget(titleLbl);
+
+    QWidget *listWgt = new QWidget();
+    listWgt->setObjectName("autotune_list");
+    rebuildAutoTuneList(listWgt);
+    FollowScrollArea *sv = new FollowScrollArea(listWgt, panel);
+    sv->setStyleSheet("background-color:#141414; border-radius:12px;");
+    vbox->addWidget(sv, 1);
+
+    // 底部按钮区: 全选 / 应用所选 / 关闭 / 重置学习数据，四个按钮平均宽度并列一排
+    QHBoxLayout *btnRow = new QHBoxLayout();
+    btnRow->setSpacing(20);
+
+    QPushButton *selAllBtn = new QPushButton("全选", panel);
+    selAllBtn->setStyleSheet("height:110px; font-size:34px; background-color:#2f4f7f; color:white; border-radius:18px;");
+    QObject::connect(selAllBtn, &QPushButton::clicked, listWgt, [selAllBtn, listWgt](bool) {
+      bool anyUnchecked = false;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (!cb->isChecked()) { anyUnchecked = true; break; }
+      }
+      bool target = anyUnchecked;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) cb->setChecked(target);
+      selAllBtn->setText(target ? "取消全选" : "全选");
+    });
+
+    QPushButton *applyBtn = new QPushButton("应用所选", panel);
+    applyBtn->setStyleSheet("height:110px; font-size:34px; background-color:#2f7f4f; color:white; border-radius:18px;");
+    QObject::connect(applyBtn, &QPushButton::clicked, listWgt, [listWgt, applyBtn](bool) {
+      QJsonArray applyArr, revertArr;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        QJsonObject base;
+        base["param"] = cb->property("rec_param").toString();
+        base["ctx"]   = cb->property("rec_ctx").toString();
+        base["old"]   = cb->property("rec_old").toInt();
+        base["new"]   = cb->property("rec_new").toInt();
+        if (cb->isChecked()) {
+          QJsonObject a;
+          a["key"] = base["param"].toString();
+          a["ctx_key"] = base["ctx"].toString();
+          a["new_value"] = base["new"].toInt();
+          applyArr.append(a);
+        } else {
+          revertArr.append(base);
+        }
+      }
+      QJsonDocument ad(applyArr), rd(revertArr);
+      QByteArray ab = ad.toJson(QJsonDocument::Compact);
+      QByteArray rb = rd.toJson(QJsonDocument::Compact);
+      Params().put("CarrotLearningApplyList", std::string(ab.constData(), ab.size()));
+      Params().put("CarrotLearningRevertList", std::string(rb.constData(), rb.size()));
+      rebuildAutoTuneList(listWgt);
+      applyBtn->setText("已提交 ✓");
+      QTimer::singleShot(1500, applyBtn, [applyBtn]() { applyBtn->setText("应用所选"); });
+    });
+
+    QPushButton *closeBtn = new QPushButton("关闭", panel);
+    closeBtn->setStyleSheet("height:110px; font-size:34px; background-color:#393939; color:white; border-radius:18px;");
+    QObject::connect(closeBtn, &QPushButton::clicked, overlay, [overlay, top](bool) {
+      overlay->hide();
+      if (top) { top->raise(); top->activateWindow(); }
+    });
+
+    QPushButton *deleteBtn = new QPushButton("删除", panel);
+    deleteBtn->setStyleSheet("height:110px; font-size:34px; background-color:#a85a2a; color:white; border-radius:18px;");
+    QObject::connect(deleteBtn, &QPushButton::clicked, listWgt, [listWgt, deleteBtn](bool) {
+      QJsonArray delArr;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (cb->isChecked()) {
+          QJsonObject o;
+          o["seq"]    = cb->property("rec_seq").toInt();
+          o["param"]  = cb->property("rec_param").toString();
+          o["ctx"]    = cb->property("rec_ctx").toString();
+          o["old"]    = cb->property("rec_old").toInt();
+          o["new"]    = cb->property("rec_new").toInt();
+          delArr.append(o);
+        }
+      }
+      if (delArr.isEmpty()) {
+        deleteBtn->setText("请先勾选");
+        QTimer::singleShot(1500, deleteBtn, [deleteBtn]() { deleteBtn->setText("删除"); });
+        return;
+      }
+      QJsonDocument dd(delArr);
+      QByteArray db = dd.toJson(QJsonDocument::Compact);
+      Params().put("CarrotLearningDeleteList", std::string(db.constData(), db.size()));
+      // 等 Python 端处理完再刷新列表(延迟刷新)
+      QTimer::singleShot(1200, listWgt, [listWgt]() { rebuildAutoTuneList(listWgt); });
+      deleteBtn->setText("已删除 ✓");
+      QTimer::singleShot(1500, deleteBtn, [deleteBtn]() { deleteBtn->setText("删除"); });
+    });
+
+    QPushButton *resetBtnIn = new QPushButton("重置学习数据", panel);
+    resetBtnIn->setStyleSheet("height:110px; font-size:34px; background-color:#7a2f2f; color:white; border-radius:18px;");
+    QObject::connect(resetBtnIn, &QPushButton::clicked, [top](bool) { showResetConfirm(top); });
+
+    btnRow->addWidget(selAllBtn, 1);
+    btnRow->addWidget(applyBtn, 1);
+    btnRow->addWidget(closeBtn, 1);
+    btnRow->addWidget(deleteBtn, 1);
+    btnRow->addWidget(resetBtnIn, 1);
+    vbox->addLayout(btnRow);
+
+    overlay->show();
+  });
+  featToggles->addItem(tuneBtn);
+  featToggles->addItem(new CValueControl("CarrotLearningReview", "自学习调节开关(1)", "1:开启自学习并应用学到的参数(自动写入生效);0:仅记录不应用(在[自学习记录]里手动勾选应用)", 0, 1, 1));
+
+  // === AI 调参建议浮层 (独立第二套界面, 与「自动调参记录」互不干扰) ===
+  // 入口有两个: ①本页的[AI 调参建议]按钮  ②体检报告浮层底部的[采纳建议]按钮。
+  // 写入的是 CarrotAiApplyList / CarrotAiRevertList, 与学习器的三条通道完全分开。
+  auto openAiSuggestOverlay = [this]() {
+    QWidget *top = this->window();
+    QWidget *overlay = top->findChild<QWidget*>("aisuggest_overlay");
+    if (overlay) {
+      QWidget *lw = overlay->findChild<QWidget*>("aisuggest_list");
+      if (lw) rebuildAiSuggestList(lw);
+      overlay->setGeometry(top->rect());
+      overlay->show(); overlay->raise();
+      return;
+    }
+    overlay = new QWidget(top);
+    overlay->setObjectName("aisuggest_overlay");
+    overlay->setGeometry(top->rect());
+    overlay->setStyleSheet(R"(
+      QWidget#aisuggest_overlay { background-color: rgba(0,0,0,0.85); }
+      QWidget#aisuggest_panel { background-color: #1e1e1e; border-radius: 28px; }
+    )");
+    QWidget *panel = new QWidget(overlay);
+    panel->setObjectName("aisuggest_panel");
+    int smargin = 60;
+    panel->setFixedSize(top->width() - 2 * smargin, top->height() - 2 * smargin);
+    panel->move(smargin, smargin);
+    QVBoxLayout *svbox = new QVBoxLayout(panel);
+    svbox->setContentsMargins(36, 36, 36, 36);
+    svbox->setSpacing(20);
+
+    QLabel *stitle = new QLabel("AI 调参建议 (需人工采纳)", panel);
+    stitle->setAlignment(Qt::AlignCenter);
+    stitle->setStyleSheet("font-size:36px; font-weight:bold; color:white;");
+    svbox->addWidget(stitle);
+
+    QWidget *listWgt = new QWidget();
+    listWgt->setObjectName("aisuggest_list");
+    rebuildAiSuggestList(listWgt);
+    FollowScrollArea *ssv = new FollowScrollArea(listWgt, panel);
+    ssv->setStyleSheet("background-color:#141414; border-radius:12px;");
+    svbox->addWidget(ssv, 1);
+
+    QHBoxLayout *sbtnRow = new QHBoxLayout();
+    sbtnRow->setSpacing(20);
+
+    QPushButton *sSelAll = new QPushButton("全选", panel);
+    sSelAll->setStyleSheet("height:110px; font-size:34px; background-color:#2f4f7f; color:white; border-radius:18px;");
+    QObject::connect(sSelAll, &QPushButton::clicked, listWgt, [sSelAll, listWgt](bool) {
+      bool anyUnchecked = false;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (!cb->isChecked()) { anyUnchecked = true; break; }
+      }
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) cb->setChecked(anyUnchecked);
+      sSelAll->setText(anyUnchecked ? "取消全选" : "全选");
+    });
+
+    QPushButton *sApply = new QPushButton("应用所选", panel);
+    sApply->setStyleSheet("height:110px; font-size:34px; background-color:#2f7f4f; color:white; border-radius:18px;");
+    QObject::connect(sApply, &QPushButton::clicked, listWgt, [listWgt, sApply](bool) {
+      QJsonArray arr;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (!cb->isChecked()) continue;
+        if (cb->property("ai_applied").toBool()) continue;   // 已应用的跳过, 避免重复写
+        QJsonObject o;
+        o["param"] = cb->property("ai_param").toString();
+        o["cur"]   = cb->property("ai_cur").toInt();
+        o["new"]   = cb->property("ai_new").toInt();
+        arr.append(o);
+      }
+      if (arr.isEmpty()) {
+        sApply->setText("请先勾选");
+        QTimer::singleShot(1500, sApply, [sApply]() { sApply->setText("应用所选"); });
+        return;
+      }
+      QByteArray ab = QJsonDocument(arr).toJson(QJsonDocument::Compact);
+      Params().put("CarrotAiApplyList", std::string(ab.constData(), ab.size()));
+      sApply->setText("已提交 ✓");
+      QTimer::singleShot(1500, listWgt, [listWgt]() { rebuildAiSuggestList(listWgt); });
+      QTimer::singleShot(1800, sApply, [sApply]() { sApply->setText("应用所选"); });
+    });
+
+    QPushButton *sRevert = new QPushButton("撤销所选", panel);
+    sRevert->setStyleSheet("height:110px; font-size:34px; background-color:#a85a2a; color:white; border-radius:18px;");
+    QObject::connect(sRevert, &QPushButton::clicked, listWgt, [listWgt, sRevert](bool) {
+      QJsonArray arr;
+      for (QCheckBox *cb : listWgt->findChildren<QCheckBox*>()) {
+        if (!cb->isChecked()) continue;
+        if (!cb->property("ai_applied").toBool()) continue;  // 只撤销真正应用过的
+        QJsonObject o;
+        o["param"] = cb->property("ai_param").toString();
+        o["old"]   = cb->property("ai_from").toInt();
+        arr.append(o);
+      }
+      if (arr.isEmpty()) {
+        sRevert->setText("无可撤销项");
+        QTimer::singleShot(1500, sRevert, [sRevert]() { sRevert->setText("撤销所选"); });
+        return;
+      }
+      QByteArray rb = QJsonDocument(arr).toJson(QJsonDocument::Compact);
+      Params().put("CarrotAiRevertList", std::string(rb.constData(), rb.size()));
+      sRevert->setText("已提交 ✓");
+      QTimer::singleShot(1500, listWgt, [listWgt]() { rebuildAiSuggestList(listWgt); });
+      QTimer::singleShot(1800, sRevert, [sRevert]() { sRevert->setText("撤销所选"); });
+    });
+
+    QPushButton *sClose = new QPushButton("关闭", panel);
+    sClose->setStyleSheet("height:110px; font-size:34px; background-color:#393939; color:white; border-radius:18px;");
+    QObject::connect(sClose, &QPushButton::clicked, overlay, [overlay, top](bool) {
+      overlay->hide();
+      if (top) { top->raise(); top->activateWindow(); }
+    });
+
+    sbtnRow->addWidget(sSelAll, 1);
+    sbtnRow->addWidget(sApply, 1);
+    sbtnRow->addWidget(sRevert, 1);
+    sbtnRow->addWidget(sClose, 1);
+    svbox->addLayout(sbtnRow);
+
+    overlay->show();
+  };
+
+  ButtonControl *suggestBtn = new ButtonControl("AI 调参建议", "查看",
+    "查看云端 AI 提出的具体调参建议并逐条决定是否采纳。与[自动调参记录]完全分开: "
+    "AI 建议默认全不勾选、永不自动生效, 只有你勾选并点[应用所选]才写入参数, 之后还能[撤销所选]还原。");
+  connect(suggestBtn, &ButtonControl::clicked, openAiSuggestOverlay);
+  featToggles->addItem(suggestBtn);
+
+  // === 驾驶习惯体检报告 (B+C: UI 查看 + offroad 自动生成) ===
+  // 点击打开可滑动浮层查看报告; 浮层内[重新生成]置 CarrotAiReportRun=1, 由 carrot_man 异步跑脚本并复位。
+  ButtonControl *reportBtn = new ButtonControl("生成并查看体检报告", "查看",
+    "生成并查看驾驶习惯体检报告: 数据量 / 学习成效 / 采样健康度 / 手动设定 vs 安全区 / 诊断结论。离车后自动生成, 也可点[重新生成]立刻刷新。");
+  auto openAiReportOverlay = [this, openAiSuggestOverlay]() {
+    g_ai_report_idx = 0;
+    QWidget *top = this->window();
+    QWidget *overlay = top->findChild<QWidget*>("aireport_overlay");
+    if (overlay) {
+      QWidget *abody = overlay->findChild<QWidget*>("aireport_body");
+      if (abody) rebuildAiReport(abody);
+      overlay->setGeometry(top->rect());
+      overlay->show(); overlay->raise();
+      return;
+    }
+    overlay = new QWidget(top);
+    overlay->setObjectName("aireport_overlay");
+    overlay->setGeometry(top->rect());
+    overlay->setStyleSheet(R"(
+      QWidget#aireport_overlay { background-color: rgba(0,0,0,0.85); }
+      QWidget#aireport_panel { background-color: #1e1e1e; border-radius: 28px; }
+    )");
+    QWidget *panel = new QWidget(overlay);
+    panel->setObjectName("aireport_panel");
+    int amargin = 60;
+    panel->setFixedSize(top->width() - 2 * amargin, top->height() - 2 * amargin);
+    panel->move(amargin, amargin);
+    QVBoxLayout *avbox = new QVBoxLayout(panel);
+    avbox->setContentsMargins(36, 36, 36, 36);
+    avbox->setSpacing(20);
+    QLabel *atitle = new QLabel("驾驶习惯体检报告", panel);
+    atitle->setAlignment(Qt::AlignCenter);
+    atitle->setStyleSheet("font-size:36px; font-weight:bold; color:white;");
+    avbox->addWidget(atitle);
+
+    QWidget *abody = new QWidget();
+    abody->setObjectName("aireport_body");
+    rebuildAiReport(abody);
+    FollowScrollArea *asv = new FollowScrollArea(abody, panel);
+    asv->setStyleSheet("background-color:#141414; border-radius:12px;");
+    avbox->addWidget(asv, 1);
+
+    QHBoxLayout *abtnRow = new QHBoxLayout();
+    abtnRow->setSpacing(20);
+    QPushButton *aregen = new QPushButton("重新生成", panel);
+    aregen->setStyleSheet("height:110px; font-size:34px; background-color:#2f7f4f; color:white; border-radius:18px;");
+    QObject::connect(aregen, &QPushButton::clicked, [abody, aregen](bool) {
+      Params().put("CarrotAiReportRun", std::string("1"));
+      aregen->setText("生成中…");
+      QTimer *at = new QTimer(aregen);
+      at->setSingleShot(false);
+      int *atries = new int(0);
+      QObject::connect(at, &QTimer::timeout, [abody, aregen, at, atries]() {
+        (*atries)++;
+        std::string adone = Params().get("CarrotAiReportRun");
+        if (adone == "0" || *atries > 16) {
+          g_ai_report_idx = 0;
+          rebuildAiReport(abody);
+          aregen->setText("重新生成");
+          at->stop(); at->deleteLater();
+        }
+      });
+      at->start(500);
+    });
+    QPushButton *aclose = new QPushButton("关闭", panel);
+    aclose->setStyleSheet("height:110px; font-size:34px; background-color:#393939; color:white; border-radius:18px;");
+    QObject::connect(aclose, &QPushButton::clicked, overlay, [overlay, top](bool) {
+      overlay->hide();
+      if (top) { top->raise(); top->activateWindow(); }
+    });
+    // [采纳建议]: 从报告直接跳到 AI 建议列表, 逐条勾选后才写入参数(绝不自动应用)
+    QPushButton *aadopt = new QPushButton("采纳建议", panel);
+    aadopt->setStyleSheet("height:110px; font-size:34px; background-color:#2f6fbf; color:white; border-radius:18px;");
+    QObject::connect(aadopt, &QPushButton::clicked, panel, [openAiSuggestOverlay](bool) {
+      openAiSuggestOverlay();
+    });
+    abtnRow->addWidget(aregen, 1);
+    abtnRow->addWidget(aadopt, 1);
+    abtnRow->addWidget(aclose, 1);
+    avbox->addLayout(abtnRow);
+
+    QHBoxLayout *apageRow = new QHBoxLayout();
+    apageRow->setSpacing(16);
+    QPushButton *aprev = new QPushButton("← 上一份", panel);
+    aprev->setStyleSheet("height:90px; font-size:30px; background-color:#3a3a3a; color:white; border-radius:16px;");
+    g_ai_page_lbl = new QLabel("第 1 / 1 份", panel);
+    g_ai_page_lbl->setAlignment(Qt::AlignCenter);
+    g_ai_page_lbl->setStyleSheet("font-size:28px; color:#bdbdbd;");
+    QPushButton *anext = new QPushButton("下一份 →", panel);
+    anext->setStyleSheet("height:90px; font-size:30px; background-color:#3a3a3a; color:white; border-radius:16px;");
+    QObject::connect(aprev, &QPushButton::clicked, [abody]() {
+      aiReportCollect();
+      if (g_ai_report_files.empty()) return;
+      g_ai_report_idx = (g_ai_report_idx - 1 + (int)g_ai_report_files.size()) % (int)g_ai_report_files.size();
+      rebuildAiReport(abody);
+    });
+    QObject::connect(anext, &QPushButton::clicked, [abody]() {
+      aiReportCollect();
+      if (g_ai_report_files.empty()) return;
+      g_ai_report_idx = (g_ai_report_idx + 1) % (int)g_ai_report_files.size();
+      rebuildAiReport(abody);
+    });
+    apageRow->addWidget(aprev, 1);
+    apageRow->addWidget(g_ai_page_lbl, 2);
+    apageRow->addWidget(anext, 1);
+    avbox->addLayout(apageRow);
+
+    // 浮层打开即自动轮询: 本地(重新生成)或云端(AI分析)报告生成完成后自动刷新
+    {
+      QTimer *apt = new QTimer(panel);
+      apt->setSingleShot(false);
+      int *aptries = new int(0);
+      QObject::connect(apt, &QTimer::timeout, [abody, apt, aptries]() {
+        (*aptries)++;
+        std::string rd = Params().get("CarrotAiReportRun");
+        std::string cd = Params().get("CarrotAiCloudRun");
+        // 云端分析 = 报告正文(约 15s) + 结构化调参建议(约 90s), 合计可能近 2 分钟,
+        // 轮询窗口必须够长, 否则报告刚出来轮询就停了, 用户得手动重开浮层。
+        if ((rd == "0" && cd == "0") || *aptries > 300) {
+          g_ai_report_idx = 0;
+          rebuildAiReport(abody);
+          apt->stop(); apt->deleteLater();
+        }
+      });
+      apt->start(500);
+    }
+    overlay->show();
+  };
+  connect(reportBtn, &ButtonControl::clicked, openAiReportOverlay);
+  featToggles->addItem(reportBtn);
+
+  // === 驾驶习惯云端 AI 深度分析入口(自学习相关参数下方) ===
+  // 配置 /data/carrot_ai_key.txt(硅基流动 SiliconFlow 免费额度)后, 点击上传行车摘要(仅几KB)做深度分析;
+  // 未配置 key 时自动降级为本地分析。结果追加写入同一份报告, 浮层打开即自动刷新显示。
+  ButtonControl *cloudBtn = new ButtonControl("生成并查看云端AI分析", "查看",
+    "上传行车摘要(仅几KB, 不传原始日志/视频/定位)做云端深度分析, 自动探测可用平台(优先硅基流动, 备选火山方舟/阿里百炼)。"
+    "分析结论追加显示在体检报告内, 同时生成可逐条勾选采纳的[AI 调参建议]。全程约 1~2 分钟, 请耐心等待。"
+    "未配置密钥时自动降级为本地分析。");
+  connect(cloudBtn, &ButtonControl::clicked, [=]() {
+    Params().put("CarrotAiCloudRun", std::string("1"));
+    openAiReportOverlay();
+  });
+  featToggles->addItem(cloudBtn);
+
+  // === 云端 AI 密钥配置(功能菜单内直接填写, 存入 Param CarrotAiCloudKey) ===
+  // 复用本 fork 自带 InputDialog(自带屏幕键盘, 与 WiFi 密码输入同一套, c3 可用); 不使用裸 QLineEdit(c3 无输入法无法打字)
+  ButtonControl *keyBtn = new ButtonControl("设置云端AI密钥", "设置",
+    "点击[设置]后用屏幕键盘输入你的硅基流动( SiliconFlow )免费 API key(形如 sk-xxxx)。留空则清除并回退使用文件 /data/carrot_ai_key.txt。配置后点[生成并查看云端AI分析]即上传行车摘要做深度分析。");
+  connect(keyBtn, &ButtonControl::clicked, [this]() {
+    std::string kcur = Params().get("CarrotAiCloudKey");
+    QString cur = kcur.empty() ? QString() : QString::fromStdString(kcur);
+    QString v = InputDialog::getText(QString("设置云端AI密钥"), this,
+      QString("粘贴/输入你的硅基流动( SiliconFlow )免费 API key。\n免费申请: 打开 https://cloud.siliconflow.cn 注册 → 控制台 → API密钥 → 新建密钥。\n留空则清除当前密钥。"),
+      false, -1, cur);
+    if (!v.isNull()) {
+      std::string s = v.trimmed().toStdString();
+      while (!s.empty() && (s.back()=='\n' || s.back()=='\r' || s.back()==' ')) s.pop_back();
+      while (!s.empty() && (s.front()=='\n' || s.front()=='\r' || s.front()==' ')) s.erase(s.begin());
+      Params().put("CarrotAiCloudKey", s);
+    }
+  });
+  featToggles->addItem(keyBtn);
+  featToggles->addItem(new ParamControl("CarrotAiReportAuto", tr("离车自动体检"), tr("回到 offroad(熄火/退出驾驶)后自动生成驾驶习惯体检报告并存盘, 随时可看。关闭后仅在手动点[生成并查看体检报告]时生成。"), "", this));
+  featToggles->addItem(sectionHeader("横向与转向辅助"));
+
+  // 自学习重置入口已移入"自动调参记录"弹窗内(见 showResetConfirm)。
+  featToggles->addItem(new CValueControl("AutoLaneCorrection", "自动居中纠偏(2)", "0:关闭, 1:实时纠偏, 2:实时纠偏+学习固定偏差(自动保持车道居中)", 0, 2, 1));
+  featToggles->addItem(new CValueControl("AutoLaneCorrectionGain", "纠偏强度(40)", "纠偏增益, 越大回中越快; 画龙时调小, 回中慢时调大", 0, 100, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
+  featToggles->addItem(sectionHeader("显示与画面"));
+  featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
+  // === 驾驶优化方案 2026-08-03: 前车切出(方案五) ===
+  featToggles->addItem(new CValueControl("DynamicTFollowCutOut", "前车切出跟车释放(100)", "前车变道离开你前方时释放跟车距离的强度, 单位%; 0:关闭, 100:最强", 0, 100, 5));
+  featToggles->addItem(new ParamControl("dp_ui_rainbow", tr("彩虹路径"), tr("将行驶路径显示为彩虹色动态渐变效果"), "", this));
+  featToggles->addItem(new CValueControl("dp_ui_rainbow_speed", "彩虹流动速度(10)", "彩虹色沿路径流动的快慢; 数值越大流动越快, 越小越舒缓; 需先开启[彩虹路径]", 1, 50, 1));
+  featToggles->addItem(new CValueControl("dp_ui_rainbow_brightness", "彩虹亮度(70)%", "彩虹路径的颜色亮度百分比; 数值越大越鲜亮, 越小越暗淡通透; 需先开启[彩虹路径]", 10, 100, 5));
+
+  // === 广角/长焦摄像头切换(模式 + 迟滞速度, 单位 km/h, 可调; 放在功能标签最后) ===
+  featToggles->addItem(new CValueControl("CarrotWideCamMode", "广角摄像头模式", "0:自动切换(迟滞速度见下方两项), 1:仅长焦(road主摄), 2:仅广角(wide)", 0, 2, 1));
+  featToggles->addItem(new CValueControl("CarrotWideCamSpeedLow", "广角切换速度(28)km/h", "自动模式下, 车速低于此值(单位km/h)时切到广角画面; 需小于[长焦切换速度]以形成迟滞, 防止在边界反复切换", 0, 120, 1));
+  featToggles->addItem(new CValueControl("CarrotWideCamSpeedHigh", "长焦切换速度(32)km/h", "自动模式下, 车速高于此值(单位km/h)时切回长焦画面; 需大于[广角切换速度]以形成迟滞", 0, 120, 1));
+
+
+  toggles_layout->addWidget(featToggles);
+  featToggles->setVisible(true);
+  applyLicenseLock();
+  }
   ScrollView* toggles_view = new ScrollView(toggles, this);
   carrotLayout->addWidget(toggles_view, 1);
 
@@ -1347,25 +2098,65 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   main_layout->addWidget(homeScreen);
   main_layout->setCurrentWidget(homeScreen);
 
-  togglesCarrot(0);
+  if (panelMode == 0) togglesCarrot(0);
 }
 
 void CarrotPanel::togglesCarrot(int widgetIndex) {
+  if (panelMode != 0) return;
   startToggles->setVisible(widgetIndex == 0);
   cruiseToggles->setVisible(widgetIndex == 1);
   navToggles->setVisible(widgetIndex == 2);
   speedToggles->setVisible(widgetIndex == 3);
   latLongToggles->setVisible(widgetIndex == 4);
   dispToggles->setVisible(widgetIndex == 5);
-  featToggles->setVisible(widgetIndex == 6);
+  trackToggles->setVisible(widgetIndex == 6);
+}
+
+// === 商用授权: 未激活/次数用完时, 设置底部「功能」标签页全部置灰并恢复关闭 ===
+void CarrotPanel::applyLicenseLock() {
+  std::string st = Params().get("CarrotLicStatus");
+  bool activated = (st == "1");
+  if (panelMode != 1) return;   // 仅锁定「功能」标签页(单页面板), 萝卜面板不动
+  if (!featToggles) return;
+  for (auto* c : featToggles->findChildren<AbstractControl*>()) {
+    c->setEnabled(activated);
+  }
+  if (!activated) {
+    // 恢复关闭: 按清单强制设值 (开关=关闭, 数值=指定值) 并刷新显示
+    static const char* off_bool[] = {"CarrotLearningEnabled", "CarrotAiReportAuto", "dp_ui_rainbow"};
+    for (const char* k : off_bool) {
+      Params().putBool(k, false);
+    }
+    struct IntSet { const char* key; int val; };
+    static const IntSet off_int[] = {
+      {"CarrotLearningReview", 0},   // 自学习调节开关 -> 0
+      {"AutoLaneCorrection", 0},     // 自动居中纠偏 -> 0
+      {"BlinkerTurnIntent", 0},      // 转向灯转弯意图 -> 0
+      {"ShowDrivePanel", 0},         // 驾驶面板 -> 0
+      {"DynamicTFollowCutOut", 0},   // 前车切出跟车释放 -> 0
+      {"CarrotWideCamMode", 2},      // 广角摄像头模式 -> 2(仅广角)
+    };
+    for (const auto& it : off_int) {
+      Params().put(it.key, std::to_string(it.val));
+    }
+    for (auto* pc : featToggles->findChildren<ParamControl*>()) {
+      pc->refresh();
+    }
+  }
+}
+
+void CarrotPanel::showEvent(QShowEvent *event) {
+  applyLicenseLock();
+  QWidget::showEvent(event);
 }
 
 void CarrotPanel::updateButtonStyles() {
+  if (panelMode != 0) return;
   QString styleSheet = R"(
-      #start_btn, #cruise_btn, #nav_btn, #speed_btn, #latLong_btn ,#disp_btn, #feat_btn {
+      #start_btn, #cruise_btn, #nav_btn, #speed_btn, #latLong_btn ,#disp_btn, #track_btn {
         height: 120px; border-radius: 15px; background-color: #393939;
       }
-      #start_btn:pressed, #cruise_btn:pressed, #nav_btn:pressed, #speed_btn:pressed, #latLong_btn:pressed, #disp_btn:pressed, #feat_btn:pressed {
+      #start_btn:pressed, #cruise_btn:pressed, #nav_btn:pressed, #speed_btn:pressed, #latLong_btn:pressed, #disp_btn:pressed, #track_btn:pressed {
         background-color: #4a4a4a;
       }
   )";
@@ -1390,7 +2181,7 @@ void CarrotPanel::updateButtonStyles() {
     styleSheet += "#disp_btn { background-color: #33ab4c; }";
     break;
   case 6:
-    styleSheet += "#feat_btn { background-color: #33ab4c; }";
+    styleSheet += "#track_btn { background-color: #33ab4c; }";
     break;
   }
 
@@ -1398,8 +2189,9 @@ void CarrotPanel::updateButtonStyles() {
 }
 
 
-CValueControl::CValueControl(const QString& params, const QString& title, const QString& desc, int min, int max, int unit)
-  : AbstractControl(title, desc), m_params(params), m_min(min), m_max(max), m_unit(unit) {
+CValueControl::CValueControl(const QString& params, const QString& title, const QString& desc, int min, int max, int unit,
+                             const QString& base_key)
+  : AbstractControl(title, desc), m_params(params), m_min(min), m_max(max), m_unit(unit), m_base_key(base_key) {
 
   label.setAlignment(Qt::AlignVCenter | Qt::AlignRight);
   label.setStyleSheet("color: #e0e879");
@@ -1440,7 +2232,15 @@ void CValueControl::showEvent(QShowEvent* event) {
 }
 
 void CValueControl::refresh() {
-  label.setText(QString::fromStdString(Params().get(m_params.toStdString())));
+  QString cur = QString::fromStdString(Params().get(m_params.toStdString()));
+  if (!m_base_key.isEmpty()) {
+    QString base = QString::fromStdString(Params().get(m_base_key.toStdString()));
+    if (!base.isEmpty()) {
+      label.setText(QString("%1 (基线 %2)").arg(cur).arg(base));
+      return;
+    }
+  }
+  label.setText(cur);
 }
 
 void CValueControl::adjustValue(int delta) {
@@ -1457,5 +2257,3 @@ void CValueControl::increaseValue() {
 void CValueControl::decreaseValue() {
   adjustValue(-m_unit);
 }
-
-#include "settings.moc"

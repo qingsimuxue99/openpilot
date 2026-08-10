@@ -15,6 +15,8 @@
 #include "selfdrive/ui/qt/widgets/controls.h"
 
 // ********** settings window + top-level panels **********
+class DeveloperPanel;   // 商用授权: 点「开发」标签 6 次解锁 SSH 显示
+
 class SettingsWindow : public QFrame {
   Q_OBJECT
 
@@ -36,6 +38,10 @@ private:
   QWidget *sidebar_widget;
   QButtonGroup *nav_btns;
   QStackedWidget *panel_widget;
+
+  // 商用授权: 点「开发」标签文字累计 6 次解锁 SSH 显示; 切换其他菜单清零
+  DeveloperPanel *dev_panel_ = nullptr;
+  int dev_click_count_ = 0;
 };
 
 class DevicePanel : public ListWidget {
@@ -47,6 +53,9 @@ signals:
   void reviewTrainingGuide();
   void showDriverView();
 
+protected:
+  void showEvent(QShowEvent *event) override;
+
 private slots:
   void poweroff();
   void reboot();
@@ -55,8 +64,15 @@ private slots:
   void updateCalibDescription();
 
 private:
+  // onroad/offroad mode switch (moved here from SoftwarePanel)
+  void updateOnOffRoadBtn();
+
   Params params;
   ButtonControl *pair_device;
+  ButtonControl *onOffRoadBtn = nullptr;
+  ParamWatcher *onoffroad_watch = nullptr;
+  // 商用授权: 剩余激活次数显示(设备菜单, showEvent 刷新)
+  class LabelControl* lic_remain_lbl_ = nullptr;
 };
 
 class TogglesPanel : public ListWidget {
@@ -95,7 +111,6 @@ private:
   LabelControl *versionLbl;
   ButtonControl *installBtn;
   ButtonControl *downloadBtn;
-  ButtonControl *onOffRoadBtn;
   ButtonControl *targetBranchBtn;
 
   Params params;
@@ -112,30 +127,37 @@ private:
   QStackedLayout* main_layout = nullptr;
   QWidget* homeScreen = nullptr;
   int currentCarrotIndex = 0;
+  int panelMode = 0;  // 0:萝卜面板(多标签)  1:一级「功能」面板(单页)
 
   QWidget* homeWidget;
   QVBoxLayout* carrotLayout;
 
-  ListWidget* cruiseToggles;
-  ListWidget* latLongToggles;
-  ListWidget* featToggles;
-  ListWidget* dispToggles;
-  ListWidget* startToggles;
-  ListWidget* speedToggles;
-  ListWidget* navToggles;
+  ListWidget* cruiseToggles = nullptr;
+  ListWidget* latLongToggles = nullptr;
+  ListWidget* featToggles = nullptr;
+  ListWidget* dispToggles = nullptr;
+  ListWidget* startToggles = nullptr;
+  ListWidget* speedToggles = nullptr;
+  ListWidget* navToggles = nullptr;
+  ListWidget* trackToggles = nullptr;
 
   void togglesCarrot(int widgetIndex);
   void updateButtonStyles();
 
 public:
-  explicit CarrotPanel(QWidget* parent = nullptr);
+  explicit CarrotPanel(QWidget* parent = nullptr, int mode = 0);
+
+  // 商用授权: 未激活/次数用完时锁定全部定制功能项(置灰不可操作)
+  void applyLicenseLock();
+  void showEvent(QShowEvent *event) override;
 };
 
 class CValueControl : public AbstractControl {
   Q_OBJECT
 
 public:
-  CValueControl(const QString& params, const QString& title, const QString& desc, int min, int max, int unit = 1);
+  CValueControl(const QString& params, const QString& title, const QString& desc, int min, int max, int unit = 1,
+                 const QString& base_key = QString());
 
 private slots:
   void increaseValue();
@@ -149,6 +171,7 @@ private:
   QPushButton btnplus;
   QPushButton btnminus;
   QLabel label;
+  QString m_base_key;   // 可选: 若非空, refresh 时在 label 追加 " (基线 X)"
 
   QString m_params;
   int m_min;

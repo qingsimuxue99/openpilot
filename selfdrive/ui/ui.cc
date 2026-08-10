@@ -75,6 +75,11 @@ void ui_update_params(UIState *s) {
 
   // DP Rainbow Path
   s->scene.dp_ui_rainbow = params.getBool("dp_ui_rainbow");
+  // 彩虹流动速度 / 亮度: param 未设置时 getInt 返回 0, 回退默认值以保持原有观感
+  int rainbow_speed = params.getInt("dp_ui_rainbow_speed");
+  s->scene.dp_ui_rainbow_speed = (rainbow_speed <= 0) ? 10 : std::clamp(rainbow_speed, 1, 50);
+  int rainbow_brightness = params.getInt("dp_ui_rainbow_brightness");
+  s->scene.dp_ui_rainbow_brightness = (rainbow_brightness <= 0) ? 70 : std::clamp(rainbow_brightness, 10, 100);
 }
 
 void UIState::updateStatus() {

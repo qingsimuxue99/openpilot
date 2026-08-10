@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export PARAMS_ROOT=/data/params
 export API_HOST='https://api.konik.ai'
 export ATHENA_HOST='wss://athena.konik.ai'
 #export MAPS_HOST=https://api.konik.ai/maps

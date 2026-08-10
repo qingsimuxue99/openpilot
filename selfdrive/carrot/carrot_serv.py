@@ -96,6 +96,7 @@ class CarrotServ:
     self.nRoadLimitSpeed = 30
     self.nRoadLimitSpeed_last = 30
     self.nRoadLimitSpeed_counter = 0
+    self.road_limit_valid = False   # 导航是否发来有效道路限速(修复 road_limit_valid 未定义导致的 AttributeError 崩溃)
 
     self.active_carrot = 0     ## 1: CarrotMan Active, 2: sdi active , 3: speed decel active, 4: section active, 5: bump active, 6: speed limit active
     self.active_count = 0
@@ -1180,6 +1181,7 @@ class CarrotServ:
       self.nGoPosTime = int(msg_nav.timeRemaining)
       if self.active_kisa_count <= 0 and msg_nav.speedLimit > 0:
         self.nRoadLimitSpeed = max(30, round(msg_nav.speedLimit * CV.MS_TO_KPH))
+        self.road_limit_valid = True
       self.xDistToTurn = int(msg_nav.maneuverDistance)
       self.xDistToTurnNav = int(msg_nav.maneuverDistance)
       self.szTBTMainText = msg_nav.maneuverPrimaryText
@@ -1204,6 +1206,7 @@ class CarrotServ:
         if not self.is_metric:
           road_limit_speed *= CV.MPH_TO_KPH
         self.nRoadLimitSpeed = road_limit_speed
+        self.road_limit_valid = True
     if "kisawazealert" in data:
       pass
     if "kisawazeendalert" in data:
@@ -1252,6 +1255,7 @@ class CarrotServ:
       if CS.speedLimit > 0 and self.active_carrot <= 1:
         self.nRoadLimitSpeed = CS.speedLimit
         cs_speed_limit = True
+        self.road_limit_valid = True
     else:
       v_ego = v_ego_kph = 0
       delta_dist = 0
@@ -1371,6 +1375,7 @@ class CarrotServ:
     if (controls_active and 30 < v_cruise_kph < 150 and self.active_carrot <= 1 #巡航已激活/巡航速度有效(小于150，大于30)/未开导航
       and self.autoSpeedUptoRoadSpeedLimit > 0 and not cs_speed_limit):          # 未设置巡航速度跟随道路限速/无车辆自带限速时，把巡航速度作为道路限速
       self.nRoadLimitSpeed = v_cruise_kph
+      self.road_limit_valid = True
 
     speed_n_sources = [
       (atc_desired, "atc"),
@@ -1636,6 +1641,7 @@ class CarrotServ:
       ### roadLimitSpeed
       nRoadLimitSpeed = int(json.get("nRoadLimitSpeed", 20))
       if nRoadLimitSpeed > 0:
+        self.road_limit_valid = True
         if nRoadLimitSpeed > 200:
           nRoadLimitSpeed = (nRoadLimitSpeed - 20) / 10
         elif nRoadLimitSpeed > 120:
@@ -1655,6 +1661,7 @@ class CarrotServ:
           nRoadLimitSpeed = min(nRoadLimitSpeed + add_val, 60)
       else:
         nRoadLimitSpeed = 30
+        self.road_limit_valid = False
       self.nRoadLimitSpeed = nRoadLimitSpeed
       #if self.nRoadLimitSpeed != nRoadLimitSpeed:
       #  self.nRoadLimitSpeed_counter += 1
