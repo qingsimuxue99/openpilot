@@ -190,8 +190,9 @@ class CarSpecificEvents:
     
     if CS.doorOpen and not self.mute_door:
       events.add(EventName.doorOpen)
-    if CS.seatbeltUnlatched and not self.mute_seatbelt:
-      events.add(EventName.seatbeltNotLatched)
+    # 安全带限制已移除: 不系安全带可正常使用(含提示)
+    # if CS.seatbeltUnlatched and not self.mute_seatbelt:
+    #   events.add(EventName.seatbeltNotLatched)
     if CS.gearShifter == GearShifter.park:
       events.add(EventName.wrongGear)
     if CS.gearShifter == GearShifter.neutral:
