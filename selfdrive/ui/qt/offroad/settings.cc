@@ -1136,7 +1136,6 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
   panels.append({ tr("萝卜"), new CarrotPanel(this) });
   dev_panel_ = new DeveloperPanel(this);
   panels.append({ tr("开发"), dev_panel_ });
-  panels.append({ tr("模型"), new DrivingModelPanel(this) });
 
   nav_btns = new QButtonGroup(this);
   for (auto &[name, panel] : panels) {
@@ -1495,6 +1494,20 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
 
 
   startToggles->addItem(selectCarBtn);
+  // 模型选择: 打开全屏二级弹窗 (模型列表, 参考车型选择/自学习记录弹窗框架)
+  QPushButton* modelBtn = new QPushButton(tr("模型选择"));
+  modelBtn->setObjectName("modelBtn");
+  modelBtn->setStyleSheet(R"(
+    QPushButton {
+      margin-top: 0px; margin-bottom: 20px; padding: 10px; height: 120px; border-radius: 15px;
+      color: #FFFFFF; background-color: #1F7F4F;
+    }
+    QPushButton:pressed {
+      background-color: #17683F;
+    }
+  )");
+  connect(modelBtn, &QPushButton::clicked, [=]() { showModelOverlay(this); });
+  startToggles->addItem(modelBtn);
   startToggles->addItem(new CValueControl("HyundaiCameraSCC", "现代: 摄像头SCC(0)", "1:连接SCC的CAN线到摄像头, 2:同步定速状态, 3:原厂长控，不是用摄像头实现SCC的均设置为0", -1, 100, 1));
   startToggles->addItem(new CValueControl("CanfdHDA2", "CANFD: HDA2 模式", "1:HDA2, 2:HDA2+盲点监测, 一般非CanFD车型设置为0", 0, 2, 1));
   startToggles->addItem(new CValueControl("EnableRadarTracks", "启用雷达追踪(1)", "1:启用雷达追踪, -1,2:禁用 (始终使用HKG SCC雷达)，胜达设置为1, 改变值后需要重启车辆", -1, 3, 1));
