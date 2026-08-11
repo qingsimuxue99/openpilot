@@ -28,6 +28,7 @@ function agnos_init {
 }
 
 function launch {
+
   # Remove orphaned git lock if it exists on boot
   [ -f "$DIR/.git/index.lock" ] && rm -f $DIR/.git/index.lock
 
@@ -73,6 +74,12 @@ function launch {
   if [ -f /AGNOS ]; then
     agnos_init
   fi
+
+  # --- 上线全部 CPU 核心 (必需: controlsd绑core4/plannerd绑core5/modeld pin core7; 不上线=核心进程全崩) ---
+  # 放在 agnos_init 之后: 开机早期 sudo 未就绪, 此时已可靠
+  for c in 4 5 6 7; do
+    ( echo 1 > /sys/devices/system/cpu/cpu$c/online ) 2>/dev/null || sudo sh -c "echo 1 > /sys/devices/system/cpu/cpu$c/online" 2>/dev/null || true
+  done
 
   # write tmux scrollback to a file
   tmux capture-pane -pq -S-1500 > /tmp/launch_log

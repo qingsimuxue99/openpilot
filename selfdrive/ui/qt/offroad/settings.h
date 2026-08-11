@@ -16,7 +16,6 @@
 
 // ********** settings window + top-level panels **********
 class DeveloperPanel;   // 商用授权: 点「开发」标签 6 次解锁 SSH 显示
-class DrivingModelPanel;  // 驾驶模型选择器 (本地列表切换 + 在线下载)
 
 class SettingsWindow : public QFrame {
   Q_OBJECT

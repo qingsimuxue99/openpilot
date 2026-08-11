@@ -1119,6 +1119,7 @@
       "default": 0,
       "unit": 1
     },
+
     {
       "group": "화면",
       "name": "ShowDebugUI",
@@ -1664,19 +1665,6 @@
       "max": 100,
       "default": 0,
       "unit": 5
-    },
-    {
-      "group": "차량간격",
-      "name": "DynamicTFollowCutOut",
-      "title": "전방차량 컷아웃 처리(100%)",
-      "descr": "옆차선으로 빠져나가는 선행차를 미리 놓아줌",
-      "egroup": "FDIST",
-      "etitle": "Dynamic TFollow CutOut(100%)",
-      "edescr": "Release lead earlier when it changes lane out",
-      "min": 0,
-      "max": 100,
-      "default": 100,
-      "unit": 1
     },
     {
       "group": "감속제어",
