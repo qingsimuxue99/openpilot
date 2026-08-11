@@ -27,6 +27,12 @@ static QString run_mgr(const QString &args) {
   return QString::fromStdString(out);
 }
 
+// 仅这 5 个验证过的 SP 模型可下载
+static const QStringList SP_DL_LIST = {"wmiv12", "tr16", "ltr14", "wmiv9", "tr15"};
+static QString g_downloading;   // 当前后台下载中的模型名 (小写), 空=空闲
+
+static void buildModelList(QWidget *listWidget, QWidget *top);  // 前置声明 (startDlPolling 引用)
+
 // 后台启动下载 (nohup, 不阻塞 UI); 进度写入 /tmp/model_dl_progress
 static void startDownload(const QString &name) {
   std::string cmd = "cd /data/openpilot && nohup /usr/local/venv/bin/python selfdrive/modeld/driving_model_manager.py download "
@@ -34,9 +40,43 @@ static void startDownload(const QString &name) {
   system(cmd.c_str());
 }
 
-// 仅这 5 个验证过的 SP 模型可下载
-static const QStringList SP_DL_LIST = {"wmiv12", "tr16", "ltr14", "wmiv9", "tr15"};
-static QString g_downloading;   // 当前后台下载中的模型名 (小写), 空=空闲
+// 轮询下载进度: 1.5s 一次读 /tmp/model_dl_progress; 完成(模型出现)→自动重建; 30s 无更新→判中断恢复可重试
+static void startDlPolling(QPushButton *dlBtn, const QString &sn, const QString &disp, QWidget *top, QWidget *listWidget) {
+  QTimer *t = new QTimer(listWidget);
+  t->setInterval(1500);
+  QString lastProg;   // 记录上次进度内容 ([=] 默认值捕获 + mutable)
+  int stall = 0;      // 连续无进度更新的轮询次数 (20 次 * 1.5s = 30s)
+  QObject::connect(t, &QTimer::timeout, listWidget, [=]() mutable {
+    if (g_downloading != sn) { t->stop(); t->deleteLater(); return; }
+    std::string prog = util::read_file("/tmp/model_dl_progress");
+    QRegularExpression re("(\\d+)\\s*%");
+    QRegularExpressionMatch m = re.match(QString::fromStdString(prog));
+    if (m.hasMatch()) {
+      int pct = m.captured(1).toInt();
+      dlBtn->setText(QString("SP: %1  ⬇ 下载中 %2%").arg(disp).arg(pct));
+    }
+    // 进度内容变化 = 有更新; 否则连续计数 (30 秒无更新判中断)
+    QString nowProg = QString::fromStdString(prog);
+    if (nowProg != lastProg) { lastProg = nowProg; stall = 0; }
+    else { stall++; }
+    // 完成检测: 本地模型列表已出现该模型
+    QString lj = run_mgr("list --json");
+    if (lj.contains(sn, Qt::CaseInsensitive)) {
+      g_downloading.clear();
+      t->stop(); t->deleteLater();
+      buildModelList(listWidget, top);   // 自动刷新 (该模型进入已安装区)
+      return;
+    }
+    // 中断检测: 30 秒无进度更新且模型未出现 → 下载进程已死/网络断, 恢复可重试
+    if (stall >= 20) {
+      g_downloading.clear();
+      t->stop(); t->deleteLater();
+      dlBtn->setText(QString("SP: %1  ⬇ 重试(上次中断)").arg(disp));
+      ConfirmationDialog::alert(QObject::tr("%1 下载中断(网络/进程), 已恢复可重试; 已下载分块会自动续传").arg(disp), top);
+    }
+  });
+  t->start();
+}
 
 // ===== 构建弹窗列表: 本地模型(点击切换) + 5 个 SP 可下载(点击下载, 行内进度) =====
 static void buildModelList(QWidget *listWidget, QWidget *top) {
@@ -100,6 +140,19 @@ static void buildModelList(QWidget *listWidget, QWidget *top) {
   group->setExclusive(true);
   int current_idx = -1;
 
+  // 当前使用模型醒目显示 (列表顶部, 一眼看出在用哪个)
+  for (const auto &r : rows) {
+    if (r.active) {
+      QString cur = r.text;
+      cur.remove(QObject::tr("  ✓"));
+      QLabel *curLbl = new QLabel(QObject::tr("▶ 当前使用: %1").arg(cur), listWidget);
+      curLbl->setAlignment(Qt::AlignCenter);
+      curLbl->setStyleSheet("font-size:32px; font-weight:bold; color:#4CD964; background-color:#1E3A2A; border-radius:10px; padding:12px 0; margin:2px 0;");
+      listLayout->addWidget(curLbl);
+      break;
+    }
+  }
+
   for (const auto &r : rows) {
     QPushButton *btn = new QPushButton(r.text, listWidget);
     btn->setCheckable(true);
@@ -141,37 +194,27 @@ static void buildModelList(QWidget *listWidget, QWidget *top) {
       QPushButton:disabled { background-color: #2A2A3C; color: #888899; }
       QPushButton:pressed { background-color: #2C2CE2; }
     )");
-    if (!g_downloading.isEmpty()) dlBtn->setEnabled(false);  // 已有下载进行中
+    // 下载中不禁用其他按钮: 点击时给出明确提示 (避免"点不动"困惑)
     QObject::connect(dlBtn, &QPushButton::clicked, [=]() {
-      if (!g_downloading.isEmpty()) return;
+      if (!g_downloading.isEmpty()) {
+        if (g_downloading == sn) return;  // 当前按钮(下载中/重试)自身处理
+        ConfirmationDialog::alert(QObject::tr("正在下载 %1, 请等待其完成后再下载 %2").arg(g_downloading.toUpper()).arg(disp), top);
+        return;
+      }
       if (ConfirmationDialog::confirm(QObject::tr("下载 SP 模型 %1?\n(后台下载, 行内显示进度, 完成后自动更新)").arg(disp), QObject::tr("CONFIRM"), top)) {
         g_downloading = sn;
         startDownload(sn);
         dlBtn->setEnabled(false);
         dlBtn->setText(QString("SP: %1  ⬇ 下载中 0%").arg(disp));
-        // 轮询进度: 1.5s 一次, 读 /tmp/model_dl_progress; 完成(本地列表出现)后自动重建
-        QTimer *t = new QTimer(listWidget);
-        t->setInterval(1500);
-        QObject::connect(t, &QTimer::timeout, listWidget, [=]() {
-          if (g_downloading != sn) { t->stop(); t->deleteLater(); return; }
-          std::string prog = util::read_file("/tmp/model_dl_progress");
-          QRegularExpression re("(\\d+)\\s*%");
-          QRegularExpressionMatch m = re.match(QString::fromStdString(prog));
-          if (m.hasMatch()) {
-            int pct = m.captured(1).toInt();
-            dlBtn->setText(QString("SP: %1  ⬇ 下载中 %2%").arg(disp).arg(pct));
-          }
-          // 完成检测: 本地模型列表已出现该模型
-          QString lj = run_mgr("list --json");
-          if (lj.contains(sn, Qt::CaseInsensitive)) {
-            g_downloading.clear();
-            t->stop(); t->deleteLater();
-            buildModelList(listWidget, top);   // 自动刷新 (该模型进入已安装区)
-          }
-        });
-        t->start();
+        startDlPolling(dlBtn, sn, disp, top, listWidget);
       }
     });
+    // 弹窗重建后恢复下载中状态 (刷新/重开弹窗时进度不丢失)
+    if (g_downloading == sn) {
+      dlBtn->setEnabled(false);
+      dlBtn->setText(QString("SP: %1  ⬇ 下载中…").arg(disp));
+      startDlPolling(dlBtn, sn, disp, top, listWidget);
+    }
     listLayout->addWidget(dlBtn);
   }
   if (!anyToDl) {
