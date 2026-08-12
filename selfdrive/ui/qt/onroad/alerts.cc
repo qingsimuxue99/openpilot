@@ -41,9 +41,9 @@ OnroadAlerts::Alert OnroadAlerts::getAlert(const SubMaster &sm, uint64_t started
     } else if (ss_missing > SELFDRIVE_STATE_TIMEOUT && !Hardware::PC()) {
       // car is started, but selfdrive is lagging or died
       if (ss.getEnabled() && (ss_missing - SELFDRIVE_STATE_TIMEOUT) < 10) {
-        a = {tr("TAKE CONTROL IMMEDIATELY"), tr("System Unresponsive"),
-             "selfdriveUnresponsive", cereal::SelfdriveState::AlertSize::FULL,
-             cereal::SelfdriveState::AlertStatus::CRITICAL};
+        a = {tr("System Unresponsive"), tr("openpilot 无响应, 请稍候"),
+             "selfdriveUnresponsive", cereal::SelfdriveState::AlertSize::MID,
+             cereal::SelfdriveState::AlertStatus::NORMAL};
       } else {
         a = {tr("System Unresponsive"), tr("Reboot Device"),
              "selfdriveUnresponsivePermanent", cereal::SelfdriveState::AlertSize::MID,

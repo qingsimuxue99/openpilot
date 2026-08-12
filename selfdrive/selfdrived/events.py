@@ -156,10 +156,10 @@ class NoEntryAlert(Alert):
 
 class SoftDisableAlert(Alert):
   def __init__(self, alert_text_2: str):
-    super().__init__("立即接管方向盘", alert_text_2,
-                     AlertStatus.userPrompt, AlertSize.full,
-                     Priority.MID, VisualAlert.steerRequired,
-                     AudibleAlert.warningSoft, 2.),
+    super().__init__("", "",
+                     AlertStatus.normal, AlertSize.none,
+                     Priority.LOW, VisualAlert.none,
+                     AudibleAlert.none, 0.),
 
 
 # 用户触发的轻度解除
@@ -171,10 +171,10 @@ class UserSoftDisableAlert(SoftDisableAlert):
 
 class ImmediateDisableAlert(Alert):
   def __init__(self, alert_text_2: str):
-    super().__init__("立即接管方向盘", alert_text_2,
-                     AlertStatus.critical, AlertSize.full,
-                     Priority.HIGHEST, VisualAlert.steerRequired,
-                     AudibleAlert.warningImmediate, 4.),
+    super().__init__("", "",
+                     AlertStatus.normal, AlertSize.none,
+                     Priority.LOW, VisualAlert.none,
+                     AudibleAlert.none, 0.),
 
 
 class EngagementAlert(Alert):
@@ -512,42 +512,42 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
 
   EventName.driverDistracted: {
     ET.WARNING: Alert(
-      "立即接管",
-      "司机在干嘛？",
-      AlertStatus.critical, AlertSize.full,
-      Priority.HIGH, VisualAlert.steerRequired, AudibleAlert.warningImmediate, .1),
+      "",
+      "",
+      AlertStatus.normal, AlertSize.none,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0.),
   },
 
   EventName.preDriverUnresponsive: {
     ET.WARNING: Alert(
-      "请扶方向盘",
       "",
-      AlertStatus.normal, AlertSize.small,
-      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .1),
+      "",
+      AlertStatus.normal, AlertSize.none,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0.),
   },
 
   EventName.promptDriverUnresponsive: {
     ET.WARNING: Alert(
-      "请扶方向盘",
-      "司机没反应？",
-      AlertStatus.userPrompt, AlertSize.mid,
-      Priority.MID, VisualAlert.steerRequired, AudibleAlert.promptDistracted, .1),
+      "",
+      "",
+      AlertStatus.normal, AlertSize.none,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0.),
   },
 
   EventName.driverUnresponsive: {
     ET.WARNING: Alert(
-      "DISENGAGE IMMEDIATELY",
-      "Driver Unresponsive",
-      AlertStatus.critical, AlertSize.full,
-      Priority.HIGH, VisualAlert.steerRequired, AudibleAlert.warningImmediate, .1),
+      "",
+      "",
+      AlertStatus.normal, AlertSize.none,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0.),
   },
 
   EventName.manualRestart: {
     ET.WARNING: Alert(
-      "TAKE CONTROL",
-      "Resume Driving Manually",
-      AlertStatus.userPrompt, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, .2),
+      "",
+      "",
+      AlertStatus.normal, AlertSize.none,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0.),
   },
 
   EventName.resumeRequired: {
@@ -596,10 +596,10 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
 
   EventName.steerSaturated: {
     ET.WARNING: Alert(
-      "请接管方向盘",
-      "转向能力已达极限",
-      AlertStatus.normal, AlertSize.small,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, 1.),
+      "",
+      "",
+      AlertStatus.normal, AlertSize.none,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0.),
   },
 
   # Thrown when the fan is driven at >50% but is not rotating
