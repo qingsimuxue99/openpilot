@@ -1089,6 +1089,10 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
 
   featToggles->addItem(new CValueControl("AutoLaneCorrection", "自动居中纠偏(2)", "0:关闭, 1:实时纠偏, 2:实时纠偏+学习固定偏差(自动保持车道居中)", 0, 2, 1));
   featToggles->addItem(new CValueControl("AutoLaneCorrectionGain", "纠偏强度(40)", "纠偏增益, 越大回中越快; 画龙时调小, 回中慢时调大", 0, 100, 1));
+  // === 弯道居中（独立开关，默认关=零影响原逻辑）===
+  featToggles->addItem(new CValueControl("CurveCenteringMode", "弯道居中(0)", "弯道中强制沿模型车道线中心行驶, 不外扩不内切, 避免压线; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
+  featToggles->addItem(new CValueControl("CurveCenteringStrength", "居中强度(60)x0.01", "朝车道中心回正的强度; 越大回正越狠越快, 越小越柔; 仅修正弯道中的偏离分量, 不影响直道与用户偏移", 10, 100, 5));
+  featToggles->addItem(new CValueControl("CurveCenteringCurv", "激活曲率(4)x0.001", "触发弯道居中的最小曲率(1/m), 越大只在更急的弯才激活; 直道(曲率≈0)不生效", 1, 10, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
   // === 红绿灯与停止辅助（独立开关，默认关=零影响原逻辑）===
@@ -1105,6 +1109,11 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("TrafficJamCreepSpeed", "蠕行速度(10)x0.1m/s", "蠕行时的目标速度, 单位0.1m/s, 越大前挪越快", 3, 30, 1));
   featToggles->addItem(new CValueControl("LeadDepartureMode", "前车起步预判(0)", "前车一动立即更跟手起步, 覆盖平顺起步的缓给; 0:关闭, 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("LeadDepartureSpeed", "跟车起步目标(40)x0.1m/s", "前车动时我们起步的目标速度上限, 单位0.1m/s, 越大起步越急", 10, 80, 1));
+  // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===
+  featToggles->addItem(sectionHeader("弯道预备减速辅助"));
+  featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
+  featToggles->addItem(new CValueControl("CurveAnticipateDist", "预备前瞻距离(60)m", "往前看多远开始预备降速, 单位m; 越大越早开始减速越柔, 越小越晚", 20, 150, 5));
+  featToggles->addItem(new CValueControl("CurveAnticipateLatA", "预备横向加速度(28)x0.1", "由曲率估算弯道限速时用的目标横向加速度, 单位0.1m/s^2; 越大降速越少越晚, 越小降速越多越早(下限由弯道限速兜底, 不会过慢)", 12, 50, 1));
   featToggles->addItem(sectionHeader("显示与画面"));
   featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
   // === 驾驶优化方案 2026-08-03: 前车切出(方案五) ===

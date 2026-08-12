@@ -12,6 +12,8 @@ from cereal import log
 from openpilot.common.params import Params
 #from openpilot.selfdrive.controls.lib.lane_planner import LanePlanner
 from openpilot.selfdrive.controls.lib.lane_planner_2 import LanePlanner
+# new: 弯道居中（独立模块，独立开关，默认关=零影响）
+from openpilot.selfdrive.carrot.curve_centering import CurveCentering
 from collections import deque
 
 TRAJECTORY_SIZE = 33
@@ -54,6 +56,8 @@ class LateralPlanner:
     self.latDebugText = ""
     # lane_mode
     self.LP = LanePlanner()
+    # new: 弯道居中控制器（独立开关，关闭时整段 no-op）
+    self.cc = CurveCentering()
     self.readParams = 0
     self.lanelines_active = False
     self.lanelines_active_tmp = False
@@ -145,6 +149,8 @@ class LateralPlanner:
     self.LP.curvature = measured_curvature
     self.path_xyz, self.lanelines_active = self.LP.get_d_path(sm['carState'], self.v_ego, self.t_idxs, self.path_xyz, self.curve_speed)
 
+    # === 弯道居中（独立模块，独立开关，默认关=零影响）===
+    self.path_xyz = self.cc.update(carrot, sm, self.path_xyz, self.LP, measured_curvature, self.v_ego, sm['carState'])
 
     #if self.LP.lanefull_mode:
     #  self.plan_yaw, self.plan_yaw_rate = self.LP.calculate_plan_yaw_and_yaw_rate(self.path_xyz)
@@ -266,21 +272,29 @@ class LateralPlanner:
     if lead_right.status:
       radar_right_info += f"| R:{lead_right.dRel:.1f}m,{lead_right.vLead * 3.6:.0f}km/h"
     '''
-    lanemode_str = 'lanemode' if self.lanelines_active else 'laneless'
-    if self.lanelines_active:
-      cs = self.curve_speed
-      # vTurnSpeed 在直路/无曲率时为 clip 上限 200(等效无限大)，或启动初期为 0，均非有效弯道限速，不显示为具体速度
-      turn_str = f"{cs:.0f}km/h" if 0 < cs < 199 else "inf"
-      offset_turn_info = f"offset={self.LP.offset_total * 100.0:.1f}cm turn={turn_str}"
+    # 弯道限速显示：直路/无曲率时 vTurnSpeed 等于 clip 上限(200, 等效无限大)，不显示为具体速度
+    cs = float(np.clip(self.curve_speed, -200, 200))
+    turn_str = f"{cs:.0f}km/h" if 0.0 < abs(cs) < 199.0 else "inf"
+
+    # 自动纠偏中文读数（区分左右）：ac_applied / ac_learned 为正=向右修正
+    ac_on = getattr(self.LP, "ac_enabled", 0) > 0
+    if ac_on:
+      a = self.LP.ac_applied * 100.0
+      l = self.LP.ac_learned * 100.0
+      ac_str = f"纠{'右' if a >= 0 else '左'}{abs(a):.0f}cm(学纠{'右' if l >= 0 else '左'}{abs(l):.0f}cm)"
     else:
-      offset_turn_info = ""
+      ac_str = "自动纠偏:关"
+
+    # 车道宽/偏移/弯速 中文读数
+    lane_info = f"左{self.LP.lane_width_left:.1f}m 中{self.LP.lane_width:.1f}m 右{self.LP.lane_width_right:.1f}m"
+    extra = ""
+    if self.lanelines_active:
+      extra = f" | 偏移{self.LP.offset_total * 100.0:.1f}cm 弯速{turn_str}"
     debugText = (
-      f"{lanemode_str} | " +
-      f"{self.LP.lane_width_left:.1f}m | " +
-      f"{self.LP.lane_width:.1f}m | " +
-      f"{self.LP.lane_width_right:.1f}m | " +
-      f"{offset_turn_info} | " +
-      f"AC:{self.LP.ac_applied * 100.0:+.0f}cm(L{self.LP.ac_learned * 100.0:+.0f})" +
+      f"{'车道线' if self.lanelines_active else '无车道线'} | " +
+      lane_info +
+      extra +
+      f" | {ac_str}" +
       radar_left_info +
       radar_right_info
     )
