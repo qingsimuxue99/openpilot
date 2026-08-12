@@ -1091,6 +1091,12 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("AutoLaneCorrectionGain", "纠偏强度(40)", "纠偏增益, 越大回中越快; 画龙时调小, 回中慢时调大", 0, 100, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
+  // === 红绿灯与停止辅助（独立开关，默认关=零影响原逻辑）===
+  featToggles->addItem(sectionHeader("红绿灯与停止辅助"));
+  featToggles->addItem(new CValueControl("TrafficLightBrakeMode", "红绿灯刹车增强(0)", "0:关闭(完全不影响原逻辑), 1:仅红灯加强刹车避免过线, 2:红灯加强+绿灯强制起步", 0, 2, 1));
+  featToggles->addItem(new CValueControl("TrafficLightBrakeMargin", "红灯提前停止(20)x0.1m", "在模型停止线前额外提前的距离, 单位0.1m, 越大越提前停防止过线/蠕动过线", 0, 100, 1));
+  featToggles->addItem(new CValueControl("TrafficLightBrakeConfirm", "多帧确认(8)", "红/绿灯需连续确认的帧数, 越大越抗单帧误识别抖动", 1, 30, 1));
+  featToggles->addItem(new CValueControl("TrafficLightBrakeDecel", "加强刹车下限(15)x0.1", "红灯加强刹车时的加速度下限, 单位0.1m/s^2, 越小刹车越狠", 5, 50, 1));
   featToggles->addItem(sectionHeader("显示与画面"));
   featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
   // === 驾驶优化方案 2026-08-03: 前车切出(方案五) ===
