@@ -1097,6 +1097,14 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("TrafficLightBrakeMargin", "红灯提前停止(20)x0.1m", "在模型停止线前额外提前的距离, 单位0.1m, 越大越提前停防止过线/蠕动过线", 0, 100, 1));
   featToggles->addItem(new CValueControl("TrafficLightBrakeConfirm", "多帧确认(8)", "红/绿灯需连续确认的帧数, 越大越抗单帧误识别抖动", 1, 30, 1));
   featToggles->addItem(new CValueControl("TrafficLightBrakeDecel", "加强刹车下限(15)x0.1", "红灯加强刹车时的加速度下限, 单位0.1m/s^2, 越小刹车越狠", 5, 50, 1));
+  // === 起步与跟车辅助（三个独立开关，默认关=零影响原逻辑）===
+  featToggles->addItem(sectionHeader("起步与跟车辅助"));
+  featToggles->addItem(new CValueControl("LaunchSmoothingMode", "平顺起步(0)", "红灯外从停止起步时限制初始加速, 不窜动; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
+  featToggles->addItem(new CValueControl("LaunchSmoothingInit", "起步缓给速度(15)x0.1m/s", "起步窗口内目标不超过当前速度+此值, 越大起步越冲, 越小越缓", 3, 40, 1));
+  featToggles->addItem(new CValueControl("TrafficJamCreepMode", "拥堵蠕行(0)", "低速跟车小幅前挪缩小车距, 减少被加塞更跟手; 0:关闭, 1:开启", 0, 1, 1));
+  featToggles->addItem(new CValueControl("TrafficJamCreepSpeed", "蠕行速度(10)x0.1m/s", "蠕行时的目标速度, 单位0.1m/s, 越大前挪越快", 3, 30, 1));
+  featToggles->addItem(new CValueControl("LeadDepartureMode", "前车起步预判(0)", "前车一动立即更跟手起步, 覆盖平顺起步的缓给; 0:关闭, 1:开启", 0, 1, 1));
+  featToggles->addItem(new CValueControl("LeadDepartureSpeed", "跟车起步目标(40)x0.1m/s", "前车动时我们起步的目标速度上限, 单位0.1m/s, 越大起步越急", 10, 80, 1));
   featToggles->addItem(sectionHeader("显示与画面"));
   featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
   // === 驾驶优化方案 2026-08-03: 前车切出(方案五) ===

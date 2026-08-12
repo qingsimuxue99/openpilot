@@ -21,6 +21,8 @@ from openpilot.selfdrive.controls.lib.dec.longitudinal_planner import Longitudin
 from openpilot.selfdrive.carrot.config import UnifiedParams
 #new: 红绿灯刹车/起步增强（独立模块，默认关=零影响）
 from openpilot.selfdrive.carrot.traffic_light_brake import TrafficLightBrake
+#new: 起步与跟车辅助（独立模块，三功能各自独立开关，默认关=零影响）
+from openpilot.selfdrive.carrot.launch_assist import LaunchAssist
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 A_CRUISE_MIN = -2.0 #-1.2
@@ -94,6 +96,8 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     self.frame = 0
     #new: 红绿灯刹车/起步增强控制器（开关关闭时整段 no-op）
     self.tlb = TrafficLightBrake()
+    #new: 起步与跟车辅助控制器（三功能各自独立开关，关闭时整段 no-op）
+    self.la = LaunchAssist()
     self.DynamicExperimentalSpeed = -1
     self.DynamicExperimentalLatA = 0.0
     self.UserExperimentalMode = False
@@ -296,6 +300,8 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     self.mpc.set_cur_state(self.v_desired_filter.x, self.a_desired)
     # === 红绿灯刹车/起步增强（独立模块，默认关=零影响）===
     self.tlb.update(carrot, sm, v_ego, v_cruise)
+    # === 起步与跟车辅助（独立模块，三功能各自独立开关，默认关=零影响）===
+    self.la.update(carrot, sm, v_ego, v_cruise)
     self.mpc.update(carrot, reset_state, sm['radarState'], v_cruise, x, v, a, j, personality=sm['selfdriveState'].personality)
 
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
