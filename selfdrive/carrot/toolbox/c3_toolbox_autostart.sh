@@ -32,9 +32,9 @@ done
 PYP=/usr/local/venv/bin/python
 [ -x "$PYP" ] || PYP=python3
 
-# 启动工具箱 (cd 代码目录, 让 SCRIPT_DIR 定位 html; PYTHONPATH 加 /data/pylibs 供 flask)
+# 启动工具箱 (cd 代码目录, 让 SCRIPT_DIR 定位 html; PYTHONPATH 加仓库内 pylibs 供 flask)
 cd "$TOOLBOX_DIR"
-export PYTHONPATH=/data/pylibs:${PYTHONPATH:-}
+export PYTHONPATH=/data/openpilot/selfdrive/carrot/toolbox/pylibs:${PYTHONPATH:-}
 setsid "$PYP" c3_toolbox_local.py >> "$LOG_FILE" 2>&1 < /dev/null &
 echo $! > "$PID_FILE"
 
