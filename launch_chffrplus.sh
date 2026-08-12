@@ -81,6 +81,15 @@ function launch {
     ( echo 1 > /sys/devices/system/cpu/cpu$c/online ) 2>/dev/null || sudo sh -c "echo 1 > /sys/devices/system/cpu/cpu$c/online" 2>/dev/null || true
   done
 
+  # --- C3 工具箱自启 (5588 网页工具箱; 代码随仓库分发, 运行时数据在 /data/c3_toolbox) ---
+  TBX="$DIR/selfdrive/carrot/toolbox"
+  if [ -f "$TBX/c3_toolbox_autostart.sh" ]; then
+    mkdir -p /data/c3_toolbox
+    bash "$TBX/c3_toolbox_autostart.sh" >> /tmp/c3_toolbox_autostart.log 2>&1
+  fi
+  # --- gen_qr 二维码实时刷新 (IP 变化自动重生成, 供侧栏显示/扫码) ---
+  ( sleep 8; [ -x "$TBX/gen_qr.py" ] && setsid /usr/local/venv/bin/python "$TBX/gen_qr.py" >> /tmp/gen_qr.log 2>&1 < /dev/null & )
+
   # write tmux scrollback to a file
   tmux capture-pane -pq -S-1500 > /tmp/launch_log
   if python -c "import flask" > /dev/null 2>&1; then

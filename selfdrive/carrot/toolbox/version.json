@@ -1,0 +1,6 @@
+{
+  "version": "1.0.73",
+  "changelog": "完整备份与恢复功能已迁移至 App 工具箱（SSH 私钥登录、停 openpilot 后 tar 打包 + md5 校验、SFTP 下载到手机、实时进度日志，彻底解决网页版备份包损坏缺失 / 恢复无进度）；网页端保留 SSH 终端与参数管理。网页端不再提供完整备份/恢复入口。",
+  "tag": "v1.1.4",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.4/release/c3_toolbox.tar.gz"
+}
