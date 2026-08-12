@@ -1,6 +1,6 @@
 {
-  "version": "1.0.74",
-  "changelog": "移除网页端「完整备份 openpilot」功能(在线打包 /data/openpilot 校验机制在整目录场景有缺陷, 已去除); 保留参数备份/恢复、SSH 终端、在线更新等其余功能。",
-  "tag": "v1.1.5",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.4/release/c3_toolbox.tar.gz"
+  "version": "1.2.1",
+  "changelog": "v1.2.1: flask 及依赖纯 Python 库入库(pylibs), 重刷/重启不再依赖 /data, 工具箱开机即用; 修复移除完整备份时误删 </script> 致页面 JS 失效、参数无法加载。v1.2.0: 移除网页端「完整备份 openpilot」功能(整目录打包校验有缺陷); 保留参数备份/恢复、SSH 终端、在线更新。",
+  "tag": "v1.1.6",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.1.5/release/c3_toolbox.tar.gz"
 }
