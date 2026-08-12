@@ -699,15 +699,6 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
         <button class="btn bw" onclick="doParamDiff()" style="margin-top:8px">开始对比</button>
         <div id="diffResult" style="margin-top:10px"></div>
       </div>
-      <div class="cd"><div class="ct">完整备份（openpilot 整目录 + 参数）</div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">在线打包 <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/openpilot</code> + <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/data/params</code>，后台执行、绝不杀 openpilot（避免设备重启断连），实时进度 + 末尾 md5 / 文件数校验。点「整体备份」后弹出进度窗。</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <button class="btn bp" onclick="doFullBackup()">🗄️ 整体备份</button>
-          <span class="bs-info" id="fullBkStatus"></span>
-        </div>
-        <div id="fullBkList" style="margin-top:8px"></div>
-        <div class="bs-note">完整恢复（解包回写）建议在 <b>App 工具箱</b> 完成（SSH 直连、断点可控更稳）；网页端侧重「一键备份 + 校验」。</div>
-      </div>
       <div class="cd"><div class="ct">自定义写入</div>
         <div class="fg"><textarea id="cParams" rows="5" placeholder='{"AutoCruiseControl": "1"}' style="font-family:monospace;font-size:11px"></textarea></div>
         <button class="btn bp" onclick="applyCustom()" style="margin-top:8px">应用</button>
@@ -1864,37 +1855,12 @@ async function streamTask(url, body, opts){
     var c=document.getElementById('progClose');if(c.disabled){progDone();if(opts.onDone)opts.onDone();}
   }catch(e){progLog('❌ 连接中断：'+e.message);progErr();}
 }
-function doFullBackup(){streamTask('/api/backup_full',{},{title:'整体备份（openpilot + 参数）',onDone:loadFullBkList});}
 function doDeployUpdate(){if(!confirm('确定更新到最新版本？服务将自动重启，期间页面会短暂断开。'))return;streamTask('/api/update',{},{title:'一键部署 / 在线更新'});}
-function loadFullBkList(){
-  var el=document.getElementById('fullBkList');if(!el)return;
-  fetch('/api/backup_full/list').then(function(r){return r.json()}).then(function(d){
-    if(!d.backups||!d.backups.length){el.innerHTML='<p style="font-size:11px;color:var(--dim)">暂无整体备份包</p>';return;}
-    var h='';
-    d.backups.forEach(function(b){var mb=(b.size/1024/1024).toFixed(1);
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);font-size:11px"><span style="color:var(--ink)">'+esc(b.name)+'</span>'
-        +'<span style="color:var(--dim)">'+b.time+' · '+mb+'MB '
-        +'<a class="upd-link" onclick="dlFullBk(\''+esc(b.name)+'\')">下载</a> '
-        +'<a class="upd-link" style="color:var(--accent2)" onclick="delFullBk(\''+esc(b.name)+'\')">删除</a></span></div>';
-    });
-    el.innerHTML=h;
-  }).catch(function(){});
-}
-function dlFullBk(name){window.open('/api/backup_full/download/'+encodeURIComponent(name));}
-async function delFullBk(name){
-  if(!confirm('确定删除整体备份 '+name+' ？'))return;
-  try{var r=await fetch('/api/backup_full/delete/'+encodeURIComponent(name),{method:'POST'});var d=await r.json();toast(d.message||(d.success?'已删除':'删除失败'),d.success?'ok':'er');if(d.success)loadFullBkList();}catch(e){toast('删除失败','er');}
-}
 
 // === Init ===
-(function(){restoreGrps();loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate();loadFullBkList()})();
+(function(){restoreGrps();loadInfo();checkAutoBackup();loadParamMeta();loadParams();loadVersion();checkUpdate()})();
 // Load backup list on init
 setTimeout(function(){loadBkList()},2000);
 // 应用保存的皮肤主题
 initTheme();
 // 自动检查更新：打开页面即查（上方 init 已调用），切标签即查（onTabSwitch 内已调用），
-// 并每 5 分钟后台静默复检一次，全程无需手动点击「检查更新」按钮。
-setInterval(function(){try{checkUpdate()}catch(e){}},5*60*1000);
-</script>
-</body>
-</html>
