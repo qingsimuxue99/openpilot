@@ -860,7 +860,7 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   latLongToggles->addItem(new CValueControl("StoppingDecelRate", "纵向: 停车时的减速率x0.01(80)", "StoppingDecelRate,单位0.01m/s^2,0表示使用各车型的默认值", 0, 200, 1));
   latLongToggles->addItem(new CValueControl("ComfortBrake", "纵向: 舒适制动减速度x0.01(240)", "ComfortBrake,单位0.01m/s^2", 0, 400, 5));
   latLongToggles->addItem(new CValueControl("StopDistanceCarrot", "纵向: 停车距离 (600)cm", "停车后距离前车的距离，单位为厘米", 300, 1000, 10));
-  latLongToggles->addItem(new CValueControl("RedLightDistOffset", "纵向: 红灯停车偏移(0)dm", "红灯停车距离偏移(单位dm, 1dm=0.1m): 若停车冲过/超出停止线(停太近)调为正值拉远, 若离停止线太远(停太远)调为负值拉近; 范围-150~150dm", -150, 150, 1));
+  latLongToggles->addItem(new CValueControl("RedLightDistOffset", "纵向: 红灯停车偏移(0)dm", "用于调整红灯停止线的距离偏移，如果红灯停车会超出停止线，调为负值，如果离停止线太远，调为正值", -150, 150, 1));
   latLongToggles->addItem(new CValueControl("DecelLimitVEgoMax", "减速: 限制减速度的最大车速(20)x0.1", "DecelLimitVEgoMax,单位0.1m/s,0表示关闭减速度限制功能", 0, 500, 1));
   latLongToggles->addItem(new CValueControl("DecelLimitAEgoMax", "减速: 限制减速度的最大值(-100)x0.01", "DecelLimitVEgoMax,单位0.01m/s^2,参数为负值", -350, 0, 1));
   latLongToggles->addItem(new CValueControl("DecelLimitVEgoMin", "减速: 限制减速度的最小车速(10)x0.1", "DecelLimitVEgoMin,单位0.1m/s", 0, 500, 1));
