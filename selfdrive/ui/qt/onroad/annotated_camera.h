@@ -31,6 +31,11 @@ private:
   int skip_frame_count = 0;
   bool wide_cam_requested = false;
 
+  // 广角切换参数缓存：由 updateState 低频(约1秒)刷新，paintEvent 每帧只用缓存值，避免每帧读磁盘阻塞主线程
+  int wide_cam_mode_cache_ = 0;
+  int wide_cam_speed_low_ = 28;
+  int wide_cam_speed_high_ = 32;
+
   // STOPPED 静止计时器
   bool standstill_timer_enabled_ = true;
   bool is_standstill_ = false;

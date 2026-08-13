@@ -43,6 +43,15 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   experimental_btn->updateState(s);
   dmon.updateState(s);
 
+  // 广角切换参数：每 ~20 帧(约1秒)刷新一次缓存，避免 paintEvent 每帧读磁盘阻塞主线程
+  static int wide_cam_param_cnt = 0;
+  if (wide_cam_param_cnt == 0 || (++wide_cam_param_cnt % 20) == 0) {
+    Params p;
+    wide_cam_mode_cache_ = p.getInt("CarrotWideCamMode");
+    wide_cam_speed_low_ = p.getInt("CarrotWideCamSpeedLow");
+    wide_cam_speed_high_ = p.getInt("CarrotWideCamSpeedHigh");
+  }
+
   // === 高速净屏：隐藏 Qt 控件图标（独立开关，默认关=零影响）===
   const bool clean_view = s.clean_view_active;
   if (experimental_btn->isVisible() == clean_view) experimental_btn->setVisible(!clean_view);
@@ -180,7 +189,7 @@ void AnnotatedCameraWidget::paintEvent(QPaintEvent *event) {
     }
 
     // >>>>>>>>>>>>>>>>>> 广角/主摄切换逻辑（30km/h 带迟滞，可调） <<<<<<<<<<<<<<<<<<
-    int wide_cam_mode = Params().getInt("CarrotWideCamMode"); // 0自动 1仅长焦 2仅广角
+    int wide_cam_mode = wide_cam_mode_cache_; // 0自动 1仅长焦 2仅广角 (低频缓存,见 updateState)
     bool has_wide_cam = available_streams.count(VISION_STREAM_WIDE_ROAD);
     if (wide_cam_mode == 1) {
       // 仅长焦(road / narrow): 始终使用主摄
@@ -195,8 +204,8 @@ void AnnotatedCameraWidget::paintEvent(QPaintEvent *event) {
       // 迟滞速度可调(单位 km/h, 由 UI 设置):
       // - 低于 CarrotWideCamSpeedLow(km/h) 切到广角
       // - 高于 CarrotWideCamSpeedHigh(km/h) 切回长焦
-      int spd_low = Params().getInt("CarrotWideCamSpeedLow");    // km/h, 默认 28
-      int spd_high = Params().getInt("CarrotWideCamSpeedHigh");  // km/h, 默认 32
+      int spd_low = wide_cam_speed_low_;    // km/h, 默认 28 (低频缓存)
+      int spd_high = wide_cam_speed_high_;  // km/h, 默认 32 (低频缓存)
       if (spd_high <= spd_low) spd_high = spd_low + 1;  // 保证迟滞间隙, 防止边界抖动
       const float SWITCH_TO_WIDE_THRESHOLD = (float)spd_low / 3.6f;    // km/h -> m/s
       const float SWITCH_TO_ROAD_THRESHOLD = (float)spd_high / 3.6f;   // km/h -> m/s
@@ -312,4 +321,7 @@ void AnnotatedCameraWidget::drawStoppedTimer(QPainter &p, const QRect &surface_r
 }
 
 void AnnotatedCameraWidget::mousePressEvent(QMouseEvent *event) {
+  // 让点击向上冒泡到 OnroadWindow：恢复行驶界面全屏点击响应
+  // (展开侧栏 / HUD区域切换显示)。空 {} 会吞掉事件导致点击无反应。
+  QWidget::mousePressEvent(event);
 }

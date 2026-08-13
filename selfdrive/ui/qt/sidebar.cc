@@ -92,15 +92,17 @@ void Sidebar::mousePressEvent(QMouseEvent *event) {
 }
 
 void Sidebar::mouseReleaseEvent(QMouseEvent *event) {
-  if (flag_pressed || settings_pressed) {
-    flag_pressed = settings_pressed = false;
-    update();
-  }
-  if (onroad && home_btn.contains(event->pos())) {
+  // 用"按下时已命中"判定：释放时不再二次要求坐标仍在按钮矩形内，
+  // 避免触摸抖动 / 主线程繁忙导致轻点落空、需连点多次才弹出设置
+  bool was_settings = settings_pressed;
+  bool was_flag = flag_pressed;
+  flag_pressed = settings_pressed = false;
+  update();
+  if (was_flag && onroad && home_btn.contains(event->pos())) {
     MessageBuilder msg;
     msg.initEvent().initUserFlag();
     pm->send("userFlag", msg);
-  } else if (settings_btn.contains(event->pos())) {
+  } else if (was_settings) {
     emit openSettings();
   }
 }

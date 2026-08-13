@@ -217,7 +217,7 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
   int x = e->x();   // 430 - 500 : gap window
   int y = height() - e->y();  // 60 - 180 : gap window
   int ey = e->y();
-  printf("x=%d, y=%d, ey=%d\n", x, y, ey);
+  //printf("x=%d, y=%d, ey=%d\n", x, y, ey);
   double now = millis_since_boot();
   static double last_click_time = 0;
   static int _click_count = 0;
@@ -255,7 +255,7 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
     
     UIState* s = uiState();
     s->scene._current_carrot_display = (s->scene._current_carrot_display % 3) + 1;  // 4번: full map은 안보여줌.
-    printf("_current_carrot_display1=%d\n", s->scene._current_carrot_display);
+    //printf("_current_carrot_display1=%d\n", s->scene._current_carrot_display);
     QWidget::mousePressEvent(e);
   }
 }
