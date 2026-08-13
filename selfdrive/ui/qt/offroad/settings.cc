@@ -818,7 +818,7 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("DynamicTFollowLC", "动态跟车GAP控制(变道)", "", 0, 100, 5));
   cruiseToggles->addItem(new CValueControl("MyDrivingMode", "驾驶模式选择", "1:经济,2:安全,3:普通,4:激进", 1, 4, 1));
   cruiseToggles->addItem(new CValueControl("MyDrivingModeAuto", "驾驶模式自动", "0:关闭,1:开启(仅普通模式)", 0, 1, 1));
-  cruiseToggles->addItem(new CValueControl("TrafficLightDetectMode", "红绿灯检测模式", "0:无,1:仅停止,2:停走模式", 0, 2, 1));
+  // 红绿灯检测已关闭（TrafficLightDetectMode=0），菜单项移除
 
   //cruiseToggles->addItem(new CValueControl("CruiseSpeedMin", "CRUISE: Speed Lower limit(10)", "Cruise control MIN speed", 5, 50, 1));
   //cruiseToggles->addItem(new CValueControl("AutoResumeFromGas", "GAS CRUISE ON: Use", "Auto Cruise on when GAS pedal released, 60% Gas Cruise On automatically", 0, 3, 1));
@@ -860,7 +860,7 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   latLongToggles->addItem(new CValueControl("StoppingDecelRate", "纵向: 停车时的减速率x0.01(80)", "StoppingDecelRate,单位0.01m/s^2,0表示使用各车型的默认值", 0, 200, 1));
   latLongToggles->addItem(new CValueControl("ComfortBrake", "纵向: 舒适制动减速度x0.01(240)", "ComfortBrake,单位0.01m/s^2", 0, 400, 5));
   latLongToggles->addItem(new CValueControl("StopDistanceCarrot", "纵向: 停车距离 (600)cm", "停车后距离前车的距离，单位为厘米", 300, 1000, 10));
-  latLongToggles->addItem(new CValueControl("RedLightDistOffset", "纵向: 红灯停车偏移(0)dm", "用于调整红灯停止线的距离偏移，如果红灯停车会超出停止线，调为负值，如果离停止线太远，调为正值", -150, 150, 1));
+  // 红灯停车偏移随红绿灯功能一并移除
   latLongToggles->addItem(new CValueControl("DecelLimitVEgoMax", "减速: 限制减速度的最大车速(20)x0.1", "DecelLimitVEgoMax,单位0.1m/s,0表示关闭减速度限制功能", 0, 500, 1));
   latLongToggles->addItem(new CValueControl("DecelLimitAEgoMax", "减速: 限制减速度的最大值(-100)x0.01", "DecelLimitVEgoMax,单位0.01m/s^2,参数为负值", -350, 0, 1));
   latLongToggles->addItem(new CValueControl("DecelLimitVEgoMin", "减速: 限制减速度的最小车速(10)x0.1", "DecelLimitVEgoMin,单位0.1m/s", 0, 500, 1));
@@ -1095,12 +1095,8 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("CurveCenteringCurv", "激活曲率(4)x0.001", "触发弯道居中的最小曲率(1/m), 越大只在更急的弯才激活; 直道(曲率≈0)不生效", 1, 10, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
-  // === 红绿灯与停止辅助（独立开关，默认关=零影响原逻辑）===
-  featToggles->addItem(sectionHeader("红绿灯与停止辅助"));
-  featToggles->addItem(new CValueControl("TrafficLightBrakeMode", "红绿灯刹车增强(0)", "0:关闭(完全不影响原逻辑), 1:仅红灯加强刹车避免过线, 2:红灯加强+绿灯强制起步", 0, 2, 1));
-  featToggles->addItem(new CValueControl("TrafficLightBrakeMargin", "红灯提前停止(20)x0.1m", "在模型停止线前额外提前的距离, 单位0.1m, 越大越提前停防止过线/蠕动过线", 0, 100, 1));
-  featToggles->addItem(new CValueControl("TrafficLightBrakeConfirm", "多帧确认(8)", "红/绿灯需连续确认的帧数, 越大越抗单帧误识别抖动", 1, 30, 1));
-  featToggles->addItem(new CValueControl("TrafficLightBrakeDecel", "加强刹车下限(15)x0.1", "红灯加强刹车时的加速度下限, 单位0.1m/s^2, 越小刹车越狠", 5, 50, 1));
+  // === 红绿灯与停止辅助已整体移除 ===
+  // 原生 TrafficLightDetectMode 默认 0（关闭），红绿灯刹车增强模块已卸载
   // === 起步与跟车辅助（三个独立开关，默认关=零影响原逻辑）===
   featToggles->addItem(sectionHeader("起步与跟车辅助"));
   featToggles->addItem(new CValueControl("LaunchSmoothingMode", "平顺起步(0)", "红灯外从停止起步时限制初始加速, 不窜动; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
@@ -1114,6 +1110,10 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("CurveAnticipateDist", "预备前瞻距离(60)m", "往前看多远开始预备降速, 单位m; 越大越早开始减速越柔, 越小越晚", 20, 150, 5));
   featToggles->addItem(new CValueControl("CurveAnticipateLatA", "预备横向加速度(28)x0.1", "由曲率估算弯道限速时用的目标横向加速度, 单位0.1m/s^2; 越大降速越少越晚, 越小降速越多越早(下限由弯道限速兜底, 不会过慢)", 12, 50, 1));
+  // === 幽灵刹车抑制（置信度阻尼，独立开关，默认关=零影响原逻辑）===
+  featToggles->addItem(new CValueControl("PhantomBrakeGuardMode", "幽灵刹车抑制(0)", "高速雷达误检假前车导致无故急刹时, 柔和削弱其减速, 绝不删除前车; 0:关闭(完全不影响原逻辑), 1:标准, 2:激进", 0, 2, 1));
+  featToggles->addItem(new CValueControl("PhantomBrakeGuardDist", "触发距离(250)x0.1m", "雷达报前车距离小于此值才进入幽灵判定, 单位0.1m; 越大只在更近的假目标才介入", 50, 600, 10));
+  featToggles->addItem(new CValueControl("PhantomBrakeGuardConfirm", "多帧确认(10)", "连续命中幽灵判定的帧数才生效, 防单帧抖动误杀真实急刹; 越大越保守", 3, 30, 1));
   featToggles->addItem(sectionHeader("显示与画面"));
   featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
   // === 驾驶优化方案 2026-08-03: 前车切出(方案五) ===

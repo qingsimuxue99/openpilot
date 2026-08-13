@@ -5,7 +5,7 @@
 功能：接近弯道时，利用前方路径曲率剖面，提前（比原车弯速逻辑更早）把目标巡航速度
 柔和降到弯道限速，使减速分散在更长距离上，避免"弯中急刹"的突兀感。
 
-设计原则（同 launch_assist / traffic_light_brake）：
+设计原则（同 launch_assist / phantom_brake_guard）：
   - 独立开关 CurveAnticipateMode，默认 0（关）。关闭时整段 no-op，对原逻辑零影响。
   - 只读取 lateralPlan 曲率剖面与 carrotMan.vTurnSpeed，在 carrot.update() 之后、
     mpc.update() 之前微调 carrot.v_cruise（下限再夹一层 carrot 自身弯道限速，绝不突破）。

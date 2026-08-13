@@ -7,7 +7,7 @@
   2) TrafficJamCreepMode   低速拥堵蠕行：低速跟车小幅前挪，减少被加塞、更跟手
   3) LeadDepartureMode     前车起步预判：前车一动立即更跟手起步（与平顺起步互斥，单独响应）
 
-设计原则（同 traffic_light_brake）：
+设计原则（同 phantom_brake_guard）：
   - 所有开关默认 0（关）。某功能 mode==0 时该段整段 no-op。
   - 完全复用原 carrot 输出的字段（carrot.v_cruise/stop_dist/mode）与 radar lead，
     在其之上做微调，不改原文件。
