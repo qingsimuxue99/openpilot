@@ -3353,17 +3353,28 @@ void ui_draw(UIState *s, ModelRenderer* model_renderer, int w, int h) {
   //ui_draw_text(s, 500, 500, "Carrot", 100, COLOR_GREEN, BOLD);
   Params params;
   bool draw_carrot = drawCarrot.updateState(s);
-  drawCarrot.drawNaviPath(s);
+
+  // === 高速净屏（独立开关，默认关=零影响）===
+  // clean_hud : 车速达标后隐藏所有信息图标
+  // clean_path: Mode=2 极净屏时，连路径与车道线一并隐藏
+  const bool clean_hud = s->clean_view_active;
+  const bool clean_path = s->clean_view_active && s->clean_view_mode >= 2;
+
+  if (!clean_path) drawCarrot.drawNaviPath(s);
 
   static float pathDrawSeq = 0.0;
   int show_lane_info = params.getInt("ShowLaneInfo");
   bool dp_ui_rainbow = params.getBool("dp_ui_rainbow");
-  if (!dp_ui_rainbow && show_lane_info >= 0) drawPath.draw(s, pathDrawSeq);
-  if (!dp_ui_rainbow) drawLaneLine.draw(s, show_lane_info);
-  if (params.getInt("ShowPathEnd") > 0) drawPathEnd.draw(s);
+  if (!clean_path) {
+    if (!dp_ui_rainbow && show_lane_info >= 0) drawPath.draw(s, pathDrawSeq);
+    if (!dp_ui_rainbow) drawLaneLine.draw(s, show_lane_info);
+    if (params.getInt("ShowPathEnd") > 0) drawPathEnd.draw(s);
+  }
 
   int path_x = drawPathEnd.getPathX();
   int path_y = drawPathEnd.getPathY();
+
+  if (!clean_hud) {   // === 高速净屏：以下所有信息图标整体跳过 ===
   drawDesire.draw(s, path_x, path_y - 135);
 
 
@@ -3405,7 +3416,26 @@ void ui_draw(UIState *s, ModelRenderer* model_renderer, int w, int h) {
   drawTurnInfo.draw(s);
 
   ui_draw_text_a2(s);
-  ui_draw_alert(s);
+  }   // === 高速净屏：信息图标块结束 ===
+
+  ui_draw_alert(s);   // 安全底线：报警提示任何情况下都显示
+
+  // === 屏幕智能调光-暗色遮罩（仅 Mode==2，独立开关，默认关=零影响）===
+  if (s->auto_screen_dim_mode == 2 && s->scene.light_sensor >= 0 && s->scene.light_sensor < 60.0f) {
+    float env = s->scene.light_sensor / 60.0f;      // 0=暗 -> 1=亮
+    if (env < 0.0f) env = 0.0f;
+    if (env > 1.0f) env = 1.0f;
+    float lvl = s->auto_screen_dim_level;
+    if (lvl < 10.0f) lvl = 10.0f;
+    if (lvl > 100.0f) lvl = 100.0f;
+    float a = lvl / 100.0f * (0.35f + 0.25f * (1.0f - env));
+    if (a < 0.0f) a = 0.0f;
+    if (a > 0.6f) a = 0.6f;
+    nvgBeginPath(s->vg);
+    nvgRect(s->vg, 0, 0, s->fb_w, s->fb_h);
+    nvgFillColor(s->vg, nvgRGBA(0, 0, 0, (int)(a * 255.0f)));
+    nvgFill(s->vg);
+  }
 
 #if 0
   if (drawCarrot.nav_path_vertex_count > 1) {

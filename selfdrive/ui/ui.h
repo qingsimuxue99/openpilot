@@ -104,6 +104,14 @@ public:
   float show_brightness_ratio = 1.0;
   int show_brightness_timer = 20;
 
+  // === 高速净屏 CleanView (独立开关, 默认关=零影响) ===
+  int clean_view_mode = 0;             // 0关 1隐藏图标(保留路径/车道线) 2极净屏(连路径车道线也隐藏)
+  int clean_view_speed = 55;           // 净屏触发车速 km/h
+  bool clean_view_active = false;      // 净屏当前是否生效(带迟滞, 防边界闪烁)
+  // === 屏幕智能调光 AutoScreenDim (独立开关, 默认关=零影响) ===
+  int auto_screen_dim_mode = 0;        // 0关 1智能降亮 2降亮+暗色遮罩
+  float auto_screen_dim_level = 40.0f; // 暗环境目标亮度/遮罩强度(%)
+
 signals:
   void uiUpdate(const UIState &s);
   void offroadTransition(bool offroad);

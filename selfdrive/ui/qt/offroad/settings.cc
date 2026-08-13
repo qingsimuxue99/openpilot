@@ -1127,6 +1127,14 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("dp_ui_rainbow_brightness", "彩虹亮度(70)%", "彩虹路径的颜色亮度百分比; 数值越大越鲜亮, 越小越暗淡通透; 需先开启[彩虹路径]", 10, 100, 5));
   featToggles->addItem(new CValueControl("dp_ui_rainbow_width", "彩虹宽度(110)%", "彩虹路径的显示宽度百分比; 数值越大路径越宽, 越小越细; 需先开启[彩虹路径]", 30, 200, 5));
 
+  // === 屏幕智能调光（独立开关，默认关=零影响）===
+  featToggles->addItem(new CValueControl("AutoScreenDimMode", "屏幕智能调光(0)", "根据环境光(夜间/隧道)自动降低屏幕亮度与变暗, 减少刺眼; 0:关闭(完全不影响原逻辑), 1:智能降亮, 2:降亮+暗色遮罩", 0, 2, 1));
+  featToggles->addItem(new CValueControl("AutoScreenDimLevel", "暗环境亮度(40)%", "暗环境/夜间时屏幕目标亮度百分比(及遮罩强度); 越小越暗越护眼, 越大越亮; 仅[屏幕智能调光]开启时生效", 10, 80, 5));
+
+  // === 高速净屏（独立开关，默认关=零影响）===
+  featToggles->addItem(new CValueControl("CleanViewMode", "高速净屏(0)", "车速超过设定值后自动隐藏画面上的信息图标(速度HUD/时间/胎压/雷达/盲区/转向/实验按钮/录屏按钮等), 只保留干净行驶画面; 0:关闭(完全不影响原逻辑), 1:隐藏图标(保留路径与车道线), 2:极净屏(连路径车道线也隐藏); 报警提示任何情况下都会显示", 0, 2, 1));
+  featToggles->addItem(new CValueControl("CleanViewSpeed", "净屏触发车速(55)km/h", "车速达到此值自动进入净屏, 低于此值5km/h自动恢复正常显示(迟滞防闪烁); 仅[高速净屏]开启时生效", 30, 140, 5));
+
   // === 广角/长焦摄像头切换(模式 + 迟滞速度, 单位 km/h, 可调; 放在功能标签最后) ===
   featToggles->addItem(new CValueControl("CarrotWideCamMode", "广角摄像头模式", "0:自动切换(迟滞速度见下方两项), 1:仅长焦(road主摄), 2:仅广角(wide)", 0, 2, 1));
   featToggles->addItem(new CValueControl("CarrotWideCamSpeedLow", "广角切换速度(28)km/h", "自动模式下, 车速低于此值(单位km/h)时切到广角画面; 需小于[长焦切换速度]以形成迟滞, 防止在边界反复切换", 0, 120, 1));

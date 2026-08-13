@@ -65,6 +65,16 @@ static void update_state(UIState *s) {
   }
 
   scene.started = sm["deviceState"].getDeviceState().getStarted() && scene.ignition;
+
+  // === 高速净屏 CleanView: 车速判据(带迟滞, 防边界闪烁) ===
+  if (s->clean_view_mode > 0 && scene.started) {
+    float v_kph = sm["carState"].getCarState().getVEgoCluster() * 3.6f;
+    float on_spd = std::max(20.0f, (float)s->clean_view_speed);
+    if (!s->clean_view_active && v_kph >= on_spd) s->clean_view_active = true;
+    else if (s->clean_view_active && v_kph < on_spd - 5.0f) s->clean_view_active = false;
+  } else {
+    s->clean_view_active = false;
+  }
 }
 
 void ui_update_params(UIState *s) {
@@ -82,6 +92,12 @@ void ui_update_params(UIState *s) {
   s->scene.dp_ui_rainbow_brightness = (rainbow_brightness <= 0) ? 70 : std::clamp(rainbow_brightness, 10, 100);
   int rainbow_width = params.getInt("dp_ui_rainbow_width");
   s->scene.dp_ui_rainbow_width = (rainbow_width <= 0) ? 110 : std::clamp(rainbow_width, 30, 200) / 100.0f;
+
+  // === 高速净屏 CleanView / 屏幕智能调光 AutoScreenDim 读参 (独立开关, 默认关=零影响) ===
+  s->clean_view_mode = params.getInt("CleanViewMode");
+  s->clean_view_speed = params.getInt("CleanViewSpeed");
+  s->auto_screen_dim_mode = params.getInt("AutoScreenDimMode");
+  s->auto_screen_dim_level = params.getFloat("AutoScreenDimLevel");
 }
 
 void UIState::updateStatus() {
@@ -190,6 +206,12 @@ void Device::updateBrightness(const UIState &s) {
           s1->show_brightness_timer--;
       }
       else clipped_brightness *= s.show_brightness_ratio;
+      // === 屏幕智能调光-智能降亮 (仅 Mode>=1, 独立开关, 默认关=零影响) ===
+      if (s.auto_screen_dim_mode >= 1 && s.scene.light_sensor >= 0 && s.scene.light_sensor < 60.0f) {
+        float env = std::clamp(s.scene.light_sensor / 60.0f, 0.0f, 1.0f);
+        float target = std::max(10.0f, std::min(100.0f, s.auto_screen_dim_level)) / 100.0f;
+        clipped_brightness = std::min(clipped_brightness, target * (0.4f + 0.6f * env));
+      }
       //printf("show_brightness_timer: %d, clipped_brightness = %.2f ratio = %.1f\n", s.show_brightness_timer, clipped_brightness, s.show_brightness_ratio);
   }
 

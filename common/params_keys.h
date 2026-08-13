@@ -148,6 +148,10 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"ShowDrivePanel", PERSISTENT},   // <-- 新增：驾驶数据面板开关
     {"ShowPathEnd", PERSISTENT},
     {"ShowCustomBrightness", PERSISTENT},
+    {"AutoScreenDimMode", PERSISTENT},   // <-- 新增：屏幕智能调光(0关/1降亮/2降亮+暗色遮罩)
+    {"AutoScreenDimLevel", PERSISTENT},  // <-- 新增：暗环境目标亮度/遮罩强度(10-80)
+    {"CleanViewMode", PERSISTENT},       // <-- 新增：高速净屏(0关/1隐藏图标/2极净屏)
+    {"CleanViewSpeed", PERSISTENT},      // <-- 新增：净屏触发车速(km/h)
     {"ShowLaneInfo", PERSISTENT},
     {"ShowRadarInfo", PERSISTENT},
     {"ShowDeviceState", PERSISTENT},

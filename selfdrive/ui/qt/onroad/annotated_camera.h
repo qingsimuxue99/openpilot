@@ -31,9 +31,8 @@ private:
   int skip_frame_count = 0;
   bool wide_cam_requested = false;
 
-
-  // STOPPED 计时器 (ported from sunnypilot)
-  bool standstill_timer_enabled_ = true;   // TODO: 可接入 Params 开关
+  // STOPPED 静止计时器
+  bool standstill_timer_enabled_ = true;
   bool is_standstill_ = false;
   float standstill_elapsed_ = 0.0f;
   void drawStoppedTimer(QPainter &p, const QRect &surface_rect);

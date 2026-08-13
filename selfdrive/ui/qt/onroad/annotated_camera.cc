@@ -43,6 +43,11 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   experimental_btn->updateState(s);
   dmon.updateState(s);
 
+  // === 高速净屏：隐藏 Qt 控件图标（独立开关，默认关=零影响）===
+  const bool clean_view = s.clean_view_active;
+  if (experimental_btn->isVisible() == clean_view) experimental_btn->setVisible(!clean_view);
+  if (recorder != nullptr && recorder->isVisible() == clean_view) recorder->setVisible(!clean_view);
+
   static int carrot_cmd_index_last = 0;
   SubMaster& sm = *(s.sm);
   if (sm.alive("carrotMan")) {
@@ -277,9 +282,9 @@ void AnnotatedCameraWidget::drawStoppedTimer(QPainter &p, const QRect &surface_r
   QRect alertRect(x - alert_size, y - alert_size, alert_size * 2, alert_size * 2);
   QPoint center = alertRect.center();
 
-  // 圆环背景 (透灰，很透明但带点灰)
-  p.setPen(QPen(QColor(255, 255, 255, 60), 6));
-  p.setBrush(QColor(60, 60, 60, 80));  // 灰色底，很透明
+  // 外圈白边 + 深色半透明背景（若隐若现，可透出后方画面）
+  p.setPen(QPen(QColor(255, 255, 255, 100), 6));
+  p.setBrush(QColor(40, 40, 40, 140));
   p.drawEllipse(center, alert_size, alert_size);
 
   // 格式化 mm:ss
@@ -289,7 +294,7 @@ void AnnotatedCameraWidget::drawStoppedTimer(QPainter &p, const QRect &surface_r
 
   // STOPPED 标题 (上方) - 橙色
   p.setFont(InterFont(65, QFont::Bold));
-  p.setPen(QColor(255, 140, 0, 255));
+  p.setPen(QColor(255, 140, 0));
   QFontMetrics fmt(p.font());
   QRect topTextRect = fmt.boundingRect(alertRect, Qt::TextWordWrap, tr("STOPPED"));
   topTextRect.moveCenter(center);
