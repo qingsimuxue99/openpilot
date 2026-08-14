@@ -1125,6 +1125,7 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("AutoScreenDimMode", "屏幕智能调光(0)", "根据环境光(夜间/隧道)自动降低屏幕亮度与变暗, 减少刺眼; 0:关闭(完全不影响原逻辑), 1:智能降亮, 2:降亮+暗色遮罩", 0, 2, 1));
   featToggles->addItem(new CValueControl("AutoScreenDimLevel", "暗环境亮度(40)%", "暗环境/夜间时屏幕目标亮度百分比(及遮罩强度); 越小越暗越护眼, 越大越亮; 仅[屏幕智能调光]开启时生效", 10, 80, 5));
   featToggles->addItem(new CValueControl("ManualBrightness", "屏幕亮度(手动, 0)", "0=自动跟随环境光(原厂逻辑); 1-100=固定屏幕亮度百分比, 不受环境光与智能调光影响; 暗环境嫌太暗就设此值(如60)", 0, 100, 5));
+  featToggles->addItem(new CValueControl("LaneLineColor", "车道线颜色(0=原厂白)", "0:原厂白(默认, 不改原厂逻辑); 1:赤, 2:橙, 3:黄, 4:绿, 5:青, 6:蓝, 7:紫; 行驾界面车道线随之变色", 0, 7, 1));
 
   // === 画面清爽模式（独立开关，默认关=零影响）===
   featToggles->addItem(new CValueControl("CleanViewMode", "画面清爽模式(0)", "车速超过设定值后自动隐藏画面上的信息图标(速度HUD/时间/胎压/雷达/盲区/转向/实验按钮/录屏按钮等), 只保留干净行驶画面; 0:关闭(完全不影响原逻辑), 1:隐藏图标(保留路径与车道线), 2:极净屏(连路径车道线也隐藏); 报警提示任何情况下都会显示", 0, 2, 1));

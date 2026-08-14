@@ -1,4 +1,5 @@
 #include "selfdrive/ui/qt/onroad/model.h"
+#include "common/params.h"
 
 #include <cmath>     // [DP] 新增
 
@@ -100,18 +101,31 @@ void ModelRenderer::update_model(const cereal::ModelDataV2::Reader &model, const
 }
 
 void ModelRenderer::drawLaneLines(QPainter &painter) {
-  // lanelines
-  for (int i = 0; i < std::size(lane_line_vertices); ++i) {
-    painter.setBrush(QColor::fromRgbF(1.0, 1.0, 1.0, std::clamp<float>(lane_line_probs[i], 0.0, 0.7)));
-    painter.drawPolygon(lane_line_vertices[i]);
-  }
+    static const QColor lane_colors[8] = {
+      QColor::fromRgbF(1.0, 1.0, 1.0),  // 0 white (stock)
+      QColor::fromRgbF(1.0, 0.0, 0.0),  // 1 red
+      QColor::fromRgbF(1.0, 0.5, 0.0),  // 2 orange
+      QColor::fromRgbF(1.0, 1.0, 0.0),  // 3 yellow
+      QColor::fromRgbF(0.0, 1.0, 0.0),  // 4 green
+      QColor::fromRgbF(0.0, 1.0, 1.0),  // 5 cyan
+      QColor::fromRgbF(0.0, 0.0, 1.0),  // 6 blue
+      QColor::fromRgbF(0.5, 0.0, 0.5),  // 7 purple
+    };
+    int lane_color_idx = std::clamp(Params().getInt("LaneLineColor"), 0, 7);
+    QColor lane_color = lane_colors[lane_color_idx];
+    // lanelines
+    for (int i = 0; i < std::size(lane_line_vertices); ++i) {
+      lane_color.setAlphaF(std::clamp<float>(lane_line_probs[i], 0.0, 0.7));
+      painter.setBrush(lane_color);
+      painter.drawPolygon(lane_line_vertices[i]);
+    }
 
-  // road edges
-  for (int i = 0; i < std::size(road_edge_vertices); ++i) {
-    painter.setBrush(QColor::fromRgbF(1.0, 0, 0, std::clamp<float>(1.0 - road_edge_stds[i], 0.0, 1.0)));
-    painter.drawPolygon(road_edge_vertices[i]);
+    // road edges
+    for (int i = 0; i < std::size(road_edge_vertices); ++i) {
+      painter.setBrush(QColor::fromRgbF(1.0, 0, 0, std::clamp<float>(1.0 - road_edge_stds[i], 0.0, 1.0)));
+      painter.drawPolygon(road_edge_vertices[i]);
+    }
   }
-}
 
 void ModelRenderer::drawPath(QPainter &painter, const cereal::ModelDataV2::Reader &model, int height) {
   QLinearGradient bg(0, height, 0, 0);
