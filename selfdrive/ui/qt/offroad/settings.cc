@@ -1095,14 +1095,6 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("CurveCenteringCurv", "激活曲率(4)x0.001", "触发弯道居中的最小曲率(1/m), 越大只在更急的弯才激活; 直道(曲率≈0)不生效", 1, 10, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
-  // === 起步与跟车辅助（三个独立开关，默认关=零影响原逻辑）===
-  featToggles->addItem(sectionHeader("起步与跟车辅助"));
-  featToggles->addItem(new CValueControl("LaunchSmoothingMode", "平顺起步(0)", "红灯外从停止起步时限制初始加速, 不窜动; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
-  featToggles->addItem(new CValueControl("LaunchSmoothingInit", "起步缓给速度(15)x0.1m/s", "起步窗口内目标不超过当前速度+此值, 越大起步越冲, 越小越缓", 3, 40, 1));
-  featToggles->addItem(new CValueControl("TrafficJamCreepMode", "拥堵蠕行(0)", "低速跟车小幅前挪缩小车距, 减少被加塞更跟手; 0:关闭, 1:开启", 0, 1, 1));
-  featToggles->addItem(new CValueControl("TrafficJamCreepSpeed", "蠕行速度(10)x0.1m/s", "蠕行时的目标速度, 单位0.1m/s, 越大前挪越快", 3, 30, 1));
-  featToggles->addItem(new CValueControl("LeadDepartureMode", "前车起步预判(0)", "前车一动立即更跟手起步, 覆盖平顺起步的缓给; 0:关闭, 1:开启", 0, 1, 1));
-  featToggles->addItem(new CValueControl("LeadDepartureSpeed", "跟车起步目标(40)x0.1m/s", "前车动时我们起步的目标速度上限, 单位0.1m/s, 越大起步越急", 10, 80, 1));
   // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===
   featToggles->addItem(sectionHeader("弯道预备减速辅助"));
   featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
