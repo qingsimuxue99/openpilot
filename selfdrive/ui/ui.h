@@ -111,6 +111,7 @@ public:
   // === 屏幕智能调光 AutoScreenDim (独立开关, 默认关=零影响) ===
   int auto_screen_dim_mode = 0;        // 0关 1智能降亮 2降亮+暗色遮罩
   float auto_screen_dim_level = 40.0f; // 暗环境目标亮度/遮罩强度(%)
+  int manual_brightness = 0;           // 0自动跟随环境光(原厂逻辑) 1-100固定屏幕亮度百分比(跳过自动降亮)
 
 signals:
   void uiUpdate(const UIState &s);

@@ -98,6 +98,7 @@ void ui_update_params(UIState *s) {
   s->clean_view_speed = params.getInt("CleanViewSpeed");
   s->auto_screen_dim_mode = params.getInt("AutoScreenDimMode");
   s->auto_screen_dim_level = params.getFloat("AutoScreenDimLevel");
+  s->manual_brightness = params.getInt("ManualBrightness");
 }
 
 void UIState::updateStatus() {
@@ -206,11 +207,15 @@ void Device::updateBrightness(const UIState &s) {
           s1->show_brightness_timer--;
       }
       else clipped_brightness *= s.show_brightness_ratio;
-      // === 屏幕智能调光-智能降亮 (仅 Mode>=1, 独立开关, 默认关=零影响) ===
-      if (s.auto_screen_dim_mode >= 1 && s.scene.light_sensor >= 0 && s.scene.light_sensor < 60.0f) {
+      // === 手动亮度: ManualBrightness>0 时固定亮度, 跳过自动降亮 ===
+      if (s.manual_brightness > 0) {
+        clipped_brightness = std::clamp((float)s.manual_brightness, 10.0f, 100.0f);
+      }
+      // === 屏幕智能调光-智能降亮 (仅 Mode>=1, 独立开关, 默认关=零影响); 加30%保底防全黑 ===
+      else if (s.auto_screen_dim_mode >= 1 && s.scene.light_sensor >= 0 && s.scene.light_sensor < 60.0f) {
         float env = std::clamp(s.scene.light_sensor / 60.0f, 0.0f, 1.0f);
         float target = std::max(10.0f, std::min(100.0f, s.auto_screen_dim_level)) / 100.0f;
-        clipped_brightness = std::min(clipped_brightness, target * (0.4f + 0.6f * env));
+        clipped_brightness = std::max(std::min(clipped_brightness, target * (0.4f + 0.6f * env)), 0.30f);
       }
       //printf("show_brightness_timer: %d, clipped_brightness = %.2f ratio = %.1f\n", s.show_brightness_timer, clipped_brightness, s.show_brightness_ratio);
   }
