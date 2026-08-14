@@ -310,7 +310,7 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   });
   addItem(onOffRoadBtn);
 
-  addItem(new LabelControl(tr("Dongle ID"), getDongleId().value_or(tr("N/A"))));
+//   addItem(new LabelControl(tr("Dongle ID"), getDongleId().value_or(tr("N/A"))));
 
   onoffroad_watch = new ParamWatcher(this);
   onoffroad_watch->addParam("device_go_off_road");
