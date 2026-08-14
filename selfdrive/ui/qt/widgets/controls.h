@@ -153,6 +153,8 @@ public:
   void setActiveIcon(const QString &icon) {
     active_icon_pixmap = QPixmap(icon).scaledToWidth(80, Qt::SmoothTransformation);
   }
+  const std::string& getKey() const { return key; }
+
 
   void refresh() {
     bool state = params.getBool(key);

@@ -1163,35 +1163,25 @@ void CarrotPanel::togglesCarrot(int widgetIndex) {
 
 // === 商用授权: 未激活/次数用完时, 设置底部「功能」标签页全部置灰并恢复关闭 ===
 void CarrotPanel::applyLicenseLock() {
+  // only lock the "功能" tab (featToggles, panelMode==1); never touch "萝卜" tab (mode0) or other menus
+  if (panelMode == 0) return;
   std::string st = Params().get("CarrotLicStatus");
   bool activated = (st == "1");
-  if (panelMode != 1) return;   // 仅锁定「功能」标签页(单页面板), 萝卜面板不动
-  if (!featToggles) return;
-  for (auto* c : featToggles->findChildren<AbstractControl*>()) {
-    c->setEnabled(activated);
-  }
+  for (auto* c : featToggles->findChildren<AbstractControl*>()) c->setEnabled(activated);
   if (!activated) {
-    // 恢复关闭: 按清单强制设值 (开关=关闭, 数值=指定值) 并刷新显示
-    static const char* off_bool[] = {"dp_ui_rainbow"};
-    for (const char* k : off_bool) {
-      Params().putBool(k, false);
-    }
+    for (auto* pc : featToggles->findChildren<ParamControl*>()) { Params().putBool(pc->getKey(), false); pc->refresh(); }
     struct IntSet { const char* key; int val; };
     static const IntSet off_int[] = {
-            {"AutoLaneCorrection", 0},     // 自动居中纠偏 -> 0
-      {"BlinkerTurnIntent", 0},      // 转向灯转弯意图 -> 0
-      {"ShowDrivePanel", 0},         // 驾驶面板 -> 0
-      {"DynamicTFollowCutOut", 0},   // 前车切出跟车释放 -> 0
-      {"CarrotWideCamMode", 2},      // 广角摄像头模式 -> 2(仅广角)
+      {"ShowDrivePanel", 0},
+      {"CleanViewMode", 0},
+      {"AutoScreenDimMode", 0},
+      {"AutoScreenDimLevel", 40},
+      {"ManualBrightness", 0},
     };
-    for (const auto& it : off_int) {
-      Params().put(it.key, std::to_string(it.val));
-    }
-    for (auto* pc : featToggles->findChildren<ParamControl*>()) {
-      pc->refresh();
-    }
+    for (const auto& it : off_int) Params().put(it.key, std::to_string(it.val));
   }
 }
+
 
 void CarrotPanel::showEvent(QShowEvent *event) {
   applyLicenseLock();
