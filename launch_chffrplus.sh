@@ -46,7 +46,7 @@ function launch {
     if [ $? -eq 0 ]; then
       echo "${DIR} has been modified, skipping overlay update installation"
     else
-      if [ -f "${STAGING_ROOT}/finalized/.overlay_consistent" ]; then
+      if [ -f "${STAGING_ROOT}/finalized/.overlay_consistent" ] && [ "$(cat /data/params/d/DisableUpdates 2>/dev/null)" != "1" ]; then
         if [ ! -d /data/safe_staging/old_openpilot ]; then
           echo "Valid overlay update found, installing"
           LAUNCHER_LOCATION="${BASH_SOURCE[0]}"
@@ -120,6 +120,11 @@ function launch {
 
   # start manager
   cd system/manager
+  # --- 开机编译跳过：SkipBootBuild=1 时确保 prebuilt 存在(跳过开机编译) ---
+  if [ "$(cat /data/params/d/SkipBootBuild 2>/dev/null)" = "1" ]; then
+    touch "$DIR/prebuilt"
+  fi
+
   if [ ! -f $DIR/prebuilt ]; then
     ./build.py
   fi

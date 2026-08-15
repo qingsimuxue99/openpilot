@@ -377,6 +377,26 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
 
   // offroad-only buttons
 
+  // --- 设备维护开关：禁用更新 ---
+  auto disableUpdatesToggle = new ParamControl("DisableUpdates", tr("禁用更新"),
+                                   tr("打开后禁止系统自动更新(OTA)，关闭后恢复自动更新。修改后需重启设备生效。"),
+                                   "", this);
+  addItem(disableUpdatesToggle);
+
+  // --- 设备维护开关：开机编译跳过 ---
+  auto skipBuildToggle = new ParamControl("SkipBootBuild", tr("开机编译跳过"),
+                                  tr("打开后开机不再重新编译 openpilot，直接跳过编译启动(更省时)。打开会立即重启设备。"),
+                                  "", this);
+  QObject::connect(skipBuildToggle, &ParamControl::toggleFlipped, [=](bool state) {
+    if (state) {
+      system("touch /data/openpilot/prebuilt");
+      Params().putBool("DoReboot", true);
+    } else {
+      system("rm -f /data/openpilot/prebuilt");
+    }
+  });
+  addItem(skipBuildToggle);
+
   auto dcamBtn = new ButtonControl(tr("Driver Camera"), tr("PREVIEW"),
                                    tr("Preview the driver facing camera to ensure that driver monitoring has good visibility. (vehicle must be off)"));
   connect(dcamBtn, &ButtonControl::clicked, [=]() { emit showDriverView(); });

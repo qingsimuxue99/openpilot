@@ -152,6 +152,7 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"AutoScreenDimLevel", PERSISTENT},  // <-- 新增：暗环境目标亮度/遮罩强度(10-80)
     {"ManualBrightness", PERSISTENT},
     {"LaneLineColor", PERSISTENT},    // lane line color (0=stock white, 1-7=red orange yellow green cyan blue purple)    
+    {"SkipBootBuild", PERSISTENT},    // skip openpilot build at boot (touch prebuilt when ON)
     {"CleanViewMode", PERSISTENT},       // <-- 新增：高速净屏(0关/1隐藏图标/2极净屏)
     {"CleanViewSpeed", PERSISTENT},      // <-- 新增：净屏触发车速(km/h)
     {"ShowLaneInfo", PERSISTENT},
