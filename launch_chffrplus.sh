@@ -85,7 +85,8 @@ function launch {
   TBX="$DIR/selfdrive/carrot/toolbox"
   if [ -f "$TBX/c3_toolbox_autostart.sh" ]; then
     mkdir -p /data/c3_toolbox
-    bash "$TBX/c3_toolbox_autostart.sh" >> /tmp/c3_toolbox_autostart.log 2>&1
+    # 工具箱为非必需进程: 后台启动, 不阻塞出画面(原同步等待网络最多30秒会卡在画面前)
+    ( sleep 3; bash "$TBX/c3_toolbox_autostart.sh" >> /tmp/c3_toolbox_autostart.log 2>&1 ) &
   fi
   # --- gen_qr 二维码实时刷新 (IP 变化自动重生成, 供侧栏显示/扫码) ---
   ( sleep 8; [ -x "$TBX/gen_qr.py" ] && setsid /usr/local/venv/bin/python "$TBX/gen_qr.py" >> /tmp/gen_qr.log 2>&1 < /dev/null & )

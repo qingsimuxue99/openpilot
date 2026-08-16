@@ -400,8 +400,15 @@ HIDDEN_PARAMS = [
     'IsRHD', 'Passive',
 ]
 
+SENSITIVE_PARAMS = [
+    'CarrotLicRemain', 'CarrotLicStatus', 'CarrotActCounted', 'CarrotActUsed',
+    'CarrotFreeUsed', 'CarrotActivationCode', 'HardwareSerial',
+    'DongleId', 'GithubUsername',
+]
+SENSITIVE_SET = set(SENSITIVE_PARAMS)
+
 def is_param_hidden(fname):
-    for h in HIDDEN_PARAMS:
+    for h in HIDDEN_PARAMS + SENSITIVE_PARAMS:
         if fname == h or fname.startswith(h):
             return True
     return False
@@ -413,7 +420,7 @@ def api_get_params():
     try:
         for fname in sorted(os.listdir(PARAMS_DIR)):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK':
+            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
                 if is_param_hidden(fname):
                     continue
                 try:
@@ -438,6 +445,8 @@ def api_set_params():
         for key, value in data.items():
             sk = safe_key(key)
             if not sk:
+                continue
+            if sk in SENSITIVE_SET:
                 continue
             with open(os.path.join(PARAMS_DIR, sk), 'w') as f:
                 f.write(str(value))
@@ -882,7 +891,7 @@ def api_backup():
     try:
         for fname in os.listdir(PARAMS_DIR):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK':
+            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
                 try:
                     with open(fpath, 'r') as f:
                         val = f.read()
@@ -930,6 +939,23 @@ def api_restart_op():
     except:
         return jsonify({'success': True, 'message': '重启指令已发送'})
 
+@app.route('/api/fix_license', methods=['POST'])
+def api_fix_license():
+    """清除被污染的授权/身份参数并重启，恢复免费试用与本机序列号"""
+    try:
+        targets = ['CarrotLicRemain', 'CarrotLicStatus', 'CarrotActCounted',
+                   'CarrotActUsed', 'CarrotFreeUsed', 'CarrotActivationCode', 'HardwareSerial']
+        removed = []
+        for t in targets:
+            p = os.path.join(PARAMS_DIR, t)
+            if os.path.exists(p):
+                os.remove(p)
+                removed.append(t)
+        subprocess.Popen(["sudo", "reboot"])
+        return jsonify({'success': True, 'message': f'已清除 {len(removed)} 个污染参数并重启，设备将恢复免费试用与本机序列号'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
 @app.route('/api/reboot', methods=['POST'])
 def api_reboot():
     try:
@@ -948,7 +974,7 @@ def do_auto_backup():
     try:
         for fname in os.listdir(PARAMS_DIR):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK':
+            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
                 try:
                     with open(fpath, 'r') as f:
                         val = f.read()
@@ -1119,7 +1145,7 @@ def api_param_diff():
     try:
         for fname in sorted(os.listdir(PARAMS_DIR)):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK':
+            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
                 if is_param_hidden(fname):
                     continue
                 try:

@@ -574,6 +574,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
           <div class="qb" onclick="doRestartOp()"><span class="qi">🔄</span><span class="qt">重启 openpilot</span></div>
           <div class="qb" onclick="doReboot()"><span class="qi">⟳</span><span class="qt">重启设备</span></div>
           <div class="qb" onclick="loadParams()"><span class="qi">📥</span><span class="qt">刷新参数</span></div>
+          <div class="qb" onclick="doFixLicense()"><span class="qi">🛡️</span><span class="qt">修复授权污染</span></div>
           <div class="qb" onclick="go('backup')"><span class="qi">💾</span><span class="qt">备份参数</span></div>
           <div class="qb" onclick="go('params')"><span class="qi">⚙️</span><span class="qt">参数设置</span></div>
         </div>
@@ -1617,6 +1618,11 @@ function openLogStream(){
 function closeLogStream(){if(logES){logES.close();logES=null;appendT('--- 实时日志已停止 ---\n','var(--muted)')}}
 
 // === Actions ===
+
+async function doFixLicense(){
+  if(!confirm('将清除被污染的授权参数与本机序列号并重启设备，恢复免费试用。确定？'))return;
+  try{var r=await fetch('/api/fix_license',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er')}catch(e){toast('失败','er')}
+}
 async function doRestartOp(){try{var r=await fetch('/api/restart_op',{method:'POST'});var d=await r.json();toast(d.message,d.success?'ok':'er')}catch(e){toast('失败','er')}}
 function doReboot(){document.getElementById('rebootMo').classList.add('show')}
 function closeMo(){document.getElementById('rebootMo').classList.remove('show')}
