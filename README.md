@@ -75,6 +75,15 @@ Quick start: `bash <(curl -fsSL openpilot.comma.ai)`
 </table>
 
 
+## 定制功能 (Custom Features)
+
+### 转向弧 (Steering Arc)
+屏幕底部中央的弧形转向指示（移植自 sunnypilot Steering Arc）：
+- 白色背景弧 + 彩色指示弧，随方向盘转动单边滚动，反映横向转向强度
+- 指示弧配色可选：萝卜菜单 → 功能 → 转向弧颜色（0 无色 / 1 橙色渐变 / 2 天蓝·少女粉·国旗红三色渐变）
+- 白色圆点随方向盘沿弧滚动，转动后消失
+- 总开关：萝卜菜单 → 功能 → 转向弧
+
 Using openpilot in a car
 ------
 

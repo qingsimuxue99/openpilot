@@ -413,5 +413,6 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"SmoothStopMode", PERSISTENT},
     // DP Rainbow Path
     {"dp_ui_rainbow", PERSISTENT},
+    {"TurnArcEnabled", PERSISTENT},
     //new
 };

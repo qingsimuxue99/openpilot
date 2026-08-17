@@ -1132,6 +1132,8 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("dp_ui_rainbow_speed", "彩虹流动速度(10)", "彩虹色沿路径流动的快慢; 数值越大流动越快, 越小越舒缓; 需先开启[彩虹路径]", 1, 50, 1));
   featToggles->addItem(new CValueControl("dp_ui_rainbow_brightness", "彩虹亮度(70)%", "彩虹路径的颜色亮度百分比; 数值越大越鲜亮, 越小越暗淡通透; 需先开启[彩虹路径]", 10, 100, 5));
   featToggles->addItem(new CValueControl("dp_ui_rainbow_width", "彩虹宽度(110)%", "彩虹路径的显示宽度百分比; 数值越大路径越宽, 越小越细; 需先开启[彩虹路径]", 30, 200, 5));
+  featToggles->addItem(new ParamControl("TurnArcEnabled", tr("转向弧"), tr("屏幕底部中央显示弧形转向扭矩指示(移植 sunnypilot Steering Arc); 白色背景弧 + 彩色指示弧随转向摆动、接近最大转向变橙, 反映横向转向强度"), "", this));
+  featToggles->addItem(new CValueControl("SteerArcColor", "转向弧颜色(1)", "转向弧指示弧配色; 0:无色(仅白色背景弧+白点) / 1:橙色渐变 / 2:蓝粉红三色渐变; 需先开启[转向弧]", 0, 2, 1));
 
   // === 屏幕智能调光（独立开关，默认关=零影响）===
   featToggles->addItem(new CValueControl("AutoScreenDimMode", "屏幕智能调光(0)", "根据环境光(夜间/隧道)自动降低屏幕亮度与变暗, 减少刺眼; 0:关闭(完全不影响原逻辑), 1:智能降亮, 2:降亮+暗色遮罩", 0, 2, 1));

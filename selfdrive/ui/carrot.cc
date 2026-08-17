@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 
 #include <QJsonDocument>
@@ -1336,6 +1337,234 @@ public:
 		_left_blinker = true;
                 ui_draw_image(s, { x - icon_size / 2 - 60, y - icon_size / 2, icon_size, icon_size }, "ic_blinker_l", 1.0f);
             }
+        }
+    }
+};
+
+class TurnArcDrawer {
+private:
+    float torque_filter = 0.0f;   // 方向盘转角归一化 -1~1 (平滑)
+public:
+    // 转向弧: 屏幕底部中央的实心弧形指示 (移植 sunnypilot torque_bar, 橙色渐变版)
+    // 背景白弧(对称) + 橙色渐变指示弧(单边滚动) + 圆角端帽 + 白色中心圆点
+
+    // 圆角弧条 (外弧 + 端点半圆 + 内弧 + 起点半圆, 一次填充, 两端平滑圆角, 无凸起圆球)
+    static void draw_arc_rounded(NVGcontext* vg, float cx, float cy, float r_mid, float thickness,
+                                 float a0_deg, float a1_deg, NVGcolor color) {
+        float half = thickness * 0.5f;
+        float a0 = a0_deg * NVG_PI / 180.0f;
+        float a1 = a1_deg * NVG_PI / 180.0f;
+        float span = a1 - a0;
+        if (fabsf(span) < 0.001f) return;
+        int segs = (int)(fabsf(span) * 180.0f / NVG_PI / 1.2f);
+        if (segs < 12) segs = 12;
+        if (segs > 80) segs = 80;
+        int hsegs = 8;   // 半圆分段数
+        nvgBeginPath(vg);
+        // 1. 外弧 a0 → a1
+        for (int i = 0; i <= segs; i++) {
+            float a = a0 + span * i / segs;
+            float x = cx + cosf(a) * (r_mid + half);
+            float y = cy + sinf(a) * (r_mid + half);
+            if (i == 0) nvgMoveTo(vg, x, y);
+            else nvgLineTo(vg, x, y);
+        }
+        // 2. 端点半圆: a1 处从外缘扫到内缘 (th: 90° → -90°)
+        for (int i = 1; i <= hsegs; i++) {
+            float th = NVG_PI / 2.0f - NVG_PI * i / hsegs;
+            float x = cx + (r_mid + half * sinf(th)) * cosf(a1) - half * cosf(th) * sinf(a1);
+            float y = cy + (r_mid + half * sinf(th)) * sinf(a1) + half * cosf(th) * cosf(a1);
+            nvgLineTo(vg, x, y);
+        }
+        // 3. 内弧 a1 → a0
+        for (int i = segs - 1; i >= 0; i--) {
+            float a = a0 + span * i / segs;
+            float x = cx + cosf(a) * (r_mid - half);
+            float y = cy + sinf(a) * (r_mid - half);
+            nvgLineTo(vg, x, y);
+        }
+        // 4. 起点半圆: a0 处从内缘扫回外缘, 凸向 -t̂ (端面外侧, 与端点对称; 原版方向写反导致左侧缺口)
+        for (int i = hsegs - 1; i >= 1; i--) {
+            float th = NVG_PI / 2.0f - NVG_PI * i / hsegs;
+            float x = cx + (r_mid + half * sinf(th)) * cosf(a0) + half * cosf(th) * sinf(a0);
+            float y = cy + (r_mid + half * sinf(th)) * sinf(a0) - half * cosf(th) * cosf(a0);
+            nvgLineTo(vg, x, y);
+        }
+        nvgClosePath(vg);
+        nvgFillColor(vg, color);
+        nvgFill(vg);
+    }
+
+    // 端点半圆帽 (与弧体同色, 平滑圆角, 不凸出成球)
+    // toward_plus_t=true: 凸向 +t̂ (a 增大方向, 用于弧体终点端); false: 凸向 -t̂ (用于弧体起点端)
+    static void draw_arc_halfcap(NVGcontext* vg, float cx, float cy, float r_mid, float thickness,
+                                 float a_deg, NVGcolor color, bool toward_plus_t) {
+        float half = thickness * 0.5f;
+        float a = a_deg * NVG_PI / 180.0f;
+        int hsegs = 8;
+        float sign = toward_plus_t ? -1.0f : 1.0f;   // 凸向 +t̂ 时 t̂ 系数为负 (见公式)
+        nvgBeginPath(vg);
+        for (int i = 0; i <= hsegs; i++) {
+            float th = NVG_PI / 2.0f - NVG_PI * i / hsegs;   // 90° → -90° (外缘 → 内缘)
+            float x = cx + (r_mid + half * sinf(th)) * cosf(a) + sign * half * cosf(th) * sinf(a);
+            float y = cy + (r_mid + half * sinf(th)) * sinf(a) - sign * half * cosf(th) * cosf(a);
+            if (i == 0) nvgMoveTo(vg, x, y);
+            else nvgLineTo(vg, x, y);
+        }
+        nvgClosePath(vg);
+        nvgFillColor(vg, color);
+        nvgFill(vg);
+    }
+
+    // 橙色渐变指示弧 (分段, 沿弧方向: 中心浅橙 → 端点饱和橙, 全程橙色调, 无黄色)
+    static void draw_arc_orange(NVGcontext* vg, float cx, float cy, float r_mid, float thickness,
+                                float a0_deg, float a1_deg) {
+        float half = thickness * 0.5f;
+        float span = a1_deg - a0_deg;
+        if (fabsf(span) < 0.05f) return;
+        int segs = (int)(fabsf(span) / 0.6f);   // 加密分段消除颗粒感
+        if (segs < 24) segs = 24;
+        if (segs > 60) segs = 60;
+        for (int i = 0; i < segs; i++) {
+            float t0 = (float)i / segs;
+            float t1 = (float)(i + 1) / segs;
+            float a0 = (a0_deg + span * t0) * NVG_PI / 180.0f;
+            float a1 = (a0_deg + span * t1) * NVG_PI / 180.0f;
+            // 中心端浅橙(255,175,95) → 端点饱和橙(255,105,0)
+            float tc = (t0 + t1) * 0.5f;
+            int g = (int)(175 - 70 * tc);
+            int b = (int)(95 - 95 * tc);
+            if (g < 105) g = 105;
+            if (b < 0) b = 0;
+            NVGcolor color = nvgRGBA(255, g, b, 255);
+            nvgBeginPath(vg);
+            float x0o = cx + cosf(a0) * (r_mid + half), y0o = cy + sinf(a0) * (r_mid + half);
+            float x1o = cx + cosf(a1) * (r_mid + half), y1o = cy + sinf(a1) * (r_mid + half);
+            float x1i = cx + cosf(a1) * (r_mid - half), y1i = cy + sinf(a1) * (r_mid - half);
+            float x0i = cx + cosf(a0) * (r_mid - half), y0i = cy + sinf(a0) * (r_mid - half);
+            nvgMoveTo(vg, x0o, y0o);
+            nvgLineTo(vg, x1o, y1o);
+            nvgLineTo(vg, x1i, y1i);
+            nvgLineTo(vg, x0i, y0i);
+            nvgClosePath(vg);
+            nvgFillColor(vg, color);
+            nvgFill(vg);
+        }
+    }
+
+    // 蓝粉红三色渐变指示弧 (分段: 中心蓝 → 中间粉 → 端点红)
+    static void draw_arc_tricolor(NVGcontext* vg, float cx, float cy, float r_mid, float thickness,
+                                  float a0_deg, float a1_deg) {
+        float half = thickness * 0.5f;
+        float span = a1_deg - a0_deg;
+        if (fabsf(span) < 0.05f) return;
+        int segs = (int)(fabsf(span) / 0.6f);   // 加密分段消除颗粒感
+        if (segs < 24) segs = 24;
+        if (segs > 60) segs = 60;
+        for (int i = 0; i < segs; i++) {
+            float t0 = (float)i / segs;
+            float t1 = (float)(i + 1) / segs;
+            float tc = (t0 + t1) * 0.5f;
+            // 三色渐变: 天蓝(0,191,255) @t=0 → 少女粉(255,150,200) @t=0.5 → 国旗红(222,41,16) @t=1
+            int r, g, b;
+            if (tc < 0.5f) {
+                float k = tc * 2.0f;
+                r = (int)(0 + 255 * k);
+                g = (int)(191 - 41 * k);
+                b = (int)(255 - 55 * k);
+            } else {
+                float k = (tc - 0.5f) * 2.0f;
+                r = (int)(255 - 33 * k);
+                g = (int)(150 - 109 * k);
+                b = (int)(200 - 184 * k);
+            }
+            NVGcolor color = nvgRGBA(r, g, b, 255);
+            float a0 = (a0_deg + span * t0) * NVG_PI / 180.0f;
+            float a1 = (a0_deg + span * t1) * NVG_PI / 180.0f;
+            nvgBeginPath(vg);
+            float x0o = cx + cosf(a0) * (r_mid + half), y0o = cy + sinf(a0) * (r_mid + half);
+            float x1o = cx + cosf(a1) * (r_mid + half), y1o = cy + sinf(a1) * (r_mid + half);
+            float x1i = cx + cosf(a1) * (r_mid - half), y1i = cy + sinf(a1) * (r_mid - half);
+            float x0i = cx + cosf(a0) * (r_mid - half), y0i = cy + sinf(a0) * (r_mid - half);
+            nvgMoveTo(vg, x0o, y0o);
+            nvgLineTo(vg, x1o, y1o);
+            nvgLineTo(vg, x1i, y1i);
+            nvgLineTo(vg, x0i, y0i);
+            nvgClosePath(vg);
+            nvgFillColor(vg, color);
+            nvgFill(vg);
+        }
+    }
+
+    void draw(const UIState* s) {
+        SubMaster& sm = *(s->sm);
+        if (!sm.alive("carState")) return;
+        auto car_state = sm["carState"].getCarState();
+
+        // 方向盘转角归一化 (openpilot: 左正右负, 取反让弧跟手: 右打方向弧向右滚)
+        float steer_deg = car_state.getSteeringAngleDeg();
+        const float MAX_STEER = 450.0f;   // 方向盘满偏约 450°
+        float util = -steer_deg / MAX_STEER;
+        if (util > 1.0f) util = 1.0f;
+        if (util < -1.0f) util = -1.0f;
+        // 非线性放大: 轻微转动即有明显弧移, 增益 1.5 (3→1.5 灵敏度减半), 大幅转动饱和
+        float us = util * 1.5f;
+        if (us > 1.0f) us = 1.0f;
+        if (us < -1.0f) us = -1.0f;
+        float amp = sqrtf(fabsf(us));
+        util = (us >= 0.0f) ? amp : -amp;
+        torque_filter = torque_filter * 0.8f + util * 0.2f;
+
+        // 转向弧指示颜色参数: 0=无色(仅白弧) / 1=橙色渐变(默认) / 2=蓝粉红三色渐变
+        Params params = Params();
+        std::string arc_str = params.get("SteerArcColor");
+        int arc_color = arc_str.empty() ? 1 : atoi(arc_str.c_str());
+        if (arc_color < 0) arc_color = 0;
+        if (arc_color > 2) arc_color = 2;
+
+        NVGcontext* vg = s->vg;
+        int w = s->fb_w, h = s->fb_h;
+
+        const float R0 = 3200.0f;     // 弧中心线基础半径 (3200, 轻微弧度)
+        const float OFFSET = 120.0f;  // 底部偏移 (弧内缘在 fb_h-120)
+        const float SPAN = 8.0f;      // 角度跨度 (横向跨度 ≈450px)
+        const float TOP = -90.0f;     // 顶部角度
+
+        float thickness = 30.0f + fabsf(torque_filter) * 30.0f;   // 30~60 (无动作增粗一半)
+        float r_mid = R0 + thickness * 0.5f;
+        float cx = w * 0.5f;
+        float cy = h + R0 - OFFSET;
+
+        // 1. 背景弧 (对称, 白色半透明, 一次填充含两端圆角, 无圆球)
+        float bg_alpha = 0.5f + fabsf(torque_filter) * 0.15f;   // 0.5~0.65
+        NVGcolor bg = nvgRGBA(255, 255, 255, (int)(bg_alpha * 255.0f));
+        draw_arc_rounded(vg, cx, cy, r_mid, thickness, TOP - SPAN / 2, TOP + SPAN / 2, bg);
+
+        // 2. 指示弧 (单边: 中心 → 转向方向, 按 SteerArcColor 配色, 两端平滑半圆帽)
+        if (arc_color >= 1 && fabsf(torque_filter) > 0.01f) {
+            float a_end_deg = TOP + SPAN / 2 * torque_filter;
+            bool center_out = (torque_filter < 0.0f);   // 中心端帽: 弧体向 -t̂ 走时凸向 +t̂
+            bool end_out = (torque_filter > 0.0f);      // 端点帽: 弧体向 +t̂ 走时凸向 +t̂
+            if (arc_color == 1) {
+                draw_arc_orange(vg, cx, cy, r_mid, thickness, TOP, a_end_deg);
+                draw_arc_halfcap(vg, cx, cy, r_mid, thickness, TOP, nvgRGBA(255, 175, 95, 255), center_out);
+                draw_arc_halfcap(vg, cx, cy, r_mid, thickness, a_end_deg, nvgRGBA(255, 105, 0, 255), end_out);
+            } else {
+                draw_arc_tricolor(vg, cx, cy, r_mid, thickness, TOP, a_end_deg);
+                draw_arc_halfcap(vg, cx, cy, r_mid, thickness, TOP, nvgRGBA(0, 191, 255, 255), center_out);
+                draw_arc_halfcap(vg, cx, cy, r_mid, thickness, a_end_deg, nvgRGBA(222, 41, 16, 255), end_out);
+            }
+        }
+
+        // 3. 白色圆点 (随方向盘沿弧滚动; 颜色0=无色模式时始终显示; 有颜色时转约10°以上消失)
+        if (arc_color == 0 || fabsf(torque_filter) < 0.22f) {
+            float dot_a = (TOP + SPAN / 2 * torque_filter) * NVG_PI / 180.0f;
+            float dot_x = cx + cosf(dot_a) * r_mid;
+            float dot_y = cy + sinf(dot_a) * r_mid;
+            nvgBeginPath(vg);
+            nvgCircle(vg, dot_x, dot_y, thickness * 0.5f + 2.0f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 240));
+            nvgFill(vg);
         }
     }
 };
@@ -3056,9 +3285,9 @@ public:
         makeDeviceInfo(s);
         SubMaster& sm = *(s->sm);
 
-        // 信息条贴着屏幕下边框，底部留3px不覆盖
+        // 信息条贴着屏幕下边框，底部留3px不覆盖; 高度缩窄到刚好盖住文字(原82→50, 给转向弧让空间)
         const int bar_margin_bottom = 3;
-        const int bar_h = 82;
+        const int bar_h = 50;
         const int bar_y = s->fb_h - bar_h - bar_margin_bottom;
         const int bar_margin = 0;
 
@@ -3332,6 +3561,7 @@ LaneLineDrawer drawLaneLine;
 PathEndDrawer drawPathEnd;
 DesireDrawer drawDesire;
 TurnInfoDrawer drawTurnInfo;
+TurnArcDrawer drawTurnArc;
 
 OnroadAlerts::Alert alert;
 NVGcolor alert_color;
@@ -3369,6 +3599,7 @@ void ui_draw(UIState *s, ModelRenderer* model_renderer, int w, int h) {
     if (!dp_ui_rainbow && show_lane_info >= 0) drawPath.draw(s, pathDrawSeq);
     if (!dp_ui_rainbow) drawLaneLine.draw(s, show_lane_info);
     if (params.getInt("ShowPathEnd") > 0) drawPathEnd.draw(s);
+    if (params.getBool("TurnArcEnabled")) drawTurnArc.draw(s);
   }
 
   int path_x = drawPathEnd.getPathX();
