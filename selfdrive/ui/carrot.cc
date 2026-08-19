@@ -3786,7 +3786,7 @@ public:
         strcpy(bottom, str.toStdString().c_str());
 
         // bottom_left
-        char bottom_left[256] = "CP-Dev晚風0806";
+        char bottom_left[256] = "CP-Dev晚風V260819";
 
         // bottom_right
         // Params params_memory = Params("/dev/shm/params");

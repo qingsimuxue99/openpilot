@@ -197,9 +197,17 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     # ========= 模式切换 =========
     # 设定值为0表示动态实验模式
     if self.DynamicExperimentalSpeed == 0 and self.DynamicExperimentalLatA == 0:
+      # 方案B：CP 自动点亮实验模式作为 dec 使能层，dec 在内部按场景细化 blended/acc
+      if not sm['selfdriveState'].experimentalMode:
+        self.sys_params.put_bool_nonblocking("ExperimentalMode", True)
       LongitudinalPlannerSP.update(self, sm)
       if dec_mpc_mode := self.get_mpc_mode():
         self.mpc.mode = dec_mpc_mode
+      else:
+        # dec 尚未激活(初始几帧 / enabled 未就绪): 默认走原厂 ACC, 避免 blended 慢加速/限速
+        self.mpc.mode = 'acc'
+      if self.frame % 100 == 0:
+        cloudlog.info(f"DEC path: exp={sm['selfdriveState'].experimentalMode} speed={self.DynamicExperimentalSpeed} latA={self.DynamicExperimentalLatA} mpc_mode={self.mpc.mode}")
 
     # 设置值大于0表示条件实验模式
     elif self._exp_on_counter >= self._exp_on_frames and not self._exp_latched:

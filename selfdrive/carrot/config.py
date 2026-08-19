@@ -156,8 +156,14 @@ class UnifiedParams:
             "SideRelDistTime": 10,
             "SidevRelDistTime": 10,
             "SideRadarMinDist": 0,
-            "BlinkerTurnIntent": 0,
-            "BlinkerTurnIntentSpeed": 30,
+
+            "LidarBsdDelayTime": 10,
+            "LidarFrontVDistTime": 10,
+            "LidarFrontVRelDistTime": 30,
+            "LidarBehindVDistTime": 10,
+            "LidarBehindVRelDistTime": 30,
+            "LaneLineDelayTime": 10,
+
             "AutoTurnInNotRoadEdge": 1,
             "ContinuousLaneChange": 1,
             "ContinuousLaneChangeCnt": 4,
@@ -166,8 +172,10 @@ class UnifiedParams:
             "AutoEnTurnNewLaneTimeH": 0,
             "AutoEnTurnNewLaneTime": 0,
             "NewLaneWidthDiff": 8,
-            "DynamicExperimentalSpeed": -5,
+            "DynamicExperimentalSpeed": 0,
             "DynamicExperimentalLatA": 0,
+            "AtcResumeDelay": 3,
+            "AtcResumeCnt": 5,
         }
 
     def get_bool(self, key, default=False):
