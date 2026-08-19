@@ -3,7 +3,6 @@ Carrot2-v9 (2026-08-19)
 * 新增转向弧颜色 SteerArcColor：转向弧指示支持多色显示（参数持久化）
 * 实验模式图标重绘：更新实验模式图标（img_experimental.svg，已编译进资源）
 * 新增 Lidar BSD / 车道线延迟参数：LidarBsdDelayTime、LidarFrontVDistTime、LidarFrontVRelDistTime、LidarBehindVDistTime、LidarBehindVRelDistTime、LaneLineDelayTime（默认 10/30 秒）
-* 动态实验模式优化：DynamicExperimentalSpeed 默认 -5 改为 0；planner 新增方案B DEC 路径（自动点亮实验模式作为 dec 使能层，dec 未激活时默认原厂 ACC 避免 blended 慢加速）
 * 新增自动恢复参数 AtcResumeDelay / AtcResumeCnt（自动 resuming 控制）
 * 移除 BlinkerTurnIntent / BlinkerTurnIntentSpeed 转向意图参数（改用其他机制）
 * 版本号更新至 V260819
