@@ -1,5 +1,6 @@
 Carrot2-v9 (2026-08-19)
 ========================
+* 新增无车道线路沿居中（EdgeCenteringEnabled）：无车道线且两侧路沿可见时，基于两侧路沿几何中心贴道路中心行驶，避免模型偏向一侧；有车道线时完全不介入（独立开关，默认开）
 * 新增转向弧颜色 SteerArcColor：转向弧指示支持多色显示（参数持久化）
 * 实验模式图标重绘：更新实验模式图标（img_experimental.svg，已编译进资源）
 * 新增 Lidar BSD / 车道线延迟参数：LidarBsdDelayTime、LidarFrontVDistTime、LidarFrontVRelDistTime、LidarBehindVDistTime、LidarBehindVRelDistTime、LaneLineDelayTime（默认 10/30 秒）

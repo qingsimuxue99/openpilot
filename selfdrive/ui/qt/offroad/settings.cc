@@ -1113,6 +1113,8 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("CurveCenteringMode", "弯道居中(0)", "弯道中强制沿模型车道线中心行驶, 不外扩不内切, 避免压线; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("CurveCenteringStrength", "居中强度(60)x0.01", "朝车道中心回正的强度; 越大回正越狠越快, 越小越柔; 仅修正弯道中的偏离分量, 不影响直道与用户偏移", 10, 100, 5));
   featToggles->addItem(new CValueControl("CurveCenteringCurv", "激活曲率(4)x0.001", "触发弯道居中的最小曲率(1/m), 越大只在更急的弯才激活; 直道(曲率≈0)不生效", 1, 10, 1));
+  // === 无车道线路沿居中（独立开关, 默认开; 仅无车道线且路沿可见时生效, 不影响有车道线路段）===
+  featToggles->addItem(new CValueControl("EdgeCenteringEnabled", "无车道线路沿居中(1)", "无车道线且路沿可见时, 基于两侧路沿几何中心贴道路中心行驶, 避免模型偏左; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
   // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===

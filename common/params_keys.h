@@ -415,5 +415,6 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"dp_ui_rainbow", PERSISTENT},
     {"TurnArcEnabled", PERSISTENT},
     {"SteerArcColor", PERSISTENT},
+    {"EdgeCenteringEnabled", PERSISTENT},
     //new
 };

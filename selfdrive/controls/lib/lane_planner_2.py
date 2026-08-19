@@ -18,6 +18,10 @@ MAX_LANE_CENTERING_AWAY = 1.85
 KEEP_MIN_DISTANCE_FROM_LANE = 1.35
 KEEP_MIN_DISTANCE_FROM_EDGELANE = 1.15
 
+# 无车道线时用两侧路沿几何中心替代模型偏向路径
+# 总开关 EDGE_CENTERING_ENABLED(代码层); 用户开关由 UI 参数 EdgeCenteringEnabled 控制(默认开, 部署时预设=1)
+EDGE_CENTERING_ENABLED = True
+
 def clamp(num, min_value, max_value):
   # weird broken case, do something reasonable
   if min_value > num > max_value:
@@ -377,6 +381,23 @@ class LanePlanner:
 
     # AutoCenter: continuous auto correction towards lane center (works in lane mode AND laneless mode)
     ac_offset = self.update_auto_center(CS, v_ego)
+
+    # === 路沿居中: 无车道线时用两侧路沿几何中心, 替代模型偏向的一侧 ===
+    # 仅当车道线不可用时生效(有车道线路段 blend=0 完全不动), 不影响正常使用
+    if EDGE_CENTERING_ENABLED and self.params.get_bool("EdgeCenteringEnabled"):
+      lanelines_unavailable = (self.l_prob < 0.5) and (self.r_prob < 0.5)
+      edge_width = abs(self.re_y[0] - self.le_y[0])
+      edges_plausible = (1.5 < edge_width < 8.0)
+      if lanelines_unavailable and edges_plausible:
+        edge_center_traj = (self.le_y + self.re_y) * 0.5
+        # 将路沿中心沿 x 轴对齐到 path 网格(与 lane_lines 同坐标系)
+        if self.ll_x[-1] > self.ll_x[0]:
+          edge_center_on_path = np.interp(path_xyz[:, 0], self.ll_x, edge_center_traj)
+        else:
+          edge_center_on_path = edge_center_traj
+        # d_prob 越低(越无车道线) -> 越信任路沿中心; 有车道线时 blend=0 不动
+        blend = clamp(1.0 - self.d_prob, 0.0, 1.0)
+        path_xyz[:, 1] = (1.0 - blend) * path_xyz[:, 1] + blend * edge_center_on_path
 
     path_xyz[:, 1] += (CAMERA_OFFSET + self.lane_offset_filtered.x + ac_offset)
 
