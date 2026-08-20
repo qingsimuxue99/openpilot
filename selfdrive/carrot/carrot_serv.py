@@ -21,6 +21,8 @@ from openpilot.system.hardware import PC, TICI
 from openpilot.selfdrive.navd.helpers import Coordinate
 from opendbc.car.common.conversions import Conversions as CV
 from openpilot.common.realtime import DT_MDL
+#new: 窄路会车让行（独立模块，默认关=零影响）
+from openpilot.selfdrive.carrot.meet_yield import MeetYieldDetector
 
 BLINKER_NONE = 0
 BLINKER_LEFT = 1
@@ -286,6 +288,9 @@ class CarrotServ:
     self.lb_vrel = None
     self.rf_vrel = None
     self.rb_vrel = None
+    #new: 窄路会车让行检测器与状态
+    self.meet_yield = MeetYieldDetector()
+    self.meet_yield_state = 0
     self.atc_speed_delta = None
     self.bsd_v_ego_kph = None
     self.bsd_speed_keep_time = -1
@@ -1020,6 +1025,8 @@ class CarrotServ:
 
         # 获取原车雷达数据
         radar_lf_drel, radar_lf_vrel, radar_rf_drel, radar_rf_vrel = self.get_radar_front_info(sm)
+        #new: 窄路会车让行 - 对向车检测(基于 leadLeft 接近速率, MeetYieldMode=0时零影响)
+        self.meet_yield_state = self.meet_yield.update(radar_lf_drel, radar_lf_vrel)
 
         left_bsd = (True if "left" in atc_type else False) if atc_left_right_bsd else (True if driver_left_bsd else False)
         if left_bsd:  # 左变道受阻
@@ -1491,6 +1498,7 @@ class CarrotServ:
     msg.carrotMan.extState = int(self.ext_state)
     msg.carrotMan.leftBlind = (8 if self.left_lane else 0) + (4 if self.lidar_car_lblind else 0) + (2 if self.left_blind else 0) + (1 if self.lidar_lblind else 0)
     msg.carrotMan.rightBlind = (8 if self.right_lane else 0) + (4 if self.lidar_car_rblind else 0) + (2 if self.right_blind else 0) + (1 if self.lidar_rblind else 0)
+    msg.carrotMan.meetYieldState = int(self.meet_yield_state) #new: 窄路会车让行状态
     #new
 
     msg.carrotMan.xPosSpeed = float(v_ego_kph) #float(self.nPosSpeed)

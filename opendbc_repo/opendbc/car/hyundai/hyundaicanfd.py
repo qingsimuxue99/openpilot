@@ -397,7 +397,9 @@ def create_spas_messages(packer, CAN, frame, left_blink, right_blink):
   ret.append(packer.make_can_msg("SPAS1", CAN.ECAN, values))
 
   blink = 0
-  if left_blink:
+  if left_blink and right_blink:  # new: 急刹双闪 hazards (DBC VAL_: 1 "hazards")
+    blink = 1
+  elif left_blink:
     blink = 3
   elif right_blink:
     blink = 4

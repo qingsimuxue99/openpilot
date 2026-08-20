@@ -20,6 +20,8 @@ from openpilot.selfdrive.controls.lib.latcontrol_pid import LatControlPID
 from openpilot.selfdrive.controls.lib.latcontrol_angle import LatControlAngle, STEER_ANGLE_SATURATION_THRESHOLD
 from openpilot.selfdrive.controls.lib.latcontrol_torque import LatControlTorque
 from openpilot.selfdrive.controls.lib.longcontrol import LongControl
+#new: 急刹自动双闪（独立模块，默认关=零影响）
+from openpilot.selfdrive.carrot.hazard_brake import HazardBrake
 
 
 from openpilot.common.realtime import DT_CTRL, DT_MDL
@@ -62,6 +64,8 @@ class Controls:
     }
 
     self.LoC = LongControl(self.CP)
+    #new: 急刹自动双闪控制器（独立开关，关闭时整段 no-op）
+    self.hb = HazardBrake()
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
     if self.CP.steerControlType == car.CarParams.SteerControlType.angle:
@@ -120,6 +124,10 @@ class Controls:
     if model_v2.meta.laneChangeState != LaneChangeState.off:
       CC.leftBlinker = model_v2.meta.laneChangeDirection == LaneChangeDirection.left
       CC.rightBlinker = model_v2.meta.laneChangeDirection == LaneChangeDirection.right
+    #new: 急刹自动双闪 - 急减速/FCW 时点亮双闪警示后车(HazardBrakeMode=0时零影响)
+    if self.hb.update(CS, long_plan, self.sm['radarState'], DT_CTRL):
+      CC.leftBlinker = True
+      CC.rightBlinker = True
 
     if not CC.latActive:
       self.LaC.reset()

@@ -282,6 +282,7 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
     params.put("CarrotActivationCode", s);
     if (s.empty()) {
       ConfirmationDialog::alert(tr("激活码已清除, 当前为基础版"), this);
+      if (lic_remain_lbl_) lic_remain_lbl_->setText(tr("未激活 / 次数用完，请购买激活码"));
       return;
     }
     // 写临时文件后调用 license.py 校验(避免激活码出现在命令行)
@@ -291,6 +292,16 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
     FILE *fp = popen(cmd.c_str(), "r");
     std::string out;
     if (fp) { char buf[512]; while (fgets(buf, sizeof(buf), fp)) out += buf; pclose(fp); }
+    // 实时刷新剩余激活次数显示(输入激活码后立即生效, 无需重进页面/重启)
+    if (lic_remain_lbl_) {
+      bool act = (params.get("CarrotLicStatus") == "1");
+      std::string remain = params.get("CarrotLicRemain");
+      if (act) {
+        lic_remain_lbl_->setText(tr("已激活，剩余 ") + QString::fromStdString(remain) + tr(" 次"));
+      } else {
+        lic_remain_lbl_->setText(tr("未激活 / 次数用完，请购买激活码"));
+      }
+    }
     ConfirmationDialog::alert(QString::fromStdString(out), this);
   });
   addItem(licBtn);
@@ -1117,6 +1128,15 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("EdgeCenteringEnabled", "无车道线路沿居中(1)", "无车道线且路沿可见时, 基于两侧路沿几何中心贴道路中心行驶, 避免模型偏左; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
+  // === 窄路会车让行（独立开关，默认关=零影响原逻辑；需原车雷达 leadLeft 支持）===
+  featToggles->addItem(sectionHeader("窄路会车让行"));
+  featToggles->addItem(new CValueControl("MeetYieldMode", "会车让行(0)", "乡道窄路对向来车时自动向路肩平移让出会车空间, 通过后自动回正; 依据原车雷达识别对向接近车; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
+  featToggles->addItem(new CValueControl("MeetYieldOffset", "让行幅度(35)x0.01m", "最大向路肩平移的距离, 单位cm; 建议25~45, 窄路取大值", 10, 60, 1));
+  featToggles->addItem(new CValueControl("MeetYieldDist", "触发距离(60)m", "对向车进入此距离且快速接近时开始让行", 20, 120, 5));
+  featToggles->addItem(new CValueControl("MeetYieldVRel", "接近速率(80)x0.1m/s", "识别对向车的接近速率门槛, 单位0.1m/s; 80=8m/s(29km/h)可滤掉绝大多数同向慢车, 对向车通常-15以上", 40, 200, 5));
+  featToggles->addItem(new CValueControl("MeetYieldConfirm", "触发确认(3)x0.1s", "持续接近多久才让行, 单位0.1s; 防对向车道偶发目标误判", 1, 10, 1));
+  featToggles->addItem(new CValueControl("MeetYieldRate", "平移速率(10)x0.01m/s", "路径平移快慢, 单位0.01m/s; 越大让行越果断, 越小越平缓", 3, 30, 1));
+  featToggles->addItem(new CValueControl("MeetYieldDir", "让行方向(1)", "+1=向右(靠右行驶地区), -1=向左(靠左行驶地区); 与路径偏移PathOffset同方向语义", -1, 1, 1));
   // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===
   featToggles->addItem(sectionHeader("弯道预备减速辅助"));
   featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
@@ -1126,6 +1146,14 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("PhantomBrakeGuardMode", "幽灵刹车抑制(0)", "高速雷达误检假前车导致无故急刹时, 柔和削弱其减速, 绝不删除前车; 0:关闭(完全不影响原逻辑), 1:标准, 2:激进", 0, 2, 1));
   featToggles->addItem(new CValueControl("PhantomBrakeGuardDist", "触发距离(250)x0.1m", "雷达报前车距离小于此值才进入幽灵判定, 单位0.1m; 越大只在更近的假目标才介入", 50, 600, 10));
   featToggles->addItem(new CValueControl("PhantomBrakeGuardConfirm", "多帧确认(10)", "连续命中幽灵判定的帧数才生效, 防单帧抖动误杀真实急刹; 越大越保守", 3, 30, 1));
+  // === 急刹自动双闪（独立开关，默认关=零影响原逻辑）===
+  featToggles->addItem(sectionHeader("急刹安全警示"));
+  featToggles->addItem(new CValueControl("HazardBrakeMode", "急刹自动双闪(0)", "急减速时自动点亮双闪警示后方来车, 降低追尾风险; 0:关闭(完全不影响原逻辑), 1:急刹触发, 2:急刹+FCW碰撞预警触发", 0, 2, 1));
+  featToggles->addItem(new CValueControl("HazardBrakeAccel", "触发减速度(-35)x0.1", "触发双闪的减速度阈值, 单位0.1m/s^2; 数值越负越难触发(更急的刹才闪), 建议-30~-45", -60, -15, 1));
+  featToggles->addItem(new CValueControl("HazardBrakeRelease", "释放减速度(-15)x0.1", "刹车力度恢复到此值以上才开始计时熄灭(迟滞防抖), 单位0.1m/s^2", -40, -5, 1));
+  featToggles->addItem(new CValueControl("HazardBrakeMinSpeed", "最低触发车速(30)km/h", "低于此车速不触发双闪, 避免市区蠕行/泊车误闪", 0, 120, 5));
+  featToggles->addItem(new CValueControl("HazardBrakeHold", "熄灭延时(15)x0.1s", "减速恢复后双闪再保持的时间, 单位0.1s; 提示后车前方有情况", 5, 50, 1));
+  featToggles->addItem(new CValueControl("HazardBrakeConfirm", "触发确认(3)x0.1s", "持续急刹多久才点亮, 单位0.1s; 防颠簸/单帧噪声误闪", 1, 10, 1));
   featToggles->addItem(sectionHeader("显示与画面"));
   featToggles->addItem(new CValueControl("ShowDrivePanel", "驾驶面板", "0:隐藏,1:显示", 0, 1, 1));
   // === 驾驶优化方案 2026-08-03: 前车切出(方案五) ===

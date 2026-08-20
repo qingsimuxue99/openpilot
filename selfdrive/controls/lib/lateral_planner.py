@@ -14,6 +14,8 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.controls.lib.lane_planner_2 import LanePlanner
 # new: 弯道居中（独立模块，独立开关，默认关=零影响）
 from openpilot.selfdrive.carrot.curve_centering import CurveCentering
+# new: 窄路会车让行（独立模块，独立开关，默认关=零影响）
+from openpilot.selfdrive.carrot.meet_yield import MeetYieldPath
 from collections import deque
 
 TRAJECTORY_SIZE = 33
@@ -58,6 +60,8 @@ class LateralPlanner:
     self.LP = LanePlanner()
     # new: 弯道居中控制器（独立开关，关闭时整段 no-op）
     self.cc = CurveCentering()
+    # new: 窄路会车让行注入器（独立开关，关闭时整段 no-op）
+    self.my = MeetYieldPath()
     self.readParams = 0
     self.lanelines_active = False
     self.lanelines_active_tmp = False
@@ -151,6 +155,8 @@ class LateralPlanner:
 
     # === 弯道居中（独立模块，独立开关，默认关=零影响）===
     self.path_xyz = self.cc.update(carrot, sm, self.path_xyz, self.LP, measured_curvature, self.v_ego, sm['carState'])
+    # new: 窄路会车让行 - 对向来车时向路肩平移路径(MeetYieldMode=0时零影响)
+    self.path_xyz = self.my.update(carrot, sm, self.path_xyz, self.LP, self.v_ego, sm['carState'])
 
     #if self.LP.lanefull_mode:
     #  self.plan_yaw, self.plan_yaw_rate = self.LP.calculate_plan_yaw_and_yaw_rate(self.path_xyz)

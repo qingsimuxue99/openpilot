@@ -53,6 +53,8 @@ struct CarrotMan @0x81c2f05a394cf4af {
 
 	leftBlind @37 : Int32;
 	rightBlind @38 : Int32;
+	#new: 窄路会车让行 0:无 1:让行中 2:回正中
+	meetYieldState @39 : Int32;
 }
 
 struct AmapNavi @0xaedffd8f31e7b55d {
