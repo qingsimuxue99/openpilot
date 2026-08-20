@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "apk": "https://raw.githubusercontent.com/qingsimuxue99/openpilot/ssh-app-update/openpilot-ssh-debug.apk",
+  "notes": "openpilot SSH 工具 Android 版 - 在线更新源（初始版本 v1.0.0）",
+  "force": false
+}
