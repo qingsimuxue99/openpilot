@@ -1128,15 +1128,6 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("EdgeCenteringEnabled", "无车道线路沿居中(1)", "无车道线且路沿可见时, 基于两侧路沿几何中心贴道路中心行驶, 避免模型偏左; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
-  // === 窄路会车让行（独立开关，默认关=零影响原逻辑；需原车雷达 leadLeft 支持）===
-  featToggles->addItem(sectionHeader("窄路会车让行"));
-  featToggles->addItem(new CValueControl("MeetYieldMode", "会车让行(0)", "乡道窄路对向来车时自动向路肩平移让出会车空间, 通过后自动回正; 依据原车雷达识别对向接近车; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
-  featToggles->addItem(new CValueControl("MeetYieldOffset", "让行幅度(35)x0.01m", "最大向路肩平移的距离, 单位cm; 建议25~45, 窄路取大值", 10, 60, 1));
-  featToggles->addItem(new CValueControl("MeetYieldDist", "触发距离(60)m", "对向车进入此距离且快速接近时开始让行", 20, 120, 5));
-  featToggles->addItem(new CValueControl("MeetYieldVRel", "接近速率(80)x0.1m/s", "识别对向车的接近速率门槛, 单位0.1m/s; 80=8m/s(29km/h)可滤掉绝大多数同向慢车, 对向车通常-15以上", 40, 200, 5));
-  featToggles->addItem(new CValueControl("MeetYieldConfirm", "触发确认(3)x0.1s", "持续接近多久才让行, 单位0.1s; 防对向车道偶发目标误判", 1, 10, 1));
-  featToggles->addItem(new CValueControl("MeetYieldRate", "平移速率(10)x0.01m/s", "路径平移快慢, 单位0.01m/s; 越大让行越果断, 越小越平缓", 3, 30, 1));
-  featToggles->addItem(new CValueControl("MeetYieldDir", "让行方向(1)", "+1=向右(靠右行驶地区), -1=向左(靠左行驶地区); 与路径偏移PathOffset同方向语义", -1, 1, 1));
   // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===
   featToggles->addItem(sectionHeader("弯道预备减速辅助"));
   featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
