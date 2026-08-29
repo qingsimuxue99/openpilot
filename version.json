@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "changelog": "【进度推送 + 防卡】在线更新改为 SSE 流式：分块下载真实百分比 → 解压 → 延迟重启；整体备份回归网页端，后台 tar 打包、每 2 秒回报进度、末尾 md5 + 解包文件数双重校验。两者全程心跳保活，彻底告别「假死 / 退出码 -1」。【界面】新增「一键部署 / 在线更新」页与「关于」页，移动端导航同步为 7 项。【修复】参数设置页空白：补回收藏 / 横向 / 纵向 / 弯道 / 变道 / 导航 / 显示 / 系统设置 / 其他共 9 个分组折叠面板，新增全部展开与仅看收藏，折叠状态本地记忆。",
-  "tag": "v1.2.0",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.0/release/c3_toolbox.tar.gz"
+  "version": "1.2.1",
+  "changelog": "【修复】v1.2.0 后端残留两个 /api/update 路由导致 Flask 重复注册报错，已删除旧版同步实现，保留 SSE 流式进度推送版。【兼容】安装脚本增强对 sunnypilot 系统的自启兼容性：systemd 优先、失败时自动回退 cron 兜底、启动后主动验证 5588 端口，并在启用 systemd 时清理 launch_openpilot.sh 旧自启块避免冲突。",
+  "tag": "v1.2.1",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.1/release/c3_toolbox.tar.gz"
 }
