@@ -29,6 +29,14 @@ DeveloperPanel::DeveloperPanel(SettingsWindow *parent) : ListWidget(parent) {
   });
   addItem(experimentalLongitudinalToggle);
 
+  // 提示音输出方式: 0=自动 1=蜂鸣器 2=扬声器 3=关闭
+  addItem(new CValueControl("BeepMode", tr("提示音输出方式"), tr("0:自动, 1:蜂鸣器(无扬声器设备), 2:扬声器, 3:关闭"), 0, 3, 1));
+  // 声音细分开关: 0=关 1=开
+  // 开机提示音(BeepStartup): 仅 C3XL 蜂鸣器设备有此逻辑; 标准 C3 走扬声器(soundd), 本身不带开机提示音, 故此开关在 C3 上为无操作(界面仍显示)
+  addItem(new CValueControl("BeepStartup", tr("开机提示音"), tr("1:开 0:关 (仅 C3XL 蜂鸣器)"), 0, 1, 1));
+  addItem(new CValueControl("BeepEngage", tr("开启ACC提示音"), tr("1:开 0:关"), 0, 1, 1));
+  addItem(new CValueControl("BeepDisengage", tr("关闭ACC提示音"), tr("1:开 0:关"), 0, 1, 1));
+
   // Joystick and longitudinal maneuvers should be hidden on release branches
   is_release = params.getBool("IsReleaseBranch");
 

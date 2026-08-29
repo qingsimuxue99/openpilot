@@ -25,6 +25,43 @@ AMBIENT_DB = 30 # DB where MIN_VOLUME is applied
 DB_SCALE = 30 # AMBIENT_DB + DB_SCALE is where MAX_VOLUME is applied
 
 AudibleAlert = car.CarControl.HUDControl.AudibleAlert
+import os
+import subprocess
+
+
+def buzzer_present():
+  # C3XL(阉割版)带蜂鸣器(GPIO42); 标准 C3 无蜂鸣器, 走扬声器
+  # 用 sudo 主动尝试导出 GPIO42 判断: 能导出=有蜂鸣器(C3XL), 失败=无(C3)
+  if os.path.exists("/sys/class/gpio/gpio42"):
+    return True
+  subprocess.run("echo 42 | sudo tee /sys/class/gpio/export",
+                 shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+  return os.path.exists("/sys/class/gpio/gpio42")
+
+
+def resolve_beep_mode():
+  # BeepMode: 0=自动 1=蜂鸣器 2=扬声器 3=关闭
+  bm = Params().get_int("BeepMode")
+  if bm == 3:
+    return "off"
+  if bm == 1:
+    return "buzzer"
+  if bm == 2:
+    return "speaker"
+  return "buzzer" if buzzer_present() else "speaker"
+
+
+def sound_enabled(key):
+  # 细分子开关: 未设置或 !=0 视为开启(向后兼容, 默认开)
+  # 注意: BeepStartup(开机提示音) 仅 C3XL 蜂鸣器侧生效; 标准 C3 走扬声器, 本身无开机提示音逻辑, 故该开关在扬声器侧无作用
+  v = Params().get(key)
+  if v is None or v == b"":
+    return True
+  try:
+    return int(v) != 0
+  except ValueError:
+    return True
+
 
 
 sound_list: dict[int, tuple[str, int | None, float]] = {
@@ -227,6 +264,11 @@ class Soundd:
     if sm.updated['selfdriveState']:
       new_alert = sm['selfdriveState'].alertSound.raw
       new_alert = self.update_carrot_alert(sm, new_alert)
+      # 细分子开关: 开启/关闭 ACC 提示音同步控制扬声器侧
+      if new_alert == AudibleAlert.engage and not sound_enabled("BeepEngage"):
+        new_alert = AudibleAlert.none
+      if new_alert == AudibleAlert.disengage and not sound_enabled("BeepDisengage"):
+        new_alert = AudibleAlert.none
       self.update_alert(new_alert)
     elif check_selfdrive_timeout_alert(sm):
       self.update_alert(AudibleAlert.warningImmediate)
@@ -247,6 +289,11 @@ class Soundd:
     return sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.callback, blocksize=SAMPLE_BUFFER)
 
   def soundd_thread(self):
+    # 按 BeepMode 决定本进程是否负责扬声器: 蜂鸣器/关闭模式时让出扬声器, 空转避免无设备崩溃
+    if resolve_beep_mode() != "speaker":
+      while True:
+        time.sleep(3600)
+      return
     # sounddevice must be imported after forking processes
     import sounddevice as sd
 
