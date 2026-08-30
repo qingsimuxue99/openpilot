@@ -1,6 +1,6 @@
 {
-  "version": "1.2.2",
-  "changelog": "【修复】「从零部署命令」复制按钮在明文 HTTP（http://设备IP:5588）访问时必报「复制失败」：原 copyText 仅用 navigator.clipboard.writeText（仅安全上下文可用），现已补上 textarea + execCommand 兜底，HTTP 下自动降级可正常复制。",
-  "tag": "v1.2.2",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.2/release/c3_toolbox.tar.gz"
+  "version": "1.2.3",
+  "changelog": "【修复】点更新显示成功但刷新仍是老版本：①在线更新解压目标由写死的 BASE_DIR 改为脚本实际所在目录 SCRIPT_DIR，杜绝设备装在非 /data/c3_toolbox 路径时新文件写到别处、服务仍 serve 旧文件；②重启逻辑优先走 systemd 托管重启，否则端口杀+setsid 拉起；③新增 /api/restart 手动重启端点与「重启服务」按钮，更新后前端自动回读版本，未切换则提示手动重启。",
+  "tag": "v1.2.3",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.3/release/c3_toolbox.tar.gz"
 }

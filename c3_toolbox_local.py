@@ -56,7 +56,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -359,9 +359,22 @@ def fetch_remote_meta():
 
 
 def schedule_restart():
-    """下载完成后，延迟杀掉旧端口并启动新实例，避免端口抢占"""
+    """下载完成后重启服务，确保加载新文件。
+    优先 systemd 托管重启（最干净，新文件由 supervisor 拉起并保持受管）；
+    否则延迟杀掉旧监听进程并以 setsid 拉起新实例。
+    """
     script = os.path.abspath(__file__)
-    cmd = "(sleep 2; fuser -k 5588/tcp 2>/dev/null; sleep 1; cd %s; setsid %s %s >> %s 2>&1 < /dev/null &)" % (
+    # 优先 systemd（c3toolbox.service 存在且 active 时）
+    try:
+        if subprocess.run(['systemctl', 'is-active', '--quiet', 'c3toolbox.service'],
+                          timeout=5).returncode == 0:
+            subprocess.Popen(['systemctl', 'restart', 'c3toolbox.service'])
+            time.sleep(0.6)
+            os._exit(0)
+    except Exception:
+        pass
+    # 兜底：延迟杀掉 5588 监听进程（fuser 不存在则忽略，os._exit 已释放端口），再以 setsid 拉起
+    cmd = "(sleep 2; fuser -k 5588/tcp 2>/dev/null || true; sleep 1; cd %s; setsid %s %s >> %s 2>&1 < /dev/null &)" % (
         BASE_DIR, sys.executable, script, LOG_FILE)
     subprocess.Popen(cmd, shell=True, start_new_session=True)
     time.sleep(0.3)
@@ -893,11 +906,13 @@ def api_update():
                 raise RuntimeError('无可用下载地址')
             yield sp.progress("下载完成，解压中...", 100)
             with tarfile.open(fileobj=io.BytesIO(data.getvalue()), mode='r:gz') as tf:
+                # 解压到「脚本实际所在目录」(SCRIPT_DIR) 而非写死的 BASE_DIR，
+                # 避免设备端脚本装在其它路径时，新文件写到了 A 目录、服务却从 B 目录 serve 旧文件。
                 # Python 3.12+ 要求显式指定 filter（PEP 706）；3.11 无该参数
                 if sys.version_info >= (3, 12):
-                    tf.extractall(BASE_DIR, filter='data')
+                    tf.extractall(SCRIPT_DIR, filter='data')
                 else:
-                    tf.extractall(BASE_DIR)
+                    tf.extractall(SCRIPT_DIR)
             yield sp.log("解压完成，正在重启服务...")
             yield sp.done("更新完成，正在重启服务...")
             time.sleep(0.6)
@@ -905,6 +920,16 @@ def api_update():
         except Exception as e:
             yield sp.error("更新失败 [%s]: %s" % (type(e).__name__, e))
     return Response(_sse_heartbeat(producer), mimetype='text/event-stream', headers=_sse_headers())
+
+
+@app.route('/api/restart', methods=['POST'])
+def api_restart():
+    """手动重启服务（更新后若自动重启未生效时的兜底）。立即返回，重启在后台执行。"""
+    try:
+        schedule_restart()
+    except Exception as e:
+        return jsonify({'success': False, 'message': '重启失败: %s' % e})
+    return jsonify({'success': True, 'message': '正在重启服务...'})
 
 
 @app.route('/api/backup_full', methods=['POST'])

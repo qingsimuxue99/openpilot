@@ -722,6 +722,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <button class="btn bp" onclick="doDeployUpdate()">🚀 立即更新</button>
           <button class="btn bs" onclick="checkUpdate()">检查更新</button>
+          <button class="btn bw" onclick="manualRestart()">🔄 重启服务</button>
           <span class="bs-info">当前版本 v<span id="deployVer2">-</span></span>
         </div>
       </div>
@@ -1867,7 +1868,39 @@ async function streamTask(url, body, opts){
   }catch(e){progLog('❌ 连接中断：'+e.message);progErr();}
 }
 function doFullBackup(){streamTask('/api/backup_full',{},{title:'整体备份（openpilot + 参数）',onDone:loadFullBkList});}
-function doDeployUpdate(){if(!confirm('确定更新到最新版本？服务将自动重启，期间页面会短暂断开。'))return;streamTask('/api/update',{},{title:'一键部署 / 在线更新'});}
+function doDeployUpdate(){
+  if(!confirm('确定更新到最新版本？服务将自动重启，期间页面会短暂断开。'))return;
+  var before=document.getElementById('deployVer2').textContent||'';
+  streamTask('/api/update',{},{title:'一键部署 / 在线更新',onDone:function(){recheckAfterUpdate(before);}});
+}
+function recheckAfterUpdate(before){
+  progLog('更新包已写入，等待服务重启…');
+  var tries=0;
+  function tick(){
+    tries++;
+    fetch('/api/version').then(function(r){return r.json()}).then(function(d){
+      var now=d.version||'';
+      if(now && now!==before && now!==''){
+        progLog('✓ 服务已切换到 v'+now);
+        toast('已更新到 v'+now,'ok');
+        loadVersion(); checkUpdate();
+      }else if(tries<6){
+        setTimeout(tick,2000);
+      }else{
+        progLog('⚠ 服务版本未变化（仍为 v'+now+'），自动重启可能未生效。请点「🔄 重启服务」手动重启，或刷新页面后再试。');
+        toast('重启可能未生效，请手动重启','er');
+      }
+    }).catch(function(){ if(tries<6){setTimeout(tick,2000);}else{progLog('⚠ 暂时连不上服务，重启可能进行中，请稍后刷新页面。');} });
+  }
+  setTimeout(tick,4000);
+}
+function manualRestart(){
+  if(!confirm('确定重启网页工具箱服务？当前连接会短暂断开。'))return;
+  fetch('/api/restart',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    toast(d.success?'正在重启…':'重启失败: '+(d.message||''), d.success?'ok':'er');
+    if(d.success){setTimeout(function(){loadVersion();checkUpdate();},4000);}
+  }).catch(function(e){toast('重启请求失败: '+e.message,'er');});
+}
 function loadFullBkList(){
   var el=document.getElementById('fullBkList');if(!el)return;
   fetch('/api/backup_full/list').then(function(r){return r.json()}).then(function(d){
