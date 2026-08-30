@@ -1,6 +1,6 @@
 {
-  "version": "1.2.3",
-  "changelog": "【修复】点更新显示成功但刷新仍是老版本：①在线更新解压目标由写死的 BASE_DIR 改为脚本实际所在目录 SCRIPT_DIR，杜绝设备装在非 /data/c3_toolbox 路径时新文件写到别处、服务仍 serve 旧文件；②重启逻辑优先走 systemd 托管重启，否则端口杀+setsid 拉起；③新增 /api/restart 手动重启端点与「重启服务」按钮，更新后前端自动回读版本，未切换则提示手动重启。",
-  "tag": "v1.2.3",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.3/release/c3_toolbox.tar.gz"
+  "version": "1.2.4",
+  "changelog": "【修复】自动/手动重启回退命令的 cd 目标由写死的 BASE_DIR(/data/c3_toolbox) 改为脚本实际所在目录 SCRIPT_DIR。此前工具箱装在 /data/c3_toolbox 之外的路径（如 carrot 的 /data/openpilot/selfdrive/carrot/toolbox）时，点「立即更新」后新文件虽写对位置，但回退重启会 cd 到错误目录、找不到脚本导致服务起不来；现在任何安装路径都能正确重启，点升级对所有设备（含非标准路径/SunnyPilot）真正生效。",
+  "tag": "v1.2.4",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.4/release/c3_toolbox.tar.gz"
 }

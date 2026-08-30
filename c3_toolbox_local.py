@@ -56,7 +56,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -373,9 +373,12 @@ def schedule_restart():
             os._exit(0)
     except Exception:
         pass
-    # 兜底：延迟杀掉 5588 监听进程（fuser 不存在则忽略，os._exit 已释放端口），再以 setsid 拉起
+    # 兜底：延迟杀掉 5588 监听进程（fuser 不存在则忽略，os._exit 已释放端口），再以 setsid 拉起。
+    # 注意 cd 到 SCRIPT_DIR（脚本实际所在目录）而非写死的 BASE_DIR：设备装在 /data/c3_toolbox 之外的
+    # 路径（如 carrot 的 /data/openpilot/selfdrive/carrot/toolbox）时，回退重启必须从真实目录启动，
+    # 否则会 cd 到错误目录、找不到 c3_toolbox_local.py 导致重启失败（更新后服务起不来）。
     cmd = "(sleep 2; fuser -k 5588/tcp 2>/dev/null || true; sleep 1; cd %s; setsid %s %s >> %s 2>&1 < /dev/null &)" % (
-        BASE_DIR, sys.executable, script, LOG_FILE)
+        SCRIPT_DIR, sys.executable, script, LOG_FILE)
     subprocess.Popen(cmd, shell=True, start_new_session=True)
     time.sleep(0.3)
     os._exit(0)
