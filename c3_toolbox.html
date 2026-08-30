@@ -1832,7 +1832,9 @@ document.addEventListener('click',function(e){
 });
 
 // === 进度推送 + 防卡：流式任务（POST + ReadableStream 读取 SSE） ===
-function copyText(id){var el=document.getElementById(id);if(!el)return;var t=el.textContent||el.innerText||'';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('已复制','ok')},function(){toast('复制失败','er')})}else{toast('复制失败','er')}}
+function copyText(id){var el=document.getElementById(id);if(!el){toast('复制失败','er');return}var t=el.textContent||el.innerText||'';if(!t){toast('复制失败','er');return}
+  function fb(){try{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.top='0';ta.style.opacity='0';ta.style.left='0';document.body.appendChild(ta);ta.focus();ta.select();var ok=document.execCommand&&document.execCommand('copy');document.body.removeChild(ta);if(ok){return true}}catch(e){}return false}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('已复制','ok')},function(){if(!fb()){toast('复制失败','er')}})}else if(!fb()){toast('复制失败','er')}}
 function progOpen(title){var mo=document.getElementById('progMo');mo.style.display='flex';document.getElementById('progLog').innerHTML='';document.getElementById('progTitle').textContent=title||'任务进行中';setProg(null,'准备中...');var c=document.getElementById('progClose');c.disabled=true;c.style.opacity='.5';}
 function progLog(m){var l=document.getElementById('progLog');var d=document.createElement('div');d.className='pl';d.textContent=m;l.appendChild(d);l.scrollTop=l.scrollHeight;}
 function setProg(pct,label){var bar=document.getElementById('progBar');var txt=document.getElementById('progPct');if(pct===null||pct===undefined){bar.classList.add('indet');txt.textContent=label||'';}else{bar.classList.remove('indet');bar.style.width=Math.max(0,Math.min(100,pct))+'%';txt.textContent=(label||'')+' '+pct+'%';}}

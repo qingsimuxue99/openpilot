@@ -1,6 +1,6 @@
 {
-  "version": "1.2.1",
-  "changelog": "【修复】v1.2.0 后端残留两个 /api/update 路由导致 Flask 重复注册报错，已删除旧版同步实现，保留 SSE 流式进度推送版。【兼容】安装脚本增强对 sunnypilot 系统的自启兼容性：systemd 优先、失败时自动回退 cron 兜底、启动后主动验证 5588 端口，并在启用 systemd 时清理 launch_openpilot.sh 旧自启块避免冲突。",
-  "tag": "v1.2.1",
-  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.1/release/c3_toolbox.tar.gz"
+  "version": "1.2.2",
+  "changelog": "【修复】「从零部署命令」复制按钮在明文 HTTP（http://设备IP:5588）访问时必报「复制失败」：原 copyText 仅用 navigator.clipboard.writeText（仅安全上下文可用），现已补上 textarea + execCommand 兜底，HTTP 下自动降级可正常复制。",
+  "tag": "v1.2.2",
+  "tarball": "https://cdn.jsdelivr.net/gh/qingsimuxue99/openpilot@v1.2.2/release/c3_toolbox.tar.gz"
 }
