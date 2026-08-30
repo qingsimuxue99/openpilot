@@ -861,6 +861,27 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   //cruiseToggles->addItem(new CValueControl("MyHighModeFactor", "DRIVEMODE: HIGH ratio(100%)", "AccelRatio control ratio", 100, 300, 10));
 
   latLongToggles = new ListWidget(this);
+
+  // 舒适跟车/加塞 参数(调节菜单最前)
+  latLongToggles->addItem(new CValueControl("ComfortLongMode", "舒适纵向模式", "默认0(原厂关闭)。0:原厂 1:自定义(手动微调用下方值) 2:套用本车型推荐预设(舒适)。想舒适选2, 想微调选1", 0, 2, 1));
+  latLongToggles->addItem(new CValueControl("LongAccelSmoothDown", "减速变化率限制 x0.001", "减速/加塞柔和度(越小越缓)。默认20(=0.020)。各车型推荐: 现代20 大众20 特斯拉20 丰田20 本田20 福特20 通用20 斯巴鲁20 马自达20 日产20 克莱斯勒20 Rivian20。均从20起按体感微调", 1, 200, 1));
+  latLongToggles->addItem(new CValueControl("LongAccelSmoothUp", "加速变化率限制 x0.001", "加速/起步柔和度(越小越柔)。默认40(=0.040)。各车型推荐: 现代40 大众40 特斯拉40 丰田40 本田40 福特40 通用40 斯巴鲁40 马自达40 日产40 克莱斯勒40 Rivian40。均从40起按体感微调", 1, 400, 1));
+  {
+    bool is_jerk_brand = false;
+    auto cp_bytes = Params().get("CarParamsPersistent");
+    if (!cp_bytes.empty()) {
+      AlignedBuffer aligned_buf;
+      capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
+      cereal::CarParams::Reader CP = cmsg.getRoot<cereal::CarParams>();
+      std::string brand = CP.getBrand();
+      is_jerk_brand = (brand == "hyundai" || brand == "volkswagen" || brand == "tesla");
+    }
+    if (is_jerk_brand) {
+      latLongToggles->addItem(new CValueControl("LongJerkMax", "jerk 上限 x0.1", "仅现代/大众/特斯拉生效。默认15(=1.5)。各车型推荐: 现代15 大众15 特斯拉49(=4.9)。大众为对称jerk, 特斯拉单位m/s³(±4.9, 超限触发ACC故障)", 5, 50, 1));
+      latLongToggles->addItem(new CValueControl("LongJerkGain", "jerk 增益 x0.1", "仅现代生效(大众/特斯拉无需)。默认15(=1.5)。现代推荐15", 5, 50, 1));
+      latLongToggles->addItem(new CValueControl("LongJerkMinBound", "jerk 下限 x0.1", "仅现代生效(大众/特斯拉无需)。默认5(=0.5)。现代推荐5", 0, 20, 1));
+    }
+  }
   latLongToggles->addItem(new CValueControl("UseLaneLineSpeed", "车道线模式速度(0)", "车道线模式，使用 lat_mpc 控制", 0, 200, 5));
   latLongToggles->addItem(new CValueControl("UseLaneLineCurveSpeed", "车道线模式弯道速度(0)", "车道线模式，仅在高速时生效", 0, 200, 5));
   latLongToggles->addItem(new CValueControl("AdjustLaneOffset", "车道偏移调整(0)cm", "", 0, 500, 5));

@@ -1,5 +1,6 @@
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.tesla.values import CANBUS, CarControllerParams
+from common.params import Params
 
 
 class TeslaCAN:
@@ -31,12 +32,27 @@ class TeslaCAN:
       # TODO: this causes jerking after gas override when above set speed
       set_speed = 0 if accel < 0 else V_CRUISE_MAX
 
+    # comfort jerk limit (LongJerkMax). mode0=stock(±4.9) 1=custom 2=tesla comfort preset(±4.9)
+    try:
+      _cl_mode = int(Params().get("ComfortLongMode") or 0)
+    except Exception:
+      _cl_mode = 0
+    if _cl_mode == 0:
+      _jerk = CarControllerParams.JERK_LIMIT_MAX
+    elif _cl_mode == 2:
+      _jerk = 4.9
+    else:
+      try:
+        _jerk = min(4.9, abs(int(Params().get("LongJerkMax") or 49) / 10.0))
+      except Exception:
+        _jerk = 4.9
+
     values = {
       "DAS_setSpeed": set_speed,
       "DAS_accState": acc_state,
       "DAS_aebEvent": 0,
-      "DAS_jerkMin": CarControllerParams.JERK_LIMIT_MIN,
-      "DAS_jerkMax": CarControllerParams.JERK_LIMIT_MAX,
+      "DAS_jerkMin": -_jerk,
+      "DAS_jerkMax": _jerk,
       "DAS_accelMin": accel,
       "DAS_accelMax": max(accel, 0),
       "DAS_controlCounter": cntr,

@@ -15,6 +15,7 @@ except ImportError:
 
 app = Flask(__name__)
 
+
 # 禁止浏览器缓存页面与接口，避免手机端停留在旧版 HTML（导致设备信息等内容显示不全）
 @app.after_request
 def no_cache(resp):
@@ -22,6 +23,7 @@ def no_cache(resp):
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
+
 
 BASE_DIR = "/data/c3_toolbox"                 # 固定设备端数据目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # 脚本所在目录(放 HTML 用)
@@ -54,7 +56,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.2.1"
+VERSION = "1.2.4"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -71,6 +73,7 @@ os.makedirs(BASE_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 os.makedirs(AUTO_BACKUP_DIR, exist_ok=True)
 
+
 # 设备端文件不存在时返回默认值
 def read_file(path, default=""):
     try:
@@ -81,6 +84,7 @@ def read_file(path, default=""):
         pass
     return default
 
+
 def run_cmd(cmd, timeout=10):
     try:
         r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
@@ -88,8 +92,10 @@ def run_cmd(cmd, timeout=10):
     except:
         return ""
 
+
 def safe_key(key):
     return key.replace("/", "").replace("\\", "").replace("..", "")
+
 
 def get_device_info():
     """完整获取设备信息"""
@@ -207,6 +213,7 @@ def get_device_info():
         info['proc_count'] = proc_count.strip()
     return info
 
+
 # ============= 在线更新 =============
 
 def cmp_version(a, b):
@@ -221,9 +228,11 @@ def cmp_version(a, b):
     pb += [0] * (n - len(pb))
     return (pa > pb) - (pa < pb)
 
+
 def _fetch_bytes(url, timeout=20):
     req = urllib.request.Request(url, headers={'User-Agent': 'c3-toolbox-update'})
     return urllib.request.urlopen(req, timeout=timeout).read()
+
 
 def try_fetch_bytes(suffix, timeout=30):
     """遍历镜像源拉取文件字节，逐源回退；全部失败抛最后一个异常"""
@@ -235,6 +244,7 @@ def try_fetch_bytes(suffix, timeout=30):
             last_err = e
     raise last_err
 
+
 def download_file(suffix, dest, timeout=30):
     """从更新源镜像拉取文件，逐镜像回退；成功写入 dest"""
     data = try_fetch_bytes(suffix, timeout)
@@ -243,9 +253,11 @@ def download_file(suffix, dest, timeout=30):
         f.write(data)
     os.replace(tmp, dest)
 
+
 def fetch_text(suffix, timeout=20):
     """从更新源镜像拉取文本（如 version.json），逐镜像回退"""
     return try_fetch_bytes(suffix, timeout).decode('utf-8')
+
 
 def fetch_bytes_from_urls(urls, timeout=60):
     """按给定的完整 URL 列表逐个尝试下载，返回首个成功的字节；全部失败抛最后一个异常"""
@@ -260,6 +272,7 @@ def fetch_bytes_from_urls(urls, timeout=60):
     if last_err:
         raise last_err
     raise RuntimeError('无可用下载地址')
+
 
 def resolve_tarball_urls(remote):
     """由远程 version.json（版本指针）解析出发布包下载地址，按优先级返回：
@@ -279,10 +292,12 @@ def resolve_tarball_urls(remote):
         urls.append(base.rstrip('/') + '/release/c3_toolbox.tar.gz')
     return urls
 
+
 def _semver_key(v):
     """把 'v1.0.12' / '1.0.12' 解析为可比较的 (major,minor,patch) 元组"""
     m = re.match(r'v?(\d+)\.(\d+)\.(\d+)', str(v))
     return tuple(int(x) for x in m.groups()) if m else (0, 0, 0)
+
 
 def discover_latest_version_github():
     """通过 GitHub API 实时发现最新版本号（tag）。
@@ -300,6 +315,7 @@ def discover_latest_version_github():
     except Exception:
         pass
     return None
+
 
 def discover_latest_version():
     """发现最新版本号。优先 GitHub API（实时，推送 tag 后立即可见）；
@@ -319,6 +335,7 @@ def discover_latest_version():
     except Exception:
         pass
     return None
+
 
 def fetch_remote_meta():
     """获取远程版本信息（version.json 内容）。策略：
@@ -340,18 +357,37 @@ def fetch_remote_meta():
             last_err = e
     raise last_err or RuntimeError('无法获取远程版本信息')
 
+
 def schedule_restart():
-    """下载完成后，延迟杀掉旧端口并启动新实例，避免端口抢占"""
+    """下载完成后重启服务，确保加载新文件。
+    优先 systemd 托管重启（最干净，新文件由 supervisor 拉起并保持受管）；
+    否则延迟杀掉旧监听进程并以 setsid 拉起新实例。
+    """
     script = os.path.abspath(__file__)
-    cmd = "(sleep 2; fuser -k 5588/tcp 2>/dev/null; sleep 1; cd %s; setsid %s %s >> %s 2>&1 < /dev/null &)" % (
-        BASE_DIR, sys.executable, script, LOG_FILE)
+    # 优先 systemd（c3toolbox.service 存在且 active 时）
+    try:
+        if subprocess.run(['systemctl', 'is-active', '--quiet', 'c3toolbox.service'],
+                          timeout=5).returncode == 0:
+            subprocess.Popen(['systemctl', 'restart', 'c3toolbox.service'])
+            time.sleep(0.6)
+            os._exit(0)
+    except Exception:
+        pass
+    # 兜底：延迟杀掉 5588 监听进程（fuser 不存在则忽略，os._exit 已释放端口），再以 setsid 拉起。
+    # 注意 cd 到 SCRIPT_DIR（脚本实际所在目录）而非写死的 BASE_DIR：设备装在 /data/c3_toolbox 之外的
+    # 路径（如 carrot 的 /data/openpilot/selfdrive/carrot/toolbox）时，回退重启必须从真实目录启动，
+    # 否则会 cd 到错误目录、找不到 c3_toolbox_local.py 导致重启失败（更新后服务起不来）。
+    cmd = "(sleep 2; fuser -k 5588/tcp 2>/dev/null || true; sleep 1; cd %s; setsid %s %s >> %s 2>&1 < /dev/null &)" % (
+        SCRIPT_DIR, sys.executable, script, LOG_FILE)
     subprocess.Popen(cmd, shell=True, start_new_session=True)
     time.sleep(0.3)
     os._exit(0)
 
+
 @app.route('/api/version')
 def api_version():
     return jsonify({'version': VERSION, 'update_base': UPDATE_BASE})
+
 
 @app.route('/api/check_update')
 def api_check_update():
@@ -368,10 +404,6 @@ def api_check_update():
     except Exception as e:
         return jsonify({'local_version': VERSION, 'remote_version': '', 'update_available': False, 'changelog': '', 'error': str(e)})
 
-def _delayed_restart(delay=1.5):
-    """延迟重启，确保 /api/update 的成功响应已发回前端（避免 os._exit 截断响应）"""
-    time.sleep(delay)
-    schedule_restart()
 
 # ============= 路由 =============
 
@@ -382,13 +414,16 @@ def index():
         return send_file(p)
     return "<h1>c3_toolbox.html 不存在</h1>"
 
+
 @app.route('/api/status')
 def api_status():
     return jsonify({'connected': True, 'type': 'local', 'host': '本机', 'device_info': get_device_info()})
 
+
 @app.route('/api/device_info')
 def api_device_info():
     return jsonify(get_device_info())
+
 
 HIDDEN_PARAMS = [
     'SoundVolumeAdjust', 'SoundVolumeAdjustEngage',
@@ -400,18 +435,13 @@ HIDDEN_PARAMS = [
     'IsRHD', 'Passive',
 ]
 
-SENSITIVE_PARAMS = [
-    'CarrotLicRemain', 'CarrotLicStatus', 'CarrotActCounted', 'CarrotActUsed',
-    'CarrotFreeUsed', 'CarrotActivationCode', 'HardwareSerial',
-    'DongleId', 'GithubUsername',
-]
-SENSITIVE_SET = set(SENSITIVE_PARAMS)
 
 def is_param_hidden(fname):
-    for h in HIDDEN_PARAMS + SENSITIVE_PARAMS:
+    for h in HIDDEN_PARAMS:
         if fname == h or fname.startswith(h):
             return True
     return False
+
 
 @app.route('/api/params', methods=['GET'])
 def api_get_params():
@@ -420,7 +450,7 @@ def api_get_params():
     try:
         for fname in sorted(os.listdir(PARAMS_DIR)):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
+            if os.path.isfile(fpath) and fname != '.LOCK':
                 if is_param_hidden(fname):
                     continue
                 try:
@@ -435,6 +465,7 @@ def api_get_params():
         return jsonify({'success': False, 'message': str(e), 'params': {}, 'count': 0})
     return jsonify({'success': True, 'message': f'成功获取 {len(params)} 个参数', 'params': params, 'sorted_keys': sorted_keys, 'count': len(params)})
 
+
 @app.route('/api/params', methods=['POST'])
 def api_set_params():
     data = request.json
@@ -446,14 +477,13 @@ def api_set_params():
             sk = safe_key(key)
             if not sk:
                 continue
-            if sk in SENSITIVE_SET:
-                continue
             with open(os.path.join(PARAMS_DIR, sk), 'w') as f:
                 f.write(str(value))
             count += 1
         return jsonify({'success': True, 'message': f'已保存 {count} 个参数'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'保存失败: {str(e)}'})
+
 
 @app.route('/api/param/delete', methods=['POST'])
 def api_delete_param():
@@ -465,6 +495,7 @@ def api_delete_param():
         os.remove(fpath)
         return jsonify({'success': True, 'message': f'已删除: {key}'})
     return jsonify({'success': False, 'message': f'参数不存在: {key}'})
+
 
 # ============= 分支识别与 dp/sp 自定义参数说明库 =============
 def detect_branch():
@@ -500,6 +531,7 @@ def detect_branch():
     except Exception:
         pass
     return 'openpilot'
+
 
 # 各分支常见自定义参数说明（中文）。框架可随时扩展；工具箱识别分支后把对应说明叠加到内置库。
 # 仅覆盖“分支特有的自定义参数”，原版/carrot 参数已由前端内置 PN_DESC 覆盖。
@@ -688,6 +720,7 @@ BRANCH_META = {
     },
 }
 
+
 @app.route('/api/param_meta')
 def api_param_meta():
     """返回当前分支识别结果与对应自定义参数说明库，前端合并到内置说明。"""
@@ -700,14 +733,16 @@ def api_param_meta():
         'bool_params': meta.get('bool_params', []),
     })
 
+
 def ensure_tmux_log():
     """设备端创建一个 tmux 会话 c3logs 持续 tail 工具箱日志，方便在设备 shell 执行 `tmux a -t c3logs` 实时查看。"""
     try:
-        log_path = LOG_FILE
+        log_path = os.path.join(SCRIPT_DIR, 'server.log')
         cmd = "tmux has-session -t c3logs 2>/dev/null || tmux new-session -d -s c3logs 'tail -F %s'" % log_path
         subprocess.run(cmd, shell=True, timeout=5)
     except Exception:
         pass
+
 
 @app.route('/api/command', methods=['POST'])
 def api_command():
@@ -727,10 +762,11 @@ def api_command():
     except Exception as e:
         return jsonify({'success': False, 'result': str(e)})
 
+
 @app.route('/api/logstream')
 def api_logstream():
     """实时日志流 (SSE)：网页终端执行 `tmux a` 时改用此接口持续推送 server.log 新内容。"""
-    log_path = LOG_FILE
+    log_path = os.path.join(SCRIPT_DIR, 'server.log')
 
     def gen():
         yield "data: ┌── 实时日志 (tmux a) 已连接 ──┐\n\n"
@@ -760,6 +796,7 @@ def api_logstream():
                    headers={'Cache-Control': 'no-cache, no-transform',
                             'X-Accel-Buffering': 'no', 'Connection': 'keep-alive'})
 
+
 # ============= SSE 进度推送 + 防卡心跳（整体备份 / 在线更新等长任务） =============
 
 class SSEProgress:
@@ -777,6 +814,7 @@ class SSEProgress:
     def error(m):
         return "data: " + json.dumps({"t": "error", "m": m}, ensure_ascii=False) + "\n\n"
 
+
 def _fmt_size(n):
     try:
         n = float(n)
@@ -787,6 +825,7 @@ def _fmt_size(n):
             return ("%.1f %s" % (n, unit)) if unit != "B" else ("%d %s" % (n, unit))
         n /= 1024
     return "%.1f PB" % n
+
 
 def _sse_heartbeat(producer):
     """包装一个事件生产者 generator：队列驱动，超过 3 秒无事件则注入 ': hb' 心跳注释，
@@ -819,12 +858,14 @@ def _sse_heartbeat(producer):
             break
         yield val
 
+
 def _sse_headers():
     return {
         'Cache-Control': 'no-cache, no-transform',
         'X-Accel-Buffering': 'no',
         'Connection': 'keep-alive',
     }
+
 
 @app.route('/api/update', methods=['POST'])
 def api_update():
@@ -868,11 +909,13 @@ def api_update():
                 raise RuntimeError('无可用下载地址')
             yield sp.progress("下载完成，解压中...", 100)
             with tarfile.open(fileobj=io.BytesIO(data.getvalue()), mode='r:gz') as tf:
+                # 解压到「脚本实际所在目录」(SCRIPT_DIR) 而非写死的 BASE_DIR，
+                # 避免设备端脚本装在其它路径时，新文件写到了 A 目录、服务却从 B 目录 serve 旧文件。
                 # Python 3.12+ 要求显式指定 filter（PEP 706）；3.11 无该参数
                 if sys.version_info >= (3, 12):
-                    tf.extractall(BASE_DIR, filter='data')
+                    tf.extractall(SCRIPT_DIR, filter='data')
                 else:
-                    tf.extractall(BASE_DIR)
+                    tf.extractall(SCRIPT_DIR)
             yield sp.log("解压完成，正在重启服务...")
             yield sp.done("更新完成，正在重启服务...")
             time.sleep(0.6)
@@ -880,6 +923,128 @@ def api_update():
         except Exception as e:
             yield sp.error("更新失败 [%s]: %s" % (type(e).__name__, e))
     return Response(_sse_heartbeat(producer), mimetype='text/event-stream', headers=_sse_headers())
+
+
+@app.route('/api/restart', methods=['POST'])
+def api_restart():
+    """手动重启服务（更新后若自动重启未生效时的兜底）。立即返回，重启在后台执行。"""
+    try:
+        schedule_restart()
+    except Exception as e:
+        return jsonify({'success': False, 'message': '重启失败: %s' % e})
+    return jsonify({'success': True, 'message': '正在重启服务...'})
+
+
+@app.route('/api/backup_full', methods=['POST'])
+def api_backup_full():
+    """整体备份（SSE 流式进度 + 心跳防卡）：在线打包 /data/openpilot + /data/params。
+    铁律：绝不在开头 pkill openpilot——否则看门狗/热点重启设备会瞬断 SSH 会话 → 退出码 -1。
+    tar 后台执行，每 2 秒汇报已打包大小；末尾 md5 + tar -tzf 解包比对文件数校验。"""
+    def producer():
+        sp = SSEProgress()
+        try:
+            os.makedirs(BACKUP_DIR, exist_ok=True)
+            yield sp.log("分析备份范围...")
+            ts = time.strftime('%Y%m%d_%H%M%S')
+            out = os.path.join(BACKUP_DIR, "c3_full_%s.tar.gz" % ts)
+            srcs = [d for d in ("/data/openpilot", "/data/params") if os.path.isdir(d)]
+            if not srcs:
+                yield sp.error("未找到可备份目录（/data/openpilot、/data/params 均不存在）")
+                return
+            # 统计源文件数（含符号链接）作为校验分母
+            src_count = 0
+            try:
+                outp = subprocess.run("find %s -type f -o -type l | wc -l" % " ".join(srcs),
+                                      shell=True, capture_output=True, text=True, timeout=30)
+                src_count = int((outp.stdout or "").strip() or 0)
+            except Exception:
+                src_count = 0
+            yield sp.log("需备份 %d 个文件（openpilot 代码 + 参数）" % src_count)
+            # 后台 tar（不带 pkill），轮询进度
+            cmd = "tar -czf %s %s" % (out, " ".join(srcs))
+            p = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            last_sz = [-1]
+            while p.poll() is None:
+                try:
+                    sz = os.path.getsize(out)
+                except Exception:
+                    sz = 0
+                if sz != last_sz[0]:
+                    last_sz[0] = sz
+                    yield sp.progress("打包中... %s" % _fmt_size(sz), None)
+                time.sleep(2)
+            if p.returncode != 0:
+                yield sp.error("打包失败（tar 退出码 %d）" % p.returncode)
+                return
+            yield sp.progress("打包完成，校验中...", 100)
+            md5 = ""
+            try:
+                r = subprocess.run("md5sum %s" % out, shell=True, capture_output=True, text=True, timeout=30)
+                md5 = (r.stdout or "").split()[0]
+            except Exception:
+                pass
+            arc_count = 0
+            try:
+                r = subprocess.run("tar -tzf %s | wc -l" % out, shell=True, capture_output=True, text=True, timeout=60)
+                arc_count = int((r.stdout or "").strip() or 0)
+            except Exception:
+                arc_count = 0
+            if src_count and arc_count and src_count == arc_count:
+                yield sp.log("校验通过：备份含 %d 个文件，与源一致（md5 %s）" % (arc_count, md5[:8]))
+            else:
+                yield sp.log("⚠ 文件数不一致：源 %d / 包 %d（md5 %s），建议重试" % (src_count, arc_count, md5[:8]))
+            yield sp.done("整体备份完成：%s（%d 文件，%s）" % (os.path.basename(out), arc_count, _fmt_size(os.path.getsize(out))))
+        except Exception as e:
+            yield sp.error("备份失败 [%s]: %s" % (type(e).__name__, e))
+    return Response(_sse_heartbeat(producer), mimetype='text/event-stream', headers=_sse_headers())
+
+
+@app.route('/api/backup_full/download/<filename>')
+def api_download_backup_full(filename):
+    """下载整体备份包（.tar.gz）"""
+    sk = safe_key(filename)
+    if not sk.endswith('.tar.gz'):
+        return jsonify({'success': False, 'message': '仅支持 .tar.gz 备份文件'})
+    fp = os.path.join(BACKUP_DIR, sk)
+    if os.path.isfile(fp):
+        return send_from_directory(BACKUP_DIR, sk, as_attachment=True)
+    return jsonify({'success': False, 'message': '文件不存在'})
+
+
+@app.route('/api/backup_full/list')
+def api_list_backup_full():
+    """列出整体备份包（.tar.gz）"""
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+    except Exception:
+        pass
+    items = []
+    try:
+        for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            if f.endswith('.tar.gz'):
+                fp = os.path.join(BACKUP_DIR, f)
+                items.append({'name': f, 'size': os.path.getsize(fp),
+                              'time': time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(fp)))})
+    except Exception:
+        pass
+    return jsonify({'backups': items})
+
+
+@app.route('/api/backup_full/delete/<filename>', methods=['POST'])
+def api_delete_backup_full(filename):
+    """删除整体备份包（.tar.gz），防路径穿越"""
+    sk = safe_key(filename)
+    if not sk.endswith('.tar.gz'):
+        return jsonify({'success': False, 'message': '仅支持删除 .tar.gz 备份'})
+    fp = os.path.join(BACKUP_DIR, sk)
+    if os.path.isfile(fp):
+        try:
+            os.remove(fp)
+            return jsonify({'success': True, 'message': '已删除 %s' % sk})
+        except Exception as e:
+            return jsonify({'success': False, 'message': '删除失败: %s' % e})
+    return jsonify({'success': False, 'message': '备份文件不存在'})
+
 
 @app.route('/api/backup', methods=['POST'])
 def api_backup():
@@ -891,7 +1056,7 @@ def api_backup():
     try:
         for fname in os.listdir(PARAMS_DIR):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
+            if os.path.isfile(fpath) and fname != '.LOCK':
                 try:
                     with open(fpath, 'r') as f:
                         val = f.read()
@@ -912,6 +1077,7 @@ def api_backup():
             return jsonify({'success': False, 'message': f'写入备份文件失败: {e}'})
     return jsonify({'success': False, 'message': '没有参数可备份'})
 
+
 @app.route('/api/restore', methods=['POST'])
 def api_restore():
     data = request.json
@@ -931,6 +1097,7 @@ def api_restore():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
+
 @app.route('/api/restart_op', methods=['POST'])
 def api_restart_op():
     try:
@@ -939,22 +1106,6 @@ def api_restart_op():
     except:
         return jsonify({'success': True, 'message': '重启指令已发送'})
 
-@app.route('/api/fix_license', methods=['POST'])
-def api_fix_license():
-    """清除被污染的授权/身份参数并重启，恢复免费试用与本机序列号"""
-    try:
-        targets = ['CarrotLicRemain', 'CarrotLicStatus', 'CarrotActCounted',
-                   'CarrotActUsed', 'CarrotFreeUsed', 'CarrotActivationCode', 'HardwareSerial']
-        removed = []
-        for t in targets:
-            p = os.path.join(PARAMS_DIR, t)
-            if os.path.exists(p):
-                os.remove(p)
-                removed.append(t)
-        subprocess.Popen(["sudo", "reboot"])
-        return jsonify({'success': True, 'message': f'已清除 {len(removed)} 个污染参数并重启，设备将恢复免费试用与本机序列号'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/reboot', methods=['POST'])
 def api_reboot():
@@ -963,6 +1114,7 @@ def api_reboot():
         return jsonify({'success': True, 'message': '设备重启命令已发送'})
     except:
         return jsonify({'success': True, 'message': '重启命令已发送'})
+
 
 def do_auto_backup():
     """自动备份所有参数（完整备份，含隐藏参数）"""
@@ -974,7 +1126,7 @@ def do_auto_backup():
     try:
         for fname in os.listdir(PARAMS_DIR):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
+            if os.path.isfile(fpath) and fname != '.LOCK':
                 try:
                     with open(fpath, 'r') as f:
                         val = f.read()
@@ -992,6 +1144,7 @@ def do_auto_backup():
     except Exception as e:
         raise RuntimeError(f"写入备份文件失败: {e}")
     return params
+
 
 @app.route('/api/auto_backup')
 def api_auto_backup():
@@ -1020,6 +1173,7 @@ def api_auto_backup():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e), 'path': AUTO_BACKUP_FILE, 'message': f'自动备份失败: {e}'})
 
+
 @app.route('/api/backups')
 def api_list_backups():
     """列出所有备份文件（手动+自动）"""
@@ -1046,6 +1200,7 @@ def api_list_backups():
         backups.append({'name': 'auto_full_params.json', 'size': size, 'time': mtime, 'type': 'auto', 'path': AUTO_BACKUP_FILE})
     return jsonify({'backups': backups})
 
+
 @app.route('/api/backup/download/<filename>')
 def api_download_backup(filename):
     """下载备份文件（支持手动和自动备份目录）"""
@@ -1059,6 +1214,7 @@ def api_download_backup(filename):
     if os.path.isfile(fp):
         return send_from_directory(os.path.dirname(fp), os.path.basename(fp), as_attachment=True)
     return jsonify({'success': False, 'message': '文件不存在'})
+
 
 @app.route('/api/restore/file', methods=['POST'])
 def api_restore_file():
@@ -1096,6 +1252,7 @@ def api_restore_file():
     except Exception as e:
         return jsonify({'success': False, 'message': f'恢复失败: {e}'})
 
+
 @app.route('/api/backup/delete/<filename>', methods=['POST'])
 def api_delete_backup(filename):
     """删除设备内某个参数备份文件（手动或自动目录），防路径穿越"""
@@ -1117,6 +1274,7 @@ def api_delete_backup(filename):
         except Exception as e:
             return jsonify({'success': False, 'message': f'删除失败: {e}'})
     return jsonify({'success': False, 'message': '备份文件不存在'})
+
 
 @app.route('/api/param-diff', methods=['POST'])
 def api_param_diff():
@@ -1145,7 +1303,7 @@ def api_param_diff():
     try:
         for fname in sorted(os.listdir(PARAMS_DIR)):
             fpath = os.path.join(PARAMS_DIR, fname)
-            if os.path.isfile(fpath) and fname != '.LOCK' and not is_param_hidden(fname):
+            if os.path.isfile(fpath) and fname != '.LOCK':
                 if is_param_hidden(fname):
                     continue
                 try:
@@ -1203,6 +1361,7 @@ def _find_splash():
         pass
     return None
 
+
 @app.route('/api/bg_info', methods=['GET'])
 def api_bg_info():
     """查询当前 Weston 背景图信息（第二屏）"""
@@ -1215,12 +1374,14 @@ def api_bg_info():
     except Exception as e:
         return jsonify({'exists': False, 'error': str(e)})
 
+
 @app.route('/api/bg_backup', methods=['GET'])
 def api_bg_backup():
     """下载当前背景图到电脑留存"""
     if os.path.isfile(BG_PATH):
         return send_from_directory('/usr/comma', 'bg.jpg', as_attachment=True)
     return jsonify({'success': False, 'message': '当前没有 bg.jpg'}), 404
+
 
 @app.route('/api/bg_set', methods=['POST'])
 def api_bg_set():
@@ -1254,6 +1415,7 @@ def api_bg_set():
     except Exception as e:
         return jsonify({'success': False, 'message': f'替换失败: {e}'})
 
+
 @app.route('/api/splash_info', methods=['GET'])
 def api_splash_info():
     """查询 splash 分区信息（第一屏）"""
@@ -1266,12 +1428,14 @@ def api_splash_info():
         sz = 0
     return jsonify({'exists': True, 'path': sp, 'size': sz, 'has_backup': os.path.isfile(SPLASH_BACKUP)})
 
+
 @app.route('/api/splash_backup', methods=['GET'])
 def api_splash_backup():
     """下载已备份的 splash 分区 bin"""
     if os.path.isfile(SPLASH_BACKUP):
         return send_from_directory('/data', 'splash_backup.bin', as_attachment=True)
     return jsonify({'success': False, 'message': '尚未备份 splash 分区'}), 404
+
 
 @app.route('/api/splash_set', methods=['POST'])
 def api_splash_set():
@@ -1320,6 +1484,7 @@ def api_splash_set():
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return jsonify({'success': False, 'message': f'刷入失败: {e}'})
+
 
 # ============= 感知数据通道（modelV2 / liveTracks / radarState）=============
 # 后台线程订阅 cereal，尽力解析真实模型输出；设备离线或未行驶时为 available:false（绝不伪造数据）。
@@ -1378,6 +1543,7 @@ def _parse_perception(sm):
     src = 'modelV2' if (path or lanes) else ('liveTracks' if boxes else 'none')
     return {"available": available, "source": src, "boxes": boxes, "path": path, "lane_lines": lanes}
 
+
 def _perception_collector():
     """后台持续订阅 cereal，缓存最新一帧感知数据。"""
     global PERC_DATA
@@ -1406,6 +1572,7 @@ def _perception_collector():
         except Exception:
             time.sleep(0.5)
 
+
 def _parse_events(sm):
     """从 carState 解析原车动作，返回状态字典。
     注：倒车(gearShifter 是 capnp 枚举，非字符串 'reverse')与减速(controlsState.decelFor*
@@ -1424,6 +1591,7 @@ def _parse_events(sm):
     except Exception:
         pass
     return st
+
 
 def _event_collector():
     """后台持续订阅 cereal 原车信号，检测状态边沿（上升/下降沿）并缓存最新事件。"""
@@ -1474,10 +1642,12 @@ def _event_collector():
         except Exception:
             time.sleep(0.5)
 
+
 @app.route('/api/perception')
 def api_perception():
     with PERC_LOCK:
         return jsonify(PERC_DATA)
+
 
 # ===== 原车动作事件 + 语音互动 =====
 VALID_VOICE = {'turn_left', 'turn_right', 'acc_on', 'acc_off'}
@@ -1488,10 +1658,12 @@ VOICE_TEXT = {
     'acc_off': '退出智能驾驶',
 }
 
+
 @app.route('/api/car_events')
 def api_car_events():
     with EVENT_LOCK:
         return jsonify(EVENT_DATA)
+
 
 @app.route('/api/voice/test_event', methods=['POST'])
 def api_voice_test_event():
@@ -1513,12 +1685,14 @@ def api_voice_test_event():
     return jsonify({'success': True, 'type': t, 'seq': cur_seq,
                     'message': '已注入测试事件，前端将在 ~800ms 内轮询到并播报（需语音开关已开、浏览器在前台且音频已解锁）'})
 
+
 @app.route('/api/voice/list')
 def api_voice_list():
     out = {}
     for t in VALID_VOICE:
         out[t] = os.path.isfile(os.path.join(VOICE_DIR, t + '.mp3'))
     return jsonify(out)
+
 
 @app.route('/api/voice/<t>')
 def api_voice_file(t):
@@ -1540,6 +1714,7 @@ def api_voice_file(t):
     resp.headers['Content-Length'] = str(len(data))
     return resp
 
+
 @app.route('/api/voice/upload', methods=['POST'])
 def api_voice_upload():
     t = request.form.get('type') or request.args.get('type')
@@ -1560,6 +1735,7 @@ def api_voice_upload():
         return jsonify({'success': False, 'message': '保存失败：%s' % e})
     return jsonify({'success': True, 'type': t, 'message': '语音已替换'})
 
+
 @app.route('/api/voice/reset', methods=['POST'])
 def api_voice_reset():
     t = request.form.get('type') or request.args.get('type')
@@ -1572,6 +1748,7 @@ def api_voice_reset():
         except Exception as e:
             return jsonify({'success': False, 'message': '删除失败：%s' % e})
     return jsonify({'success': True, 'type': t, 'message': '已恢复默认语音'})
+
 
 @app.route('/api/voice/export')
 def api_voice_export():
@@ -1603,6 +1780,7 @@ def api_voice_export():
     resp = send_file(buf, mimetype='application/zip')
     resp.headers['Content-Disposition'] = 'attachment; filename="c3_voice_pack.zip"'
     return resp
+
 
 @app.route('/api/voice/import', methods=['POST'])
 def api_voice_import():
@@ -1640,11 +1818,13 @@ def api_voice_import():
         return jsonify({'success': False, 'message': '导入失败：%s' % e})
     return jsonify({'success': True, 'imported': imported, 'message': '已导入 %d 条语音' % imported})
 
+
 # ============= 局域网扫描 / 设备发现 =============
 # 纯 Python socket 扫描，不依赖 nmap；并发 + 整体超时，避免长时间阻塞请求线程。
 import socket as _lsocket
 
 SCAN_PORTS = [5588, 5555, 5037, 80, 22, 5050, 8080, 8000, 5000, 8888, 9000, 9090]
+
 
 def _get_own_ips():
     """返回设备自身所有 IPv4 私网地址列表（优先 hostname -I，回退 ip addr）。"""
@@ -1667,6 +1847,7 @@ def _get_own_ips():
             pass
     return out
 
+
 def _is_private(ip):
     if ip.startswith('192.168.'):
         return True
@@ -1679,6 +1860,7 @@ def _is_private(ip):
         except ValueError:
             return False
     return False
+
 
 def _own_subnets():
     """返回本机私网地址对应的 /24 网段前缀列表，如 ['192.168.5']（去重保序）。"""
@@ -1693,6 +1875,7 @@ def _own_subnets():
                     seen.add(s)
                     subs.append(s)
     return subs
+
 
 def _scan_lan(subnets, ports=None, per_host_timeout=0.15, overall_timeout=15):
     """并发扫描给定网段下所有主机的开放端口，返回设备列表 [{ip,ports,is_self}]。"""
@@ -1749,12 +1932,14 @@ def _scan_lan(subnets, ports=None, per_host_timeout=0.15, overall_timeout=15):
     found.sort(key=lambda x: (not x['is_self'], x['ip']))
     return found
 
+
 @app.route('/api/lan_info')
 def api_lan_info():
     """返回本机 IP 与可扫描网段，便于前端展示「C3 当前地址」并作为扫描依据。"""
     ips = _get_own_ips()
     subnets = _own_subnets()
     return jsonify({'success': True, 'ips': ips, 'subnets': subnets, 'scan_ports': SCAN_PORTS})
+
 
 @app.route('/api/scan_lan', methods=['GET', 'POST'])
 def api_scan_lan():
@@ -1769,6 +1954,7 @@ def api_scan_lan():
         return jsonify({'success': True, 'subnets': subnets, 'count': len(devices), 'devices': devices})
     except Exception as e:
         return jsonify({'success': False, 'message': '扫描失败: %s' % e, 'devices': [], 'subnets': subnets})
+
 
 if __name__ == '__main__':
     PORT = 5588

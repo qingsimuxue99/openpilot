@@ -1,3 +1,7 @@
+Carrot2-v9 (2026-08-30)
+========================
+* 舒适纵向模式 ComfortLong（跨品牌统一加速度变化率/jerk 限制，刹车与加速更平顺）：ComfortLongMode 0=原厂关闭 1=自定义(手动微调 LongAccelSmoothDown/Up、LongJerkMax/Gain/MinBound) 2=套用本车型推荐预设(舒适)；新增参数 ComfortLongMode、LongAccelSmoothDown、LongAccelSmoothUp、LongJerkMax、LongJerkGain、LongJerkMinBound；现代/大众/特斯拉支持 jerk 上限微调（UI 仅对应品牌显示）；c3_toolbox 升级至 v1.2.4（新增整体备份、更新后版本校验、systemd 重启优先）
+
 Carrot2-v9 (2026-08-29)
 ========================
 * 提示音系统重构（BeepMode 输出方式，独立开关）：0=自动(有蜂鸣器用蜂鸣器/否则扬声器) 1=蜂鸣器(C3XL GPIO42) 2=扬声器 3=关闭；细分子开关 BeepStartup(开机提示音, 仅 C3XL 蜂鸣器) / BeepEngage(开启ACC提示音) / BeepDisengage(关闭ACC提示音)；标准 C3 走扬声器(soundd)，重新启用 soundd 进程

@@ -1,4 +1,5 @@
 from opendbc.car.crc import CRC8H2F
+from openpilot.common.params import Params
 
 
 def create_steering_control(packer, bus, apply_torque, lkas_enabled):
@@ -91,6 +92,20 @@ def acc_hud_status_value(main_switch_on, acc_faulted, long_active):
 def create_acc_accel_control(packer, bus, acc_type, acc_enabled, accel, acc_control, stopping, starting, esp_hold):
   commands = []
 
+  # comfort jerk limit (LongJerkMax). mode0=stock 4.0; mode1=custom(use LongJerkMax); mode2=VW comfort preset 1.5
+  try:
+    _cl_mode = int(Params().get("ComfortLongMode") or 0)
+  except Exception:
+    _cl_mode = 0
+  _jerk_limit = 4.0
+  if _cl_mode == 1:
+    try:
+      _jerk_limit = int(Params().get("LongJerkMax") or 15) / 10.0
+    except Exception:
+      _jerk_limit = 4.0
+  elif _cl_mode == 2:
+    _jerk_limit = 1.5
+
   acc_06_values = {
     "ACC_Typ": acc_type,
     "ACC_Status_ACC": acc_control,
@@ -98,8 +113,8 @@ def create_acc_accel_control(packer, bus, acc_type, acc_enabled, accel, acc_cont
     "ACC_Sollbeschleunigung_02": accel if acc_enabled else 3.01,
     "ACC_zul_Regelabw_unten": 0.2,  # TODO: dynamic adjustment of comfort-band
     "ACC_zul_Regelabw_oben": 0.2,  # TODO: dynamic adjustment of comfort-band
-    "ACC_neg_Sollbeschl_Grad_02": 4.0 if acc_enabled else 0,  # TODO: dynamic adjustment of jerk limits
-    "ACC_pos_Sollbeschl_Grad_02": 4.0 if acc_enabled else 0,  # TODO: dynamic adjustment of jerk limits
+    "ACC_neg_Sollbeschl_Grad_02": _jerk_limit if acc_enabled else 0,  # comfort jerk limit (LongJerkMax, mode=1 custom)
+    "ACC_pos_Sollbeschl_Grad_02": _jerk_limit if acc_enabled else 0,  # comfort jerk limit (LongJerkMax, mode=1 custom)
     "ACC_Anfahren": starting,
     "ACC_Anhalten": stopping,
   }

@@ -405,7 +405,42 @@ class CarInterfaceBase(ABC):
   def apply(self, c: structs.CarControl, now_nanos: int | None = None) -> tuple[structs.CarControl.Actuators, list[CanData]]:
     if now_nanos is None:
       now_nanos = int(time.monotonic() * 1e9)
-    return self.CC.update(c, self.CS, now_nanos)
+    actuators, can_msgs = self.CC.update(c, self.CS, now_nanos)
+    self._apply_accel_rate_limit(c)
+    return actuators, can_msgs
+
+  def _apply_accel_rate_limit(self, c: structs.CarControl):
+    # Comfort longitudinal: limit per-frame accel change for all brands (smooth braking/accel).
+    # ComfortLongMode: 0=off 1=custom(use LongAccelSmooth*) 2=hyundai recommended preset.
+    try:
+      mode = int(Params().get('ComfortLongMode') or 0)
+    except Exception:
+      mode = 0
+    if mode == 0:
+      return
+    if not hasattr(self, '_accel_smoothed'):
+      self._accel_smoothed = c.actuators.accel
+    try:
+      is_stopping = (c.actuators.longControlState == structs.CarControl.Actuators.LongControlState.stopping)
+    except Exception:
+      is_stopping = False
+    if is_stopping:
+      self._accel_smoothed = c.actuators.accel
+      return
+    if mode == 2:
+      rate_down = 0.02
+      rate_up = 0.04
+    else:
+      try:
+        rate_down = (int(Params().get('LongAccelSmoothDown') or 20)) / 1000.0
+        rate_up = (int(Params().get('LongAccelSmoothUp') or 40)) / 1000.0
+      except Exception:
+        rate_down, rate_up = 0.02, 0.04
+    try:
+      self._accel_smoothed = float(np.clip(c.actuators.accel, self._accel_smoothed - rate_down, self._accel_smoothed + rate_up))
+      c.actuators.accel = self._accel_smoothed
+    except Exception:
+      pass
 
   @staticmethod
   def get_pid_accel_limits(CP, current_speed, cruise_speed):
