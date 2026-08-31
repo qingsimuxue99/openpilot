@@ -13,6 +13,8 @@
 #include "selfdrive/ui/qt/util.h"
 #include "selfdrive/ui/ui.h"
 #include "system/hardware/hw.h"
+#include <QApplication>
+#include <QScreen>
 
 static long long milliseconds(void) {
     struct timeval tv;
@@ -180,10 +182,8 @@ void ScreenRecoder::update_screen() {
 
     applyColor();
 
-    if(rootWidget != nullptr) {
-      QPixmap pixmap = rootWidget->grab();
-      image_queue.push(pixmap.toImage());
-    }
+    QPixmap pixmap = QApplication::primaryScreen()->grabWindow(0);
+    image_queue.push(pixmap.toImage());
   }
 
   frame++;

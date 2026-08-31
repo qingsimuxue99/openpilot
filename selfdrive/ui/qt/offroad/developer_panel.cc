@@ -1,8 +1,27 @@
 #include "selfdrive/ui/qt/offroad/developer_panel.h"
 #include "selfdrive/ui/qt/widgets/ssh_keys.h"
 #include "selfdrive/ui/qt/widgets/controls.h"
+#include "selfdrive/ui/qt/widgets/input.h"
+
+#include <QProcess>
 
 DeveloperPanel::DeveloperPanel(SettingsWindow *parent) : ListWidget(parent) {
+  // 重启 UI 界面: 杀掉 ui 进程, 由 CarrotManager 自动重新拉起(无需整机重启)
+  ButtonControl *restartUiBtn = new ButtonControl(
+    tr("重启 UI 界面"),
+    tr("重启"),
+    tr("立即重启 UI 进程, 界面会短暂黑屏后自动恢复。修改 UI 后无需重启整机即可生效, 不影响行车控制。"));
+  QObject::connect(restartUiBtn, &ButtonControl::clicked, [=]() {
+    if (uiState()->engaged()) {
+      ConfirmationDialog::alert(tr("请先退出 ACC 再重启 UI"), this);
+      return;
+    }
+    if (ConfirmationDialog::confirm(tr("确定要重启 UI 界面吗?\n界面会短暂黑屏, 数秒后自动恢复。"), tr("重启"), this)) {
+      QProcess::execute("pkill", {"-x", "ui"});
+    }
+  });
+  addItem(restartUiBtn);
+
   // SSH keys (商用授权: 未激活时隐藏, 点「开发」标签 6 次后由 unlockSsh 显示)
   ssh_toggle_ = new SshToggle();
   ssh_control_ = new SshControl();

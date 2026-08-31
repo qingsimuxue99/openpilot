@@ -42,6 +42,8 @@
 #include "selfdrive/ui/qt/offroad/developer_panel.h"
 #include "selfdrive/ui/qt/widgets/input.h"
 #include "selfdrive/ui/qt/offroad/firehose.h"
+#include "selfdrive/ui/qt/offroad/screenrecord_manager.h"
+#include <QTimer>
 
 // ===== 通用触摸滚动: 直接驱动滚动条, 1:1 跟手(带阻尼), 零惯性; 同时接住 c3 的 QTouchEvent 与合成鼠标 =====
 // 用于浮层覆盖层列表(自写滚动, 替代 ScrollView 的 QScroller —— 后者在 c3 eglfs 模态框下会卡死事件循环)。
@@ -639,6 +641,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
   QList<QPair<QString, QWidget *>> panels = {
     {tr("Device"), device},
     { tr("功能"), new CarrotPanel(this, 1) },
+    { tr("录像"), new ScreenRecordManager(this) },  // 内嵌面板: 点标签即显示, 不弹窗
     {tr("Network"), networking},
     {tr("Toggles"), toggles},
   };
@@ -682,6 +685,9 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
     ScrollView *panel_frame = new ScrollView(panel, this);
     panel_widget->addWidget(panel_frame);
 
+    // 录像面板内嵌进 settings(和功能菜单一样), 点标签直接切换显示, 不再弹模态框(避免 eglfs 死锁/卡死)
+    // 注意: 必须用 [=] 按值捕获 panel_widget/btn(this 为指针, 拷贝即安全);
+    //       若用 [&] 引用捕获, setupSettings 返回后这些局部变量已销毁, 点击时访问悬垂指针 -> SIGSEGV 整个 ui 崩溃
     QObject::connect(btn, &QPushButton::clicked, [=, w = panel_frame]() {
       btn->setChecked(true);
       panel_widget->setCurrentWidget(w);

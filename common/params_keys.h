@@ -372,6 +372,9 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"dp_ui_rainbow_width", PERSISTENT},
     {"dp_ui_rainbow_speed", PERSISTENT},
     //new
+    {"CarrotScreenRecAutoClean", PERSISTENT},
+    {"CarrotScreenRecMaxDays", PERSISTENT},
+    {"CarrotScreenRecMinFreeGB", PERSISTENT},
     {"SameSpiCamFilter", PERSISTENT},
     {"StockBlinkerCtrl", PERSISTENT},
     {"ExtBlinkerCtrlTest", PERSISTENT},
