@@ -1,3 +1,8 @@
+Carrot2-v9 (2026-08-31)
+========================
+* 萝卜设置参数描述文案全面重写：所有 CValueControl 参数（定速/巡航按钮、舒适纵向、启动项、弯道降速、导航限速、变道ATC、显示与画面等分组）的描述由简短值列表扩展为详尽的"调大/调小/打开/关闭"中文说明，明确每个参数各取值与方向对车辆行为的实际影响，便于正确调参
+* 清理误入仓库的 .orig.bak 编辑备份（sidebar.cc/h、ui），减少冗余文件
+
 Carrot2-v9 (2026-08-30)
 ========================
 * 舒适纵向模式 ComfortLong（跨品牌统一加速度变化率/jerk 限制，刹车与加速更平顺）：ComfortLongMode 0=原厂关闭 1=自定义(手动微调 LongAccelSmoothDown/Up、LongJerkMax/Gain/MinBound) 2=套用本车型推荐预设(舒适)；新增参数 ComfortLongMode、LongAccelSmoothDown、LongAccelSmoothUp、LongJerkMax、LongJerkGain、LongJerkMinBound；现代/大众/特斯拉支持 jerk 上限微调（UI 仅对应品牌显示）；c3_toolbox 升级至 v1.2.4（新增整体备份、更新后版本校验、systemd 重启优先）
