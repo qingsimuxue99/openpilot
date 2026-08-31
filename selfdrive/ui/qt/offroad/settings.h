@@ -119,6 +119,7 @@ private:
 
 // Forward declaration
 class FirehosePanel;
+class CValueControl;
 
 class CarrotPanel : public QWidget {
   Q_OBJECT
@@ -144,12 +145,21 @@ private:
   void togglesCarrot(int widgetIndex);
   void updateButtonStyles();
 
+  // 转弯意图加固隐藏调参: 点「转弯意图加固」项 6 次后显示(重启 UI 后重新隐藏)
+  int firm_click_count_ = 0;
+  CValueControl* firm_break_ctrl_ = nullptr;
+  CValueControl* firm_cooldown_ctrl_ = nullptr;
+  void unlockFirmParams();
+
 public:
   explicit CarrotPanel(QWidget* parent = nullptr, int mode = 0);
 
   // 商用授权: 未激活/次数用完时锁定全部定制功能项(置灰不可操作)
   void applyLicenseLock();
   void showEvent(QShowEvent *event) override;
+
+protected:
+  bool eventFilter(QObject *obj, QEvent *event) override;
 };
 
 class CValueControl : public AbstractControl {

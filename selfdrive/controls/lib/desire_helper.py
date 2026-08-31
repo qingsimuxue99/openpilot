@@ -247,6 +247,11 @@ class DesireHelper:
     self.atc_bsd = BLINKER_NONE
     self.blinker_turn_intent = 0
     self.blinker_turn_intent_speed = 30
+    self.blinker_turn_intent_firm = 0  # 转弯意图加固: 打灯期间坚定保持/重触发模型转弯意图
+    self.firm_repulse_hold = 0
+    self.firm_repulse_wait = 0
+    self.blinker_turn_intent_firm_break = 250  # ms 断开时长(可调)
+    self.blinker_turn_intent_firm_cooldown = 800  # ms 重发冷却(可调)
     #new
 
   def lane_change_audio(self, enable, turn_type, param=0):
@@ -404,6 +409,9 @@ class DesireHelper:
       self.disableBlindSpot = self.params.get_bool("DisableBlindSpot")
       self.blinker_turn_intent = self.params.get_int("BlinkerTurnIntent")
       self.blinker_turn_intent_speed = self.params.get_int("BlinkerTurnIntentSpeed")
+      self.blinker_turn_intent_firm = self.params.get_int("BlinkerTurnIntentFirm")
+      self.blinker_turn_intent_firm_break = self.params.get_int("BlinkerTurnIntentFirmBreak") or 250
+      self.blinker_turn_intent_firm_cooldown = self.params.get_int("BlinkerTurnIntentFirmCooldown") or 800
       #new
     self.frame += 1
     lane_change_state = self.lane_change_state
@@ -895,6 +903,9 @@ class DesireHelper:
               f"obj_cnt={self.object_detected_count:.1f},{self.object_detected_count_new},active={self.atc_active},last_lane={last_lane} time:{self.last_lane_count}")
         print(f"---blinker_state={blinker_state},atc_blinker_state={atc_blinker_state},driver_blinker_state={driver_blinker_state},esp32 blinker={self.blinker}")
 
+    # 转弯意图加固生效门槛: 沿用 BlinkerTurnIntent 全部限制(功能开+打灯+低于意图速度+非静止), 仅增强坚定度
+    firm_turn_gate = (self.blinker_turn_intent and self.blinker_turn_intent_firm and driver_desire_enabled
+                      and v_ego < (self.blinker_turn_intent_speed * CV.KPH_TO_MS) and not carstate.standstill)
     if not lateral_active or self.lane_change_timer > LANE_CHANGE_TIME_MAX: #横向未激活或变道时间超过10秒时，退出变道控制
       if self.lane_change_state != LaneChangeState.off:
         if atc_desire_enabled and (fork_left_right or atc_left_right):
@@ -914,7 +925,8 @@ class DesireHelper:
         #if atc_desire_enabled and (fork_left_right or atc_left_right):
         #  self.lane_change_audio(True, 4, 0)  # 播报领航已退出
       self.lane_change_state = LaneChangeState.off
-      if self.turn_disable_count > 0:
+      # 转弯意图加固: 急弯大方向盘角度不中断转弯意图(该禁用本意是防转弯后立即变道, 会误伤转弯中途)
+      if self.turn_disable_count > 0 and not firm_turn_gate:
         self.turn_direction = TurnDirection.none
         self.lane_change_direction = LaneChangeDirection.none
       elif not car_side_blind: #车身处无障碍物
@@ -1285,6 +1297,26 @@ class DesireHelper:
       self.lane_change_direction = self.turn_direction
     else:
       self.desire = DESIRES[self.lane_change_direction][self.lane_change_state]
+
+    # ===== 转弯意图加固 (BlinkerTurnIntentFirm) =====
+    # 模型转弯意图为上升沿脉冲触发; 车道线模糊时模型可能中途认为转弯已完成, 路径乱飘。
+    # 加固: 打灯+低速+方向盘仍在转(>10°)期间, 若模型转弯意图(turn_desire_state)已消退,
+    # 短暂断开 desire 0.25s 制造新上升沿, 重新坚定触发模型往转向灯方向转弯。
+    if (firm_turn_gate and self.turn_direction != TurnDirection.none
+        and abs(carstate.steeringAngleDeg) > 10):
+      if self.firm_repulse_hold > 0:
+        self.firm_repulse_hold -= 1
+        if self.firm_repulse_hold == 0:
+          self.firm_repulse_wait = max(1, int((self.blinker_turn_intent_firm_cooldown / 1000.0) / DT_MDL))  # 重触发后冷却内不再评估
+        else:
+          self.desire = log.Desire.none  # 断开期: hold 结束后 desire 恢复即产生新脉冲
+      elif self.firm_repulse_wait > 0:
+        self.firm_repulse_wait -= 1
+      elif not self.turn_desire_state:
+        self.firm_repulse_hold = max(1, int((self.blinker_turn_intent_firm_break / 1000.0) / DT_MDL))
+    else:
+      self.firm_repulse_hold = 0
+      self.firm_repulse_wait = 0
 
     #print(f"desire = {self.desire}")
     #self.desireLog = f"desire = {self.desire}"

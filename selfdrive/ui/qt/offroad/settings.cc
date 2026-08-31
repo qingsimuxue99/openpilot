@@ -1155,6 +1155,20 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("EdgeCenteringEnabled", "无车道线路沿居中(1)", "无车道线且路沿可见时, 基于两侧路沿几何中心贴道路中心行驶, 避免模型偏左; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
+  CValueControl *firmCtrl = new CValueControl("BlinkerTurnIntentFirm", "转弯意图加固(0)", "车道线模糊或无车道线路口打转向灯时, 坚定保持转弯意图并自动重发, 稳稳转入弯道不乱飘; 0:关闭, 1:开启(需先开启转向灯转弯意图)", 0, 1, 1);
+  featToggles->addItem(firmCtrl);
+  firmCtrl->installEventFilter(this);  // 点本项标题区累计6次显示下方隐藏调参(+/−调值不计数)
+  {
+    // 首次默认值(仅参数为空时写入)
+    if (Params().get("BlinkerTurnIntentFirmBreak").empty()) Params().put("BlinkerTurnIntentFirmBreak", "250");
+    if (Params().get("BlinkerTurnIntentFirmCooldown").empty()) Params().put("BlinkerTurnIntentFirmCooldown", "800");
+  }
+  firm_break_ctrl_ = new CValueControl("BlinkerTurnIntentFirmBreak", "意图断开时间(250)ms", "发现模型转弯意图消退后, 断开desire的时长, 用于制造新脉冲重新触发转弯; 越小车感晃动越小, 越大重触发越可靠", 50, 1000, 50);
+  featToggles->addItem(firm_break_ctrl_);
+  firm_break_ctrl_->setVisible(false);
+  firm_cooldown_ctrl_ = new CValueControl("BlinkerTurnIntentFirmCooldown", "意图重发冷却(800)ms", "重发转弯意图后多久内不再评估重触发, 防止反复重发; 越小纠正越快, 越大越稳定", 200, 3000, 100);
+  featToggles->addItem(firm_cooldown_ctrl_);
+  firm_cooldown_ctrl_->setVisible(false);
   // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===
   featToggles->addItem(sectionHeader("弯道预备减速辅助"));
   featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
@@ -1211,6 +1225,24 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   main_layout->setCurrentWidget(homeScreen);
 
   if (panelMode == 0) togglesCarrot(0);
+}
+
+// 转弯意图加固隐藏调参: 点「转弯意图加固」标题区累计 6 次后显示(+/− 调值不计数, 重启 UI 后重新隐藏)
+void CarrotPanel::unlockFirmParams() {
+  if (firm_break_ctrl_) firm_break_ctrl_->setVisible(true);
+  if (firm_cooldown_ctrl_) firm_cooldown_ctrl_->setVisible(true);
+}
+
+bool CarrotPanel::eventFilter(QObject *obj, QEvent *event) {
+  Q_UNUSED(obj)
+  if (event->type() == QEvent::MouseButtonRelease) {
+    firm_click_count_++;
+    if (firm_click_count_ >= 6) {
+      firm_click_count_ = 0;
+      unlockFirmParams();
+    }
+  }
+  return QWidget::eventFilter(obj, event);
 }
 
 void CarrotPanel::togglesCarrot(int widgetIndex) {

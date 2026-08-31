@@ -182,7 +182,7 @@ void ScreenRecoder::update_screen() {
 
     applyColor();
 
-    QPixmap pixmap = QApplication::primaryScreen()->grabWindow(0);
+    QPixmap pixmap = rootWidget->grab();
     image_queue.push(pixmap.toImage());
   }
 

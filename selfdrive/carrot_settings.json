@@ -1420,6 +1420,19 @@
       "unit": 5
     },
     {
+      "group": "조향일반",
+      "name": "BlinkerTurnIntentFirm",
+      "title": "턴의도 강화(0)",
+      "descr": "켠 방향지시등 방향으로 확실하게 회전 유지(차선 불명확시)",
+      "egroup": "LAT",
+      "etitle": "Turn Intent Firm(0)",
+      "edescr": "Firmly keep turning toward blinker direction even with blurry or no lane lines",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "unit": 1
+    },
+    {
       "group": "시작",
       "name": "HapticFeedbackWhenSpeedCamera",
       "title": "핸들햅틱기능사용(0)",

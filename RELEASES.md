@@ -6,6 +6,8 @@ Carrot2-v9 (2026-08-31)
 * 新增录像自动清理（独立参数，默认关闭=零影响）：CarrotScreenRecAutoClean 0=关 1=开；CarrotScreenRecMaxDays 保留天数(默认7天，范围1-90)；CarrotScreenRecMinFreeGB 最小剩余空间(默认2GB，范围1-20)，超过天数或空间不足时自动从最旧录像开始删除（仅删视频，不影响行车日志）；也可「立即清理」手动触发
 * 修复录屏抓取范围：改用全屏抓取，此前只能抓到部分界面内容
 * 开发者菜单新增「重启 UI 界面」按钮：改 UI 后无需重启整机，杀掉 ui 进程由管理器自动拉起；行车中(ACC 已开启)禁止操作并提示先退出 ACC
+* 新增转弯意图加固（BlinkerTurnIntentFirm，独立开关默认关）：打转向灯在模糊/无车道线路口时坚定保持转弯意图并自动重发脉冲（短暂断开 desire 制造新上升沿重触发模型往转向灯方向转弯），稳稳转入弯道不乱飘；隐藏调参 BlinkerTurnIntentFirmBreak（断开时间, 默认250ms）/ BlinkerTurnIntentFirmCooldown（重发冷却, 默认800ms），点「转弯意图加固」标题区累计6次显示
+* 新增开机自动录像（CarrotScreenRecAutoStart）：进入行车界面即自动开始录制，无需手动点按钮；录像面板按钮文案与行高微调
 
 Carrot2-v9 (2026-08-30)
 ========================

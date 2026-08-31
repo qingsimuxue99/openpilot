@@ -56,6 +56,13 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   const bool clean_view = s.clean_view_active;
   if (experimental_btn->isVisible() == clean_view) experimental_btn->setVisible(!clean_view);
   if (recorder != nullptr && recorder->isVisible() == clean_view) recorder->setVisible(!clean_view);
+  // === 开机自动录像: 进入行车瞬间若开启则自动开始录制 ===
+  static bool auto_rec_last_started = false;
+  if (s.scene.started && !auto_rec_last_started) {
+    Params p;
+    if (p.getBool("CarrotScreenRecAutoStart")) recorder->start();
+  }
+  auto_rec_last_started = s.scene.started;
 
   static int carrot_cmd_index_last = 0;
   SubMaster& sm = *(s.sm);

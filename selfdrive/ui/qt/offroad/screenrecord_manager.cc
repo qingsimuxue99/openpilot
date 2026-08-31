@@ -38,7 +38,7 @@ static QPixmap makeQrPixmap(const QString &text) {
 RecRow::RecRow(QWidget *parent) : QWidget(parent) {
   setAttribute(Qt::WA_StyledBackground, true);
   setCursor(Qt::PointingHandCursor);
-  setMinimumHeight(104);
+  setFixedHeight(104);
 }
 void RecRow::bindCheckBox(QCheckBox *cb) {
   cb_ = cb;
@@ -121,7 +121,7 @@ ScreenRecordManager::ScreenRecordManager(QWidget *parent) : QWidget(parent) {
   QHBoxLayout *cleanBar = new QHBoxLayout(cleanCard);
   cleanBar->setContentsMargins(22, 16, 22, 16);
   cleanBar->setSpacing(18);
-  setBtn = new QPushButton(tr("清理设置"), this);
+  setBtn = new QPushButton(tr("录像设置"), this);
   QPushButton *cleanBtn = new QPushButton(tr("立即清理"), this);
   cleanBtn->setObjectName("primary");
   // 关掉 autoDefault/default, 避免 c3 上默认按钮把点击路由到其它按钮(误触串功能)
@@ -161,6 +161,8 @@ ScreenRecordManager::ScreenRecordManager(QWidget *parent) : QWidget(parent) {
   QVBoxLayout *setLay = new QVBoxLayout(setCard);
   setLay->setContentsMargins(26, 20, 26, 20);
   setLay->setSpacing(10);
+  setLay->addWidget(new CValueControl("CarrotScreenRecAutoStart", tr("开机自动录像"),
+    tr("滑动设置: 0=关闭, 1=开启。开启后: 进入行车界面即自动开始录制(无需手动点按钮)。"), 0, 1, 1));
   setLay->addWidget(new CValueControl("CarrotScreenRecAutoClean", tr("自动清理录像"),
     tr("滑动设置: 0=关闭, 1=开启。开启后: 超过保留天数的录像, 或设备存储剩余空间低于阈值时, 自动删除最旧的录像(仅删视频, 不影响行车日志)。"), 0, 1, 1));
   setLay->addWidget(new CValueControl("CarrotScreenRecMaxDays", tr("保留天数(天)"),
@@ -194,7 +196,7 @@ void ScreenRecordManager::toggleSettings() {
   if (!setCard) return;
   bool show = !setCard->isVisible();
   setCard->setVisible(show);
-  setBtn->setText(show ? tr("收起设置") : tr("清理设置"));
+  setBtn->setText(show ? tr("收起录像设置") : tr("录像设置"));
 }
 
 void ScreenRecordManager::refreshList() {
@@ -258,6 +260,7 @@ void ScreenRecordManager::refreshList() {
       QObject::connect(cb, &QCheckBox::toggled, this, &ScreenRecordManager::updateSelectAllBtnText);
     }
   }
+  listLayout->addStretch(1);
 
   // 统计信息
   if (statLabel) {
