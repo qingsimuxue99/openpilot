@@ -202,18 +202,16 @@ class Controls:
         _sign = 0.0
       # 累计打灯期间转过的航向角(偏航角速度积分), 防止转过头冲进对向车道
       _ll = self.sm['liveLocationKalman']
-      _yr = _ll.angularVelocityCalibrated.value[2]   # 绕z轴偏航角速度 rad/s
-      _t = _ll.logMonoTime / 1e9
-      if self._firm_last_t is None:
-        self._firm_last_t = _t
-      _dt = _t - self._firm_last_t
-      self._firm_last_t = _t
-      if 0.0 < _dt < 1.0:
-        self._firm_yaw_acc += abs(_yr) * _dt
+      try:  # 2026-09-02 fix: capnp value can be empty list, [2] raised IndexError and crashed controlsd
+        _yr = _ll.angularVelocityCalibrated.value[2]   # yaw rate around z-axis, rad/s
+      except Exception:
+        _yr = 0.0
+      # 2026-09-02 fix2: LiveLocationKalman struct has NO logMonoTime member (AttributeError,
+      # crash seen on friend's device). Integrate with fixed control period (100Hz) instead.
+      self._firm_yaw_acc += abs(_yr) * DT_CTRL
       if _sign == 0.0:
         # 没打灯/双闪: 重置累计, 下次打灯重新计
         self._firm_yaw_acc = 0.0
-        self._firm_last_t = _t
       elif self._firm_yaw_acc < _max_angle:
         # 模型自身已朝灯转够(车已开转)或转过门限角度则放手, 避免转过头/不反向
         _model_already = (math.copysign(1.0, float(new_desired_curvature)) == _sign) and (abs(float(new_desired_curvature)) > 0.5 * _firm)

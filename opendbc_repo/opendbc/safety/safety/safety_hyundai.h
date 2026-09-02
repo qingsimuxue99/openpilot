@@ -317,9 +317,10 @@ static int hyundai_fwd_hook(int bus_num, int addr) {
     }
     else {
       if(is_lkas_msg || is_lfahda_msg) {
-        if(now - last_ts_lkas11_from_op >= 200000) {
-          bus_fwd = 0;
-        }
+        // 2026-09-02 fix: permanently block stock LKAS11/LFAHDA from cam bus to car bus
+        // (comma official behavior). The old 200ms fallback put stock LKAS11 (0x340) on
+        // bus 0 whenever openpilot stopped sending >200ms (e.g. controlsd crash), which
+        // falsely triggered relayMalfunction. bus_fwd stays -1 (no forward).
       }
       else if(is_scc_msg) {
         if(now - last_ts_scc12_from_op >= 400000)
