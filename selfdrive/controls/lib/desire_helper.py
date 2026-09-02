@@ -250,8 +250,6 @@ class DesireHelper:
     self.blinker_turn_intent_firm = 0  # 转弯意图加固: 打灯期间坚定保持/重触发模型转弯意图
     self.firm_repulse_hold = 0
     self.firm_repulse_wait = 0
-    self.blinker_turn_intent_firm_break = 250  # ms 断开时长(可调)
-    self.blinker_turn_intent_firm_cooldown = 800  # ms 重发冷却(可调)
     #new
 
   def lane_change_audio(self, enable, turn_type, param=0):
@@ -410,8 +408,6 @@ class DesireHelper:
       self.blinker_turn_intent = self.params.get_int("BlinkerTurnIntent")
       self.blinker_turn_intent_speed = self.params.get_int("BlinkerTurnIntentSpeed")
       self.blinker_turn_intent_firm = self.params.get_int("BlinkerTurnIntentFirm")
-      self.blinker_turn_intent_firm_break = self.params.get_int("BlinkerTurnIntentFirmBreak") or 250
-      self.blinker_turn_intent_firm_cooldown = self.params.get_int("BlinkerTurnIntentFirmCooldown") or 800
       #new
     self.frame += 1
     lane_change_state = self.lane_change_state
@@ -1298,25 +1294,10 @@ class DesireHelper:
     else:
       self.desire = DESIRES[self.lane_change_direction][self.lane_change_state]
 
-    # ===== 转弯意图加固 (BlinkerTurnIntentFirm) =====
-    # 模型转弯意图为上升沿脉冲触发; 车道线模糊时模型可能中途认为转弯已完成, 路径乱飘。
-    # 加固: 打灯+低速+方向盘仍在转(>10°)期间, 若模型转弯意图(turn_desire_state)已消退,
-    # 短暂断开 desire 0.25s 制造新上升沿, 重新坚定触发模型往转向灯方向转弯。
-    if (firm_turn_gate and self.turn_direction != TurnDirection.none
-        and abs(carstate.steeringAngleDeg) > 10):
-      if self.firm_repulse_hold > 0:
-        self.firm_repulse_hold -= 1
-        if self.firm_repulse_hold == 0:
-          self.firm_repulse_wait = max(1, int((self.blinker_turn_intent_firm_cooldown / 1000.0) / DT_MDL))  # 重触发后冷却内不再评估
-        else:
-          self.desire = log.Desire.none  # 断开期: hold 结束后 desire 恢复即产生新脉冲
-      elif self.firm_repulse_wait > 0:
-        self.firm_repulse_wait -= 1
-      elif not self.turn_desire_state:
-        self.firm_repulse_hold = max(1, int((self.blinker_turn_intent_firm_break / 1000.0) / DT_MDL))
-    else:
-      self.firm_repulse_hold = 0
-      self.firm_repulse_wait = 0
+    # ===== 转弯意图加固 (BlinkerTurnIntentFirm) v2 =====
+    # v1 的 desire 断开重发(0.25s 空窗)在无车道线路口会让模型路径跑反方向, 已废弃。
+    # v2: desire 全程持续保持(steering>80° 的 turn_disable_count 已在上方 firm_turn_gate 旁路),
+    # 由 controlsd 直接钳制曲率方向(左灯→曲率非负, 右灯→曲率非正), 从输出层坚定保证不反方向。
 
     #print(f"desire = {self.desire}")
     #self.desireLog = f"desire = {self.desire}"

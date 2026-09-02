@@ -1107,7 +1107,24 @@ class CarrotMan:
     #turnSpeed = max(abs(adjusted_target_lat_a / max_curve)**0.5  * 3.6, self.autoCurveSpeedLowerLimit)
     turnSpeed = max(abs(adjusted_target_lat_a / max_curve)**0.5  * 3.6, 5)
     turnSpeed = min(turnSpeed, 250)
-    return turnSpeed * curv_direction
+
+    # ===== 弯道限速平滑：消除目标速度台阶导致的急刹窜动 =====
+    # 模型仅~2s前瞻, 弯道进入视野瞬间 vturn 会从250骤降到弯道速度,
+    # 不平滑会触发纵向急刹顿挫。此处限制降速速率(~8km/h/s≈2.2m/s², 舒适)。
+    try:
+      if not hasattr(self, 'vturn_filt'):
+        self.vturn_filt = float(turnSpeed)
+      dt = 0.1  # update_navi 由 Ratekeeper(10) 驱动 ~10Hz
+      max_dec = 8.0 * dt    # 降速上限 ~8 km/h/s
+      max_inc = 20.0 * dt   # 出弯恢复上限 ~20 km/h/s
+      if turnSpeed < self.vturn_filt:
+        self.vturn_filt = max(turnSpeed, self.vturn_filt - max_dec)
+      else:
+        self.vturn_filt = min(turnSpeed, self.vturn_filt + max_inc)
+      return self.vturn_filt * curv_direction
+    except Exception:
+      # 异常时回退原始值, 绝不因此让进程崩溃
+      return turnSpeed * curv_direction
 
 import traceback
 

@@ -945,6 +945,8 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   //latLongToggles->addItem(new CValueControl("CruiseMinVals", "DECEL:(120)", "Sets the deceleration rate.(x0.01m/s^2)", 50, 250, 5));
 
   dispToggles = new ListWidget(this);
+  dispToggles->addItem(new CValueControl("UIRadarLeadBoxColor", "雷达前车框颜色", "雷达探测到前车时的方框描边,以及画面左侧「雷达距离」数字的底色。0白1红2橙(默认)3黄4绿5青6蓝7紫,8深红9亮红10粉红11玫红12珊瑚13深橙14金15浅黄16米色17卡其18橄榄,19黄绿20草绿21深绿22薄荷23春绿24碧绿25青绿26天蓝27亮天蓝28钢蓝29藏青30靛蓝31紫罗兰32洋红33薰衣草34银灰35深灰。注意:SCC车型的前车(radarTrackId<1)强制显示红色,此项不生效。", 0, 35, 1));
+  dispToggles->addItem(new CValueControl("UIVisionLeadBoxColor", "视觉前车框颜色", "未探测到雷达、仅靠视觉模型识别前车时的方框描边,以及画面右侧「视觉距离」数字的底色。色号同上(0-35),6蓝(默认)。雷达探测到前车时,描边改用「雷达前车框颜色」,此项仅作用于距离标注底色。", 0, 35, 1));
   dispToggles->addItem(new CValueControl("ShowDebugLog", "调试日志", "调试日志位掩码: 1=导航信息, 2=变道请求, 4=变道状态机, 8=变道状态信息。需要多项同时记录就把对应数字相加(如想要导航+变道请求填3)。0=不记录。", 0, 255, 1));
   dispToggles->addItem(new CValueControl("ShowDebugUI", "调试信息", "屏上调试信息显示层级。0=关闭;1=显示基础调试;2=显示更详细调试信息。仅调试用,日常驾驶建议0。", 0, 2, 1));
   dispToggles->addItem(new CValueControl("ShowTpms", "胎压信息", "胎压信息显示。0=不显示;1=显示胎压。", 0, 3, 1));
@@ -1155,20 +1157,11 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   featToggles->addItem(new CValueControl("EdgeCenteringEnabled", "无车道线路沿居中(1)", "无车道线且路沿可见时, 基于两侧路沿几何中心贴道路中心行驶, 避免模型偏左; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntent", "转向灯转弯意图(0)", "开启后打转向灯时向模型发送转弯意图，低于设定速度时激活", 0, 1, 1));
   featToggles->addItem(new CValueControl("BlinkerTurnIntentSpeed", "转弯意图激活速度(30)km/h", "低于此速度打转向灯时激活转弯意图", 0, 120, 5));
-  CValueControl *firmCtrl = new CValueControl("BlinkerTurnIntentFirm", "转弯意图加固(0)", "车道线模糊或无车道线路口打转向灯时, 坚定保持转弯意图并自动重发, 稳稳转入弯道不乱飘; 0:关闭, 1:开启(需先开启转向灯转弯意图)", 0, 1, 1);
-  featToggles->addItem(firmCtrl);
-  firmCtrl->installEventFilter(this);  // 点本项标题区累计6次显示下方隐藏调参(+/−调值不计数)
-  {
-    // 首次默认值(仅参数为空时写入)
-    if (Params().get("BlinkerTurnIntentFirmBreak").empty()) Params().put("BlinkerTurnIntentFirmBreak", "250");
-    if (Params().get("BlinkerTurnIntentFirmCooldown").empty()) Params().put("BlinkerTurnIntentFirmCooldown", "800");
-  }
-  firm_break_ctrl_ = new CValueControl("BlinkerTurnIntentFirmBreak", "意图断开时间(250)ms", "发现模型转弯意图消退后, 断开desire的时长, 用于制造新脉冲重新触发转弯; 越小车感晃动越小, 越大重触发越可靠", 50, 1000, 50);
-  featToggles->addItem(firm_break_ctrl_);
-  firm_break_ctrl_->setVisible(false);
-  firm_cooldown_ctrl_ = new CValueControl("BlinkerTurnIntentFirmCooldown", "意图重发冷却(800)ms", "重发转弯意图后多久内不再评估重触发, 防止反复重发; 越小纠正越快, 越大越稳定", 200, 3000, 100);
-  featToggles->addItem(firm_cooldown_ctrl_);
-  firm_cooldown_ctrl_->setVisible(false);
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentFirm", "转弯意图加固(0)", "车道线模糊或无车道线路口打转向灯时, 坚定保持转弯意图并自动重发, 稳稳转入弯道不乱飘; 0:关闭, 1:开启(需先开启转向灯转弯意图)", 0, 1, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentFirmGain", "加固横向加速度(20=2.0)", "转弯猛烈程度: 数值÷10=目标横向加速度(m/s²), 默认20即2.0; 越大转得越急越猛、方向盘响应越快, 越小越柔; 范围5~50(0.5~5.0m/s²); 实测太猛(车猛甩)就调小, 太肉(转不动)就调大", 5, 50, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentFirmMax", "加固曲率上限(12=0.12)", "转弯最锐程度: 数值÷100=曲率上限(1/m), 默认12即0.12(≈半径8.3m最急); 越小转弯半径越大越缓, 越大越急; 范围4~30(0.04~0.30); 路口转太大冲对向车道时调大(更缓)", 4, 30, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentFirmMin", "加固曲率下限(3=0.03)", "转弯最缓程度: 数值÷100=曲率下限(1/m), 默认3即0.03; 保证即使模型没输出转弯也至少维持此最小曲率, 车始终在转不会直行; 范围1~10(0.01~0.10); 一般保持默认", 1, 10, 1));
+  featToggles->addItem(new CValueControl("BlinkerTurnIntentFirmMaxAngle", "加固最大转角(90)°", "防过转门限: 打灯后用车身偏航角速度积分累计已转角度, 超过此值(度)立即放手交还模型/道路曲率, 防止被开环指令一直推着转、冲进对向车道; 默认90°, 范围30~180°; 窄路口调小(更早放手), 大环岛调大", 30, 180, 5));
   // === 弯道预备减速辅助（独立开关，默认关=零影响原逻辑）===
   featToggles->addItem(sectionHeader("弯道预备减速辅助"));
   featToggles->addItem(new CValueControl("CurveAnticipateMode", "入弯预备减速(0)", "接近弯道时提前柔和降到弯道限速, 避免弯中急刹; 0:关闭(完全不影响原逻辑), 1:开启", 0, 1, 1));
@@ -1225,24 +1218,6 @@ CarrotPanel::CarrotPanel(QWidget* parent, int mode) : QWidget(parent) {
   main_layout->setCurrentWidget(homeScreen);
 
   if (panelMode == 0) togglesCarrot(0);
-}
-
-// 转弯意图加固隐藏调参: 点「转弯意图加固」标题区累计 6 次后显示(+/− 调值不计数, 重启 UI 后重新隐藏)
-void CarrotPanel::unlockFirmParams() {
-  if (firm_break_ctrl_) firm_break_ctrl_->setVisible(true);
-  if (firm_cooldown_ctrl_) firm_cooldown_ctrl_->setVisible(true);
-}
-
-bool CarrotPanel::eventFilter(QObject *obj, QEvent *event) {
-  Q_UNUSED(obj)
-  if (event->type() == QEvent::MouseButtonRelease) {
-    firm_click_count_++;
-    if (firm_click_count_ >= 6) {
-      firm_click_count_ = 0;
-      unlockFirmParams();
-    }
-  }
-  return QWidget::eventFilter(obj, event);
 }
 
 void CarrotPanel::togglesCarrot(int widgetIndex) {

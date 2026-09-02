@@ -52,6 +52,54 @@
 #define BOLD "KaiGenGothicKR-Bold"//"Inter-Bold"//"sans-bold"
 
 
+static const NVGcolor ui_box_colors[36] = {
+  nvgRGBA(255,255,255,255),  // 0 白
+  nvgRGBA(255,0,0,255),  // 1 红
+  nvgRGBA(255,175,3,255),  // 2 橙
+  nvgRGBA(218,202,37,255),  // 3 黄
+  nvgRGBA(0,203,0,255),  // 4 绿
+  nvgRGBA(0,255,255,255),  // 5 青
+  nvgRGBA(0,0,255,255),  // 6 蓝
+  nvgRGBA(128,0,128,255),  // 7 紫
+  nvgRGBA(139,0,0,255),  // 8 深红
+  nvgRGBA(255,80,80,255),  // 9 亮红
+  nvgRGBA(255,105,180,255),  // 10 粉红
+  nvgRGBA(255,20,147,255),  // 11 玫红
+  nvgRGBA(255,127,80,255),  // 12 珊瑚
+  nvgRGBA(255,140,0,255),  // 13 深橙
+  nvgRGBA(255,215,0,255),  // 14 金
+  nvgRGBA(255,255,102,255),  // 15 浅黄
+  nvgRGBA(245,245,220,255),  // 16 米色
+  nvgRGBA(189,183,107,255),  // 17 卡其
+  nvgRGBA(107,142,35,255),  // 18 橄榄
+  nvgRGBA(154,205,50,255),  // 19 黄绿
+  nvgRGBA(124,252,0,255),  // 20 草绿
+  nvgRGBA(0,100,0,255),  // 21 深绿
+  nvgRGBA(152,255,152,255),  // 22 薄荷
+  nvgRGBA(0,250,154,255),  // 23 春绿
+  nvgRGBA(127,255,212,255),  // 24 碧绿
+  nvgRGBA(0,206,209,255),  // 25 青绿
+  nvgRGBA(135,206,235,255),  // 26 天蓝
+  nvgRGBA(0,191,255,255),  // 27 亮天蓝
+  nvgRGBA(70,130,180,255),  // 28 钢蓝
+  nvgRGBA(25,25,112,255),  // 29 藏青
+  nvgRGBA(75,0,130,255),  // 30 靛蓝
+  nvgRGBA(238,130,238,255),  // 31 紫罗兰
+  nvgRGBA(255,0,255,255),  // 32 洋红
+  nvgRGBA(230,230,250,255),  // 33 薰衣草
+  nvgRGBA(192,192,192,255),  // 34 银灰
+  nvgRGBA(105,105,105,255),  // 35 深灰
+};
+static inline NVGcolor boxColorA(const NVGcolor &c, int a) {
+  return nvgRGBA((int)(c.r*255+0.5), (int)(c.g*255+0.5), (int)(c.b*255+0.5), a);
+}
+static int boxColorIdx(const char* key, int def) {
+  std::string s = Params().get(key);
+  if (s.empty()) return def;
+  try { int v = std::stoi(s); return (v >= 0 && v <= 35) ? v : def; }
+  catch (...) { return def; }
+}
+
 constexpr float MIN_DRAW_DISTANCE = 10.0;
 constexpr float MAX_DRAW_DISTANCE = 100.0;
 
@@ -728,6 +776,11 @@ public:
 
     void draw(const UIState* s) {
 		if (!make_data(s)) return;
+		int radarColIdx  = boxColorIdx("UIRadarLeadBoxColor", 2);
+		int visionColIdx = boxColorIdx("UIVisionLeadBoxColor", 6);
+		const NVGcolor leadBoxCol = ui_box_colors[radarColIdx];
+		const NVGcolor objBoxCol  = ui_box_colors[visionColIdx];
+
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         int x = path_x;
         int y = path_y - 135;
@@ -746,7 +799,7 @@ public:
                     ui_draw_text(s, x, disp_y, str, disp_size, COLOR_WHITE, BOLD);
                 }
                 else {
-                    ui_draw_text(s, x, disp_y, tr("智能减速中").toStdString().c_str(), disp_size, COLOR_WHITE, BOLD);
+                    ui_draw_text(s, x, disp_y, tr("车辆减速").toStdString().c_str(), disp_size, COLOR_WHITE, BOLD);
                 }
 #if 0
                 else if (getStopDist() > 0.5) {
@@ -777,14 +830,14 @@ public:
             if (dist > 0.0) {
                 sprintf(str, "%.1f", dist);
                 wStr = 32 * (strlen(str) + 0);
-                ui_fill_rect(s->vg, { (int)(x - w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, isLeadSCC() ? COLOR_RED_ALPHA(180) : COLOR_ORANGE_ALPHA(180), 15);
+                ui_fill_rect(s->vg, { (int)(x - w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, (isLeadSCC() && radarColIdx == 2) ? COLOR_RED_ALPHA(180) : boxColorA(leadBoxCol, 180), 15);
                 ui_draw_text(s, x - w, disp_y, str, 40, text_color, BOLD);
             }
             dist = visionDist * (s->scene.is_metric ? 1 : METER_TO_FOOT);
             if (dist > 0.0) {
                 sprintf(str, "%.1f", dist);
                 wStr = 32 * (strlen(str) + 0);
-                ui_fill_rect(s->vg, { (int)(x + w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, COLOR_BLUE_ALPHA(180), 15);
+                ui_fill_rect(s->vg, { (int)(x + w - wStr / 2), (int)(disp_y - 35), wStr, 42 }, boxColorA(objBoxCol, 180), 15);
                 ui_draw_text(s, x + w, disp_y, str, 40, text_color, BOLD);
             }
         }
@@ -799,7 +852,7 @@ public:
 
 
         float px[7], py[7];
-        NVGcolor rcolor = isLeadSCC() ? COLOR_RED_ALPHA(200) : COLOR_ORANGE_ALPHA(200);
+        NVGcolor rcolor = (isLeadSCC() && radarColIdx == 2) ? COLOR_RED_ALPHA(200) : boxColorA(leadBoxCol, 200);
         NVGcolor  pcolor = !isRadarDetected() ? ((trafficState == 1) ? rcolor : COLOR_GREEN_ALPHA(200)) : isRadarDetected() ? rcolor : COLOR_BLUE_ALPHA(200);
         bool show_path_end = true;
         if (false && show_path_end && !isLeadDetected()) {
@@ -831,7 +884,7 @@ public:
                 15, 3, &radar_stroke
               );
             }
-            radar_stroke = isRadarDetected() ? rcolor : COLOR_BLUE;
+            radar_stroke = isRadarDetected() ? rcolor : objBoxCol;
             ui_fill_rect(s->vg, { (int)(path_x - path_width / 2 - 10), (int)(path_y - path_width * 0.8), (int)(path_width + 20), (int)(path_width * 0.8) }, COLOR_BLACK_ALPHA(20), 15, 3, &radar_stroke);
 #if 0
             px[0] = path_x - path_width / 2 - 10;
@@ -3786,7 +3839,7 @@ public:
         strcpy(bottom, str.toStdString().c_str());
 
         // bottom_left
-        char bottom_left[256] = "CP-Dev晚風V260819";
+        char bottom_left[256] = "CP-Dev晚風V260902";
 
         // bottom_right
         // Params params_memory = Params("/dev/shm/params");

@@ -56,6 +56,8 @@ class Controls:
     self.steer_limited_by_controls = False
     self.curvature = 0.0
     self.desired_curvature = 0.0
+    self._firm_yaw_acc = 0.0   # 打灯累计转过角度(rad), 防转过头
+    self._firm_last_t = None   # 上一帧 liveLocationKalman 时间戳
     self.yStd = 0.0
 
     self.side_state = {
@@ -173,7 +175,57 @@ class Controls:
     else:
       new_desired_curvature = model_v2.action.desiredCurvature
 
+
+    # 转弯意图加固 v5: 开环朝灯曲率指令(起步直接命令, 不依赖模型振荡)
+    # 灯亮+低速+加固: 直接命令朝灯曲率(按车速算目标半径); 车已转入(模型自身已朝灯)则放手让模型/道路主导; 灯灭/超速自然回正
+    _firm_on = (CC.latActive and not CS.standstill
+                and self.params.get_int("BlinkerTurnIntent")
+                and self.params.get_int("BlinkerTurnIntentFirm")
+                and CS.vEgo < (self.params.get_int("BlinkerTurnIntentSpeed") * CV.KPH_TO_MS))
+    if _firm_on:
+      # UI 可调参数(数值÷倍率): 增益20=2.0, 上限12=0.12, 下限3=0.03, 最大转角90°
+      def _firm_gi(k, d):
+        try: return self.params.get_int(k)
+        except (ValueError, TypeError): return d
+      _gain = _firm_gi("BlinkerTurnIntentFirmGain", 20) / 10.0          # 默认20->2.0 m/s^2 横向加速度
+      _fmax = _firm_gi("BlinkerTurnIntentFirmMax", 12) / 100.0          # 默认12->0.12 曲率上限(半径~8m)
+      _fmin = _firm_gi("BlinkerTurnIntentFirmMin", 3) / 100.0           # 默认3->0.03 曲率下限
+      _max_angle = _firm_gi("BlinkerTurnIntentFirmMaxAngle", 90) * math.pi / 180.0  # 默认90° 累计转角门限
+      _spd = max(CS.vEgo, 2.0)
+      _firm = min(_gain / (_spd * _spd), _fmax)   # 目标横向加速度~_gain, 曲率上限_fmax
+      _firm = max(_firm, _fmin)                   # 下限, 保证是真实转弯
+      if CS.leftBlinker and not CS.rightBlinker:
+        _sign = -1.0   # 实车验证+latcontrol取负: 负曲率=左转
+      elif CS.rightBlinker and not CS.leftBlinker:
+        _sign = 1.0    # 正曲率=右转
+      else:
+        _sign = 0.0
+      # 累计打灯期间转过的航向角(偏航角速度积分), 防止转过头冲进对向车道
+      _ll = self.sm['liveLocationKalman']
+      _yr = _ll.angularVelocityCalibrated.value[2]   # 绕z轴偏航角速度 rad/s
+      _t = _ll.logMonoTime / 1e9
+      if self._firm_last_t is None:
+        self._firm_last_t = _t
+      _dt = _t - self._firm_last_t
+      self._firm_last_t = _t
+      if 0.0 < _dt < 1.0:
+        self._firm_yaw_acc += abs(_yr) * _dt
+      if _sign == 0.0:
+        # 没打灯/双闪: 重置累计, 下次打灯重新计
+        self._firm_yaw_acc = 0.0
+        self._firm_last_t = _t
+      elif self._firm_yaw_acc < _max_angle:
+        # 模型自身已朝灯转够(车已开转)或转过门限角度则放手, 避免转过头/不反向
+        _model_already = (math.copysign(1.0, float(new_desired_curvature)) == _sign) and (abs(float(new_desired_curvature)) > 0.5 * _firm)
+        if not _model_already:
+          new_desired_curvature = _sign * _firm   # 开环强制朝灯, 起步果断; 转够角度即不再注入
+    else:
+      self._firm_yaw_acc = 0.0
+      self._firm_last_t = None
+
     self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, self.desired_curvature, new_desired_curvature, lp.roll)
+
+
 
     actuators.curvature = float(self.desired_curvature)
     steer, steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
