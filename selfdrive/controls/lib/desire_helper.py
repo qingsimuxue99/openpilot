@@ -178,6 +178,7 @@ class DesireHelper:
     self.turn_desire_state = False
     self.desire_disable_count = 0
     self.turn_disable_count = 0 #
+    self.curve_speed_active = False  # 2026-09-04: carrot 弯道控速进行中
     self.blindspot_detected_counter = 0
     self.auto_lane_change_enable = False
     #self.next_lane_change = False #
@@ -899,9 +900,27 @@ class DesireHelper:
               f"obj_cnt={self.object_detected_count:.1f},{self.object_detected_count_new},active={self.atc_active},last_lane={last_lane} time:{self.last_lane_count}")
         print(f"---blinker_state={blinker_state},atc_blinker_state={atc_blinker_state},driver_blinker_state={driver_blinker_state},esp32 blinker={self.blinker}")
 
-    # 转弯意图加固生效门槛: 沿用 BlinkerTurnIntent 全部限制(功能开+打灯+低于意图速度+非静止), 仅增强坚定度
-    firm_turn_gate = (self.blinker_turn_intent and self.blinker_turn_intent_firm and driver_desire_enabled
-                      and v_ego < (self.blinker_turn_intent_speed * CV.KPH_TO_MS) and not carstate.standstill)
+    # 2026-09-04 禁用(改为恒 False, 恢复上游行为):
+    # 让 desire 全程持续会把"转弯意图"一直喂给模型, 模型按"平顺执行转弯"预测,
+    # orientationRate 比真实前方弯道小 → carrot 弯道限速(carrot_man.vturn_speed)虚高
+    # → 转弯不减速、路口高速过弯。上游 design: 方向盘>80°(turn_disable_count>0)时正常
+    # 中断转弯意图, 让模型回归按道路形状预测, 弯道限速恢复正常。
+    # 转弯坚定性不依赖 desire: 由 controlsd 的 v5 开环曲率注入在输出层保证(见 controlsd.py 转弯意图加固 v5)。
+    firm_turn_gate = False
+
+    # 2026-09-04: 弯道控速进行中时不激活转弯意图 desire。
+    # 此时模型已识别弯道并在降速, 不需要 desire 再"定向"; 而持续喂 desire 会让模型
+    # 按"平顺执行转弯"预测 → orientationRate 偏小 → 弯道限速虚高 → 打断入弯减速。
+    # 转向坚定性由 controlsd 的 v5 开环注入在输出层保证, 不依赖 desire, 不受影响。
+    self.curve_speed_active = False
+    try:
+      _vturn = abs(float(carrotMan.vTurnSpeed))   # km/h, 250 = 无弯道
+      _v_kph = carstate.vEgo * 3.6
+      # 限速明显低于当前车速 = 正在(或即将)执行弯道控速
+      if _vturn < 200.0 and _vturn < (_v_kph - 3.0):
+        self.curve_speed_active = True
+    except Exception:
+      self.curve_speed_active = False
     if not lateral_active or self.lane_change_timer > LANE_CHANGE_TIME_MAX: #横向未激活或变道时间超过10秒时，退出变道控制
       if self.lane_change_state != LaneChangeState.off:
         if atc_desire_enabled and (fork_left_right or atc_left_right):
@@ -915,7 +934,7 @@ class DesireHelper:
     elif ( (self.blinkerMode == 0 or not driver_desire_enabled or turn_left_right
            or (self.blinker_turn_intent and driver_desire_enabled)) and
            desire_enabled and ((below_lane_change_speed and not carstate.standstill and self.enable_turn_desires) or self.turn_desire_state
-             or (self.blinker_turn_intent and driver_desire_enabled and v_ego < (self.blinker_turn_intent_speed * CV.KPH_TO_MS) and not carstate.standstill))): #激活转弯控制模式（并不走变道流程）
+             or (self.blinker_turn_intent and driver_desire_enabled and v_ego < (self.blinker_turn_intent_speed * CV.KPH_TO_MS) and not carstate.standstill))) and not self.curve_speed_active: #激活转弯控制模式（2026-09-04: 弯道控速进行中不激活, 避免打断入弯减速）
       if self.lane_change_state != LaneChangeState.off:
         print(f"---[{time.strftime('%H:%M:%S')}]Desire Turning")
         #if atc_desire_enabled and (fork_left_right or atc_left_right):
