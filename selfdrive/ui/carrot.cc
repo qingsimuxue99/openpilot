@@ -691,6 +691,13 @@ protected:
             y = -lead_one.getYRel();
             radarTrackId = lead_one.getRadarTrackId();
             radarDist = (lead_one.getRadar()) ? lead_one.getDRel() : 0;
+            // 2026-09-03 无风险过滤: 视觉明确无前车(prob<0.3)且 lead 为 SCC 雷达兜底(trackId==0)时,
+            // 判为雷达近距噪声目标, 不显示前车框(仅改显示, 不动 radard/纵向/刹停控制)
+            if (radarTrackId == 0 && leadsV3.getProb() < 0.3) {
+                lead_status = false;
+                radarTrackId = -1;
+                radarDist = 0;
+            }
         }
         else {
             radarTrackId = -1;
