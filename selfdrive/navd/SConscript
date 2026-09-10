@@ -1,0 +1,26 @@
+Import('qt_env', 'arch', 'common', 'messaging', 'visionipc', 'cereal', 'transformations')
+
+map_env = qt_env.Clone()
+
+libs = ['qt_widgets', 'qt_util', 'QMapLibre', common, messaging, cereal, visionipc, transformations,
+        'zmq', 'capnp', 'kj', 'm', 'OpenCL', 'ssl', 'crypto', 'pthread', 'json11'] + map_env["LIBS"]
+if arch == 'larch64':
+  libs.append(':libEGL_mesa.so.0')
+  # AGNOS 出厂的 libwayland-client.so 开发链可能指向 2015 年古董 0.3.0
+  # (缺 wl_proxy_marshal_flags 等 wayland >=1.20 符号), 而 mesa EGL 需要新版.
+  # 用 soname 精确名 (.so.0) 替代开发链 (-lwayland-client), 始终链入新版.
+  # 必须 insert(0): 单遍链接下, wayland 先于 EGL_mesa 出现才能让 mesa 符号引用解析到新版.
+  libs.insert(0, ':libwayland-client.so.0')
+
+if arch in ['larch64', 'aarch64', 'x86_64']:
+  if arch == 'x86_64':
+    rpath = Dir(f"#third_party/maplibre-native-qt/{arch}/lib").srcnode().abspath
+    map_env["RPATH"] += [rpath, ]
+
+  style_path = File("style.json").abspath
+  map_env['CXXFLAGS'].append(f'-DSTYLE_PATH=\\"{style_path}\\"')
+
+  map_env["RPATH"].append(Dir('.').abspath)
+  map_env["LIBPATH"].append(Dir('.').abspath)
+  maplib = map_env.SharedLibrary("maprender", ["map_renderer.cc"], LIBS=libs)
+  map_env.Program("mapsd", ["main.cc", ], LIBS=[maplib[0].get_path(), ] + libs)

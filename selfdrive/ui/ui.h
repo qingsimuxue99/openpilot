@@ -1,0 +1,165 @@
+#pragma once
+
+#include <eigen3/Eigen/Dense>
+#include <memory>
+#include <string>
+
+#include <QTimer>
+#include <QColor>
+#include <QFuture>
+#include <QPolygonF>
+#include "nanovg.h"
+
+#include "cereal/messaging/messaging.h"
+#include "common/mat.h"
+#include "common/params.h"
+#include "common/util.h"
+#include "system/hardware/hw.h"
+#include "selfdrive/ui/qt/prime_state.h"
+
+const int UI_BORDER_SIZE = 30;
+const int UI_HEADER_HEIGHT = 420;
+
+const int UI_FREQ = 20; // Hz
+const int BACKLIGHT_OFFROAD = 50;
+
+const Eigen::Matrix3f VIEW_FROM_DEVICE = (Eigen::Matrix3f() <<
+  0.0, 1.0, 0.0,
+  0.0, 0.0, 1.0,
+  1.0, 0.0, 0.0).finished();
+
+const Eigen::Matrix3f FCAM_INTRINSIC_MATRIX = (Eigen::Matrix3f() <<
+  2648.0, 0.0, 1928.0 / 2,
+  0.0, 2648.0, 1208.0 / 2,
+  0.0, 0.0, 1.0).finished();
+
+// tici ecam focal probably wrong? magnification is not consistent across frame
+// Need to retrain model before this can be changed
+const Eigen::Matrix3f ECAM_INTRINSIC_MATRIX = (Eigen::Matrix3f() <<
+  567.0, 0.0, 1928.0 / 2,
+  0.0, 567.0, 1208.0 / 2,
+  0.0, 0.0, 1.0).finished();
+
+typedef enum UIStatus {
+  STATUS_DISENGAGED,
+  STATUS_OVERRIDE,
+  STATUS_ENGAGED,
+  STATUS_ACTIVE,
+} UIStatus;
+
+const QColor bg_colors [] = {
+  [STATUS_DISENGAGED] = QColor(0x17, 0x33, 0x49, 0xc8),
+  [STATUS_OVERRIDE] = QColor(0x91, 0x9b, 0x95, 0xf1),
+  [STATUS_ENGAGED] = QColor(0x17, 0x86, 0x44, 0xf1),
+  [STATUS_ACTIVE] = QColor(0x6f, 0xc0, 0xc9, 0xf1),
+};
+
+typedef struct UIScene {
+  Eigen::Matrix3f view_from_calib = VIEW_FROM_DEVICE;
+  Eigen::Matrix3f view_from_wide_calib = VIEW_FROM_DEVICE;
+  cereal::PandaState::PandaType pandaType;
+
+  cereal::LongitudinalPersonality personality;
+
+  float light_sensor = -1;
+  bool started, ignition, is_metric;
+  bool navigate_on_openpilot = false;
+  int _current_carrot_display = 0;
+  int _current_carrot_display_prev = 0;
+  int _display_time_count = 0;
+  bool map_on_left;
+  uint64_t started_frame;
+
+  // DP Rainbow Path
+  bool dp_ui_rainbow = false;
+  int dp_ui_rainbow_speed = 10;        // 彩虹流动速度 1~50, 越大越快 (10 = 原固定速度)
+  int dp_ui_rainbow_brightness = 70;   // 彩虹亮度百分比 10~100 (70 = 原固定亮度 0.7)
+  float dp_ui_rainbow_width = 1.1f;    // 彩虹路径宽度 0.3~2.0 (1.1 = 原默认)
+
+  bool carrot_experimental_mode = false;
+
+} UIScene;
+
+class UIState : public QObject {
+  Q_OBJECT
+
+public:
+  UIState(QObject* parent = 0);
+  void updateStatus();
+  inline bool engaged() const {
+    return scene.started && (*sm)["selfdriveState"].getSelfdriveState().getEnabled();
+  }
+  int fb_w = 0, fb_h = 0;
+  NVGcontext* vg;
+  NVGcontext* vg_border = nullptr;
+
+  std::map<std::string, int> images;
+  std::unique_ptr<SubMaster> sm;
+  UIStatus status;
+  UIScene scene = {};
+  QString language;
+  PrimeState *prime_state;
+
+  float max_distance = 0.0;
+  float show_brightness_ratio = 1.0;
+  int show_brightness_timer = 20;
+
+  // === 高速净屏 CleanView (独立开关, 默认关=零影响) ===
+  int clean_view_mode = 0;             // 0关 1隐藏图标(保留路径/车道线) 2极净屏(连路径车道线也隐藏)
+  int clean_view_speed = 55;           // 净屏触发车速 km/h
+  bool clean_view_active = false;      // 净屏当前是否生效(带迟滞, 防边界闪烁)
+  // === 屏幕智能调光 AutoScreenDim (独立开关, 默认关=零影响) ===
+  int auto_screen_dim_mode = 0;        // 0关 1智能降亮 2降亮+暗色遮罩
+  float auto_screen_dim_level = 40.0f; // 暗环境目标亮度/遮罩强度(%)
+  int manual_brightness = 0;           // 0自动跟随环境光(原厂逻辑) 1-100固定屏幕亮度百分比(跳过自动降亮)
+
+signals:
+  void uiUpdate(const UIState &s);
+  void offroadTransition(bool offroad);
+
+private slots:
+  void update();
+
+private:
+  QTimer *timer;
+  bool started_prev = false;
+};
+
+UIState *uiState();
+
+// device management class
+class Device : public QObject {
+  Q_OBJECT
+
+public:
+  Device(QObject *parent = 0);
+  bool isAwake() { return awake; }
+  void setOffroadBrightness(int brightness) {
+    offroad_brightness = std::clamp(brightness, 0, 100);
+  }
+
+private:
+  bool awake = false;
+  int interactive_timeout = 0;
+  bool ignition_on = false;
+
+  int offroad_brightness = BACKLIGHT_OFFROAD;
+  int last_brightness = 0;
+  FirstOrderFilter brightness_filter;
+  QFuture<void> brightness_future;
+
+  void updateBrightness(const UIState &s);
+  void updateWakefulness(const UIState &s);
+  void setAwake(bool on);
+
+signals:
+  void displayPowerChanged(bool on);
+  void interactiveTimeout();
+
+public slots:
+  void resetInteractiveTimeout(int timeout = -1);
+  void update(const UIState &s);
+};
+
+Device *device();
+void ui_update_params(UIState *s);

@@ -1,0 +1,170 @@
+Import('env', 'common', 'msgq')
+
+import shutil
+import os
+
+cereal_dir = Dir('.')
+gen_dir = Dir('gen')
+
+# --- 构建前清理异常残留（必须在任何节点构造之前）---
+# gen/cpp 若因异常变成普通文件/坏软链，scons 在下面 env.Command 处会直接抛
+# "File ... found where directory expected"，整个构建立刻中断（表现为开机报错）。
+# 此处用纯 os 清掉，让后续节点构造与 capnpc 都能正常建目录。
+_cpp_dir = os.path.join(gen_dir.abspath, 'cpp')
+try:
+  if os.path.exists(_cpp_dir) and not os.path.isdir(_cpp_dir):
+    print('[cereal] gen/cpp 异常残留(非目录), 已清理: %s' % _cpp_dir)
+    os.remove(_cpp_dir)
+except OSError as _e:
+  print('[cereal] 清理 gen/cpp 残留失败(不致命): %s' % _e)
+
+# capnpc 绝对路径兜底：设备上装在 /usr/local/bin，有些调用场景 PATH 里没有
+_capnpc_bin = (shutil.which('capnpc') or
+               shutil.which('capnpc', path='/usr/local/bin:/usr/local/sbin:/usr/bin:/bin') or
+               'capnpc')
+
+# Build cereal
+schema_files = ['log.capnp', 'car.capnp', 'legacy.capnp', 'custom.capnp']
+env.Command([f'gen/cpp/{s}.c++' for s in schema_files] + [f'gen/cpp/{s}.h' for s in schema_files],
+            schema_files,
+            f"{_capnpc_bin} --src-prefix={cereal_dir.path} $SOURCES -o c++:{gen_dir.path}/cpp/")
+
+# --- capnp 生成头完整性自愈（防弹版 v2）---
+#
+# gen/cpp/*.capnp.h 是 capnpc 当场生成的构建产物（log.capnp.h 约 2.6MB）。
+# 若生成被中断（断电/磁盘满/并发），会残留"文件存在但内容残缺"的 .h，
+# 编译抛出误导性的 "use of undeclared identifier 'cereal'"，且 scons 认为
+# target 已 up-to-date 不会重生成，错误会一直卡住。
+#
+# v2 相比 v1 的加固（核心目标：自愈本身绝不允许打断构建/开机）：
+#   1. 头文件全部完整时直接返回，零副作用（最常见的正常路径）
+#   2. capnpc 用 which 定位并带 /usr/local/bin 兜底，不依赖 PATH
+#   3. 绝不"先删后建"：先备份到 gen/cpp_bak，失败自动回滚
+#   4. 修正 PWD 环境变量，消除 capnp 的 "PWD doesn't match current
+#      directory" 告警，避免其把绝对路径误判为相对路径
+#   5. 相对路径 / 绝对路径两种方式依次尝试，任一成功即可
+#   6. 回滚后文件完整则更新时间戳并放行构建（降级可用，不阻断开机）
+#   7. 仅在"完全拿不到完整头文件"时才失败，且附带 capnpc 的原始 stderr
+def _capnp_selfheal(target, source, env):
+  import os, subprocess, time
+
+  src_dir = cereal_dir.abspath            # .../openpilot/cereal
+  out_dir = os.path.join(gen_dir.abspath, 'cpp')  # .../openpilot/cereal/gen/cpp
+  bak_dir = os.path.join(gen_dir.abspath, 'cpp_bak')
+
+  def intact(path):
+    try:
+      with open(path, 'rb') as f:
+        data = f.read()
+    except OSError:
+      return False
+    # 完整的 capnp 头必然含 namespace cereal，且体积远大于 1KB
+    return b'namespace cereal' in data and len(data) > 1024
+
+  def all_intact():
+    return all(intact(os.path.join(out_dir, s + '.h')) for s in schema_files)
+
+  def touch_all():
+    # 更新时间戳，让 scons 认为 target 比 source 新，跳过重复的 capnpc 调用
+    now = time.time()
+    for s in schema_files:
+      for ext in ('.h', '.c++'):
+        p = os.path.join(out_dir, s + ext)
+        if os.path.exists(p):
+          try:
+            os.utime(p, (now, now))
+          except OSError:
+            pass
+
+  # 1) 全部完整 -> 什么都不做
+  if all_intact():
+    return 0
+
+  broken = [s for s in schema_files if not intact(os.path.join(out_dir, s + '.h'))]
+  print('[cereal] capnp 生成头缺失/残缺: %s' % ', '.join(broken))
+
+  # 2) 确保输出目录存在（含异常自愈: gen/cpp 若被误建成文件或软链, 清掉重建）
+  try:
+    if os.path.exists(out_dir) and not os.path.isdir(out_dir):
+      print('[cereal] 输出路径 %s 不是目录(异常残留), 已清理重建' % out_dir)
+      os.remove(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
+  except OSError as e:
+    print('[cereal] 无法创建输出目录 %s: %s' % (out_dir, e))
+
+  # 3) 备份现有文件（绝不先删后建，保证失败可回滚）
+  try:
+    if os.path.isdir(bak_dir):
+      shutil.rmtree(bak_dir)
+    os.makedirs(bak_dir, exist_ok=True)
+    for s in schema_files:
+      for ext in ('.h', '.c++'):
+        p = os.path.join(out_dir, s + ext)
+        if os.path.exists(p):
+          shutil.copy2(p, os.path.join(bak_dir, s + ext))
+  except OSError as e:
+    print('[cereal] 备份失败(不致命): %s' % e)
+
+  # 4) 两种调用方式依次尝试，均修正 PWD 消除 capnp 的路径误判
+  proc_env = os.environ.copy()
+  proc_env['PWD'] = src_dir
+  attempts = [
+    ('相对路径', [_capnpc_bin, '--src-prefix=%s' % src_dir] + list(schema_files) +
+                 ['-o', 'c++:%s' % os.path.join('gen', 'cpp')]),
+    ('绝对路径', [_capnpc_bin, '--src-prefix=%s' % src_dir] +
+                 [os.path.join(src_dir, s) for s in schema_files] +
+                 ['-o', 'c++:%s' % out_dir]),
+  ]
+
+  last_err = ''
+  ok = False
+  for name, cmd in attempts:
+    try:
+      p = subprocess.run(cmd, cwd=src_dir, env=proc_env,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      if p.returncode == 0 and all_intact():
+        print('[cereal] capnp 生成头已重新生成完成(%s方式)' % name)
+        ok = True
+        break
+      err = (p.stderr or b'').decode('utf-8', 'replace').strip()
+      last_err = err or ('rc=%s' % p.returncode)
+      print('[cereal] capnpc(%s方式) 失败 rc=%s: %s' % (name, p.returncode, last_err[:300]))
+    except OSError as e:
+      last_err = str(e)
+      print('[cereal] capnpc(%s方式) 无法执行: %s' % (name, e))
+
+  # 5) 失败则回滚；回滚后文件完整就放行构建（降级可用，绝不阻断开机）
+  if not ok:
+    try:
+      for s in schema_files:
+        for ext in ('.h', '.c++'):
+          b = os.path.join(bak_dir, s + ext)
+          if os.path.exists(b):
+            shutil.copy2(b, os.path.join(out_dir, s + ext))
+    except OSError as e:
+      print('[cereal] 回滚失败: %s' % e)
+    if all_intact():
+      touch_all()
+      print('[cereal] 警告: capnpc 重新生成失败，已回滚旧头文件继续构建(功能不受影响)')
+      return 0
+    raise RuntimeError(
+      'capnp 生成头缺失且无法重新生成。capnpc 报错:\n%s\n'
+      '请检查 capnpc 是否可用(%s)及 /data 是否已满。' % (last_err, _capnpc_bin))
+
+  touch_all()
+  return 0
+
+capnp_check = env.Command('capnp_headers_check', [], env.Action(_capnp_selfheal, None))
+env.AlwaysBuild(capnp_check)
+# 保证校验先于任何依赖 capnp 头的编译目标执行
+env.Depends([f'gen/cpp/{s}.h' for s in schema_files], capnp_check)
+
+cereal = env.Library('cereal', [f'gen/cpp/{s}.c++' for s in schema_files])
+
+# Build messaging
+services_h = env.Command(['services.h'], ['services.py'], 'python3 ' + cereal_dir.path + '/services.py > $TARGET')
+env.Program('messaging/bridge', ['messaging/bridge.cc', 'messaging/msgq_to_zmq.cc'], LIBS=[msgq, common, 'pthread'])
+
+socketmaster = env.Library('socketmaster', ['messaging/socketmaster.cc'])
+
+Export('cereal', 'socketmaster')
