@@ -105,3 +105,5 @@ Pipfile
 .history
 .ionide
 .vs
+selfdrive/carrot/nav_params.json
+*.bak

@@ -72,7 +72,9 @@ def read_time_from_param(params, param) -> datetime.datetime | None:
   return None
 
 def run(cmd: list[str], cwd: str = None) -> str:
-  return subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.STDOUT, encoding='utf8')
+  env = dict(os.environ)
+  env['GIT_TERMINAL_PROMPT'] = '0'
+  return subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.STDOUT, encoding='utf8', env=env)
 
 
 def set_consistent_flag(consistent: bool) -> None:
