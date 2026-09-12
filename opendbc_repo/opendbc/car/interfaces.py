@@ -405,8 +405,9 @@ class CarInterfaceBase(ABC):
   def apply(self, c: structs.CarControl, now_nanos: int | None = None) -> tuple[structs.CarControl.Actuators, list[CanData]]:
     if now_nanos is None:
       now_nanos = int(time.monotonic() * 1e9)
-    actuators, can_msgs = self.CC.update(c, self.CS, now_nanos)
+    # smooth accel BEFORE update so the smoothed value is used to build CAN msgs
     self._apply_accel_rate_limit(c)
+    actuators, can_msgs = self.CC.update(c, self.CS, now_nanos)
     return actuators, can_msgs
 
   def _apply_accel_rate_limit(self, c: structs.CarControl):
