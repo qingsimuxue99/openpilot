@@ -323,7 +323,7 @@ static int hyundai_fwd_hook(int bus_num, int addr) {
         // falsely triggered relayMalfunction. bus_fwd stays -1 (no forward).
       }
       else if(is_scc_msg) {
-        if(now - last_ts_scc12_from_op >= 400000)
+        if(!hyundai_longitudinal && now - last_ts_scc12_from_op >= 400000)
           bus_fwd = 0;
       }
       else if(is_fca_msg) {
