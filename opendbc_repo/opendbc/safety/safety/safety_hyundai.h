@@ -323,7 +323,9 @@ static int hyundai_fwd_hook(int bus_num, int addr) {
         // falsely triggered relayMalfunction. bus_fwd stays -1 (no forward).
       }
       else if(is_scc_msg) {
-        if(now - last_ts_scc12_from_op >= 400000)
+        // 库斯图(CUSTIN)等 camera SCC 车型: SCC12 由 cam 原厂发出, 若 OP 停发时转发会导致 panda 检测 relayMalf
+        // 对 camera SCC 车型永久封锁 SCC12 转发, radar SCC 车型(伊兰特等)保持原逻辑
+        if(!hyundai_camera_scc && (now - last_ts_scc12_from_op >= 400000))
           bus_fwd = 0;
       }
       else if(is_fca_msg) {
