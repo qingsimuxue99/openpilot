@@ -43,10 +43,9 @@ static const CanMsg HYUNDAI_TX_MSGS[] = {
   {0x7b1, 0, 8},
 };
 
+// 2026.9.12: removed 0x371(E_EMS11)/0x91(FCEV_ACCELERATOR) from rx checks - EV/Hybrid/FCEV only, gas cars dont send -> permanent rxInvalid/CM
 #define HYUNDAI_COMMON_RX_CHECKS(legacy)                                                                                                                  \
-  {.msg = {{0x260, 0, 8, .max_counter = 3U, .frequency = 100U},                                                                                           \
-           {0x371, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 100U},                                                             \
-           {0x91,  0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 100U}}},                                                           \
+  {.msg = {{0x260, 0, 8, .max_counter = 3U, .frequency = 100U}, { 0 }, { 0 }}},                                                                                        \
   {.msg = {{0x386, 0, 8, .ignore_checksum = (legacy), .ignore_counter = (legacy), .max_counter = (legacy) ? 0U : 15U, .frequency = 100U}, { 0 }, { 0 }}}, \
   {.msg = {{0x394, 0, 8, .ignore_checksum = (legacy), .ignore_counter = (legacy), .max_counter = (legacy) ? 0U : 7U, .frequency = 100U}, { 0 }, { 0 }}},  \
 
