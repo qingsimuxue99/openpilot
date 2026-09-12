@@ -319,9 +319,8 @@ def create_acc_commands(packer, enabled, accel, jerk, idx, hud_control, set_spee
   if not use_fca:
     scc12_values["CF_VSM_ConfMode"] = 1
     scc12_values["AEB_Status"] = 2 if escc else 1  # AEB disabled
-
-  if escc:
-    scc12_values["AEB_CmdAct"] = CS.escc_cmd_act
+    if escc:
+      scc12_values["AEB_CmdAct"] = CS.escc_cmd_act
     scc12_values["CF_VSM_Warn"] = CS.escc_aeb_warning
     scc12_values["CF_VSM_DecCmdAct"] = CS.escc_aeb_dec_cmd_act
     scc12_values["CR_VSM_DecCmd"] = CS.escc_aeb_dec_cmd
