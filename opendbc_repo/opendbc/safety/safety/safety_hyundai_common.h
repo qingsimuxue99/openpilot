@@ -68,12 +68,8 @@ void hyundai_common_init(uint16_t param) {
 
   hyundai_last_button_interaction = HYUNDAI_PREV_BUTTON_SAMPLES;
 
-#ifdef ALLOW_DEBUG
   const int HYUNDAI_PARAM_LONGITUDINAL = 4;
   hyundai_longitudinal = GET_FLAG(param, HYUNDAI_PARAM_LONGITUDINAL);
-#else
-  hyundai_longitudinal = false;
-#endif
 }
 
 void hyundai_common_cruise_state_check(const bool cruise_engaged) {
