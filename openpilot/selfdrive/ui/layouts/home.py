@@ -200,13 +200,81 @@ class HomeLayout(Widget):
     )
     self._exp_mode_button.render(exp_rect)
 
-    setup_rect = rl.Rectangle(
+    # 右边画工具箱二维码
+    qr_rect = rl.Rectangle(
       self.right_column_rect.x,
       self.right_column_rect.y + exp_height + SPACING,
       self.right_column_rect.width,
       self.right_column_rect.height - exp_height - SPACING,
     )
-    self._setup_widget.render(setup_rect)
+    self._render_qr_code(qr_rect)
+
+  def _render_qr_code(self, rect: rl.Rectangle):
+    import socket
+    import qrcode
+    from PIL import Image
+    import io
+
+    # 获取设备 IP
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip = "127.0.0.1"
+
+    url = f"http://{ip}:5588"
+
+    # 画背景
+    rl.draw_rectangle_rounded(rect, 0.1, 20, rl.Color(30, 30, 30, 255))
+
+    # 标题
+    title_font = gui_app.font(FontWeight.BOLD)
+    title = "网页工具箱"
+    title_size = 48
+    title_w = measure_text_cached(title_font, title, title_size).x
+    title_x = int(rect.x + (rect.width - title_w) / 2)
+    title_y = int(rect.y + 20)
+    rl.draw_text_ex(title_font, title, rl.Vector2(title_x, title_y), title_size, 0, rl.WHITE)
+
+    # 二维码大小
+    qr_size = min(rect.width - 80, rect.height - 120)
+    qr_x = int(rect.x + (rect.width - qr_size) / 2)
+    qr_y = int(rect.y + 80)
+
+    # 生成二维码
+    qr = qrcode.QRCode(version=1, box_size=10, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # 保存为 PNG 到内存
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+
+    # 加载纹理
+    texture = rl.load_texture_from_memory(".png", buf.getvalue(), len(buf.getvalue()))
+    rl.gen_texture_mipmaps(texture)
+    rl.set_texture_filter(texture, rl.TEXTURE_FILTER_BILINEAR)
+
+    # 画二维码
+    rl.draw_texture_pro(
+      texture,
+      rl.Rectangle(0, 0, texture.width, texture.height),
+      rl.Rectangle(qr_x, qr_y, qr_size, qr_size),
+      rl.Vector2(0, 0), 0, rl.WHITE
+    )
+    rl.unload_texture(texture)
+
+    # URL 文字
+    url_font = gui_app.font(FontWeight.NORMAL)
+    url_size = 28
+    url_w = measure_text_cached(url_font, url, url_size).x
+    url_x = int(rect.x + (rect.width - url_w) / 2)
+    url_y = int(qr_y + qr_size + 15)
+    rl.draw_text_ex(url_font, url, rl.Vector2(url_x, url_y), url_size, 0, rl.Color(180, 180, 180, 255))
 
   def _refresh(self):
     self._version_text = self._get_version_text()
