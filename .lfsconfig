@@ -1,0 +1,3 @@
+[lfs]
+	url = https://gitlab.com/sunnypilot/public/sunnypilot-new-lfs.git/info/lfs
+	locksverify = false
