@@ -124,8 +124,10 @@ function launch {
   tmux capture-pane -pq -S-1000 > /tmp/launch_log
 
   # start manager
-  # 启动 C3 工具箱
-  nohup python3 /data/c3_toolbox_local.py > /tmp/toolbox.log 2>&1 &
+  # 启动 C3 工具箱（优先仓库内副本，工具箱随仓库安装；/data 旧副本仅兜底）
+  TOOLBOX_PY="$DIR/openpilot/system/toolbox/c3_toolbox_local.py"
+  [ -f "$TOOLBOX_PY" ] || TOOLBOX_PY="/data/c3_toolbox_local.py"
+  nohup python3 "$TOOLBOX_PY" > /tmp/toolbox.log 2>&1 &
 
   cd openpilot/system/manager
   if [ ! -f $DIR/prebuilt ] && [ ! -f /data/params/d/SkipOnroadCompile ]; then
