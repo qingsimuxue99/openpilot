@@ -6,6 +6,10 @@ Import('env', 'arch', 'common')
 # build the fonts
 generator = File("#openpilot/selfdrive/assets/fonts/process.py")
 source_files = Glob("#openpilot/selfdrive/assets/fonts/*.ttf") + Glob("#openpilot/selfdrive/assets/fonts/*.otf")
+# process.py 会扫 UI 源码的字符串字面量来补字形，所以 UI 的 .py 也算依赖 ——
+# 否则改了文案字体不会重烘，装到的还是缺字的旧图集。
+ui_source_dirs = [Dir("#openpilot/selfdrive/ui"), Dir("#openpilot/system/ui")]
+ui_sources = [File(p) for d in ui_source_dirs if d.exists() for p in sorted(Path(d.abspath).rglob("*.py"))]
 output_files = [
   (f"#{Path(f.path).with_suffix('.fnt')}", f"#{Path(f.path).with_suffix('.png')}")
   for f in source_files
@@ -13,7 +17,7 @@ output_files = [
 ]
 env.Command(
   target=output_files,
-  source=[generator, source_files],
+  source=[generator, source_files] + ui_sources,
   action=f"python3 {generator}",
 )
 

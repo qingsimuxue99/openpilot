@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ast
 from pathlib import Path
 import json
 
@@ -6,8 +7,11 @@ import pyray as rl
 
 FONT_DIR = Path(__file__).resolve().parent
 SELFDRIVE_DIR = FONT_DIR.parents[1]
+OPENPILOT_DIR = SELFDRIVE_DIR.parent
 TRANSLATIONS_DIR = SELFDRIVE_DIR / "ui" / "translations"
 LANGUAGES_FILE = TRANSLATIONS_DIR / "languages.json"
+# 源码里的字符串字面量也算字形来源（见 _ui_source_chars）
+UI_SOURCE_DIRS = (SELFDRIVE_DIR / "ui", OPENPILOT_DIR / "system" / "ui")
 
 GLYPH_PADDING = 6
 EXTRA_CHARS = "–‑✓×°§•X⚙✕◀▶✔⌫⇧␣○●↳çêüñ–‑✓×°§•€£¥"
@@ -21,10 +25,42 @@ def _languages():
     return json.load(f)
 
 
+def _ui_source_chars() -> set:
+  """UI 源码里出现的所有非 ASCII 字符（字符串字面量）。
+
+  本 fork 的中文文案直接写在 .py 里（tr("中文") / tr_noop("中文")），
+  未翻译时按字面显示。这些字符不在 .po 里，只看 .po 会漏掉 → 全新安装显示 "?"。
+  这里取「所有字符串字面量的非 ASCII 字符」这个超集，不去匹配具体调用形式，
+  这样 tr() 怎么导入、怎么嵌套都不会漏。
+  """
+  chars: set = set()
+  files = 0
+  for directory in UI_SOURCE_DIRS:
+    if not directory.is_dir():
+      continue
+    for py in sorted(directory.rglob("*.py")):
+      try:
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+      except (SyntaxError, UnicodeDecodeError, OSError):
+        continue
+      files += 1
+      for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+          chars.update(c for c in node.value if ord(c) > 127)
+
+  print(f"UI source chars: {len(chars)} distinct from {files} .py files")
+  return chars
+
+
 def _char_sets():
   base = set(map(chr, range(32, 127))) | set(EXTRA_CHARS)
   labels = set(base)
   per_lang: dict[str, tuple[int, ...]] = {}
+
+  # 只并入 OpFont(CJK 字体) 用的图集，不动 base —— base 会喂给 Inter 等
+  # 纯拉丁字体，塞汉字进去既浪费烘焙时间又拿不到字形。
+  ui_chars = _ui_source_chars()
+  labels.update(ui_chars)
 
   for language, code in _languages().items():
     labels.update(language)
@@ -34,7 +70,7 @@ def _char_sets():
     except FileNotFoundError:
       continue
     if code in UNIFONT_LANGUAGES:
-      lang_chars = set(base) | chars
+      lang_chars = set(base) | chars | ui_chars
       per_lang[code] = tuple(sorted(ord(c) for c in lang_chars))
     else:
       base.update(chars)
