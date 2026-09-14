@@ -32,12 +32,20 @@ class SoftwareLayoutSP(SoftwareLayout):
   def __init__(self):
     super().__init__()
     self.disable_updates_toggle = toggle_item_sp(
-      lambda: tr("Disable Updates"),
+      lambda: tr("禁用更新"),
       description="",
       initial_state=ui_state.params.get_bool("DisableUpdates"),
       callback=self._on_disable_updates_toggled,
     )
     self._scroller.add_widget(self.disable_updates_toggle)
+
+    self.skip_compile_toggle = toggle_item_sp(
+      lambda: tr("开机跳过编译"),
+      description="",
+      initial_state=ui_state.params.get_bool("SkipOnroadCompile"),
+      callback=self._on_skip_compile_toggled,
+    )
+    self._scroller.add_widget(self.skip_compile_toggle)
 
   def _handle_reboot(self, result):
     if result == DialogResult.CONFIRM:
@@ -47,8 +55,14 @@ class SoftwareLayoutSP(SoftwareLayout):
       self.disable_updates_toggle.action_item.set_state(ui_state.params.get_bool("DisableUpdates"))
 
   def _on_disable_updates_toggled(self, enabled):
-    dialog = ConfirmDialog(tr("System reboot required for changes to take effect. Reboot now?"), tr("Reboot"), callback=self._handle_reboot)
+    dialog = ConfirmDialog(tr("修改后需要重启生效，立即重启？"), tr("重启"), callback=self._handle_reboot)
     gui_app.push_widget(dialog)
+
+  def _on_skip_compile_toggled(self, enabled):
+    ui_state.params.put_bool("SkipOnroadCompile", enabled)
+    if enabled:
+      dialog = ConfirmDialog(tr("开启后开机将跳过编译直接启动，用于预编译版本。修改后重启生效。"), tr("知道了"), callback=None)
+      gui_app.push_widget(dialog)
 
   def _on_select_branch(self):
     current_git_branch = ui_state.params.get("GitBranch") or ""
@@ -56,41 +70,3 @@ class SoftwareLayoutSP(SoftwareLayout):
     branches = [b for b in branches_str.split(",") if b]
     current_target = ui_state.params.get("UpdaterTargetBranch") or ""
     top_level_branches = [current_git_branch, "release-mici", "release-tizi", "staging", "dev", "master"]
-
-    if HARDWARE.get_device_type() == "tici":
-      top_level_branches = ["release-tici", "staging-tici"]
-      branches = [b for b in branches if b.endswith("-tici")]
-
-    top_level_nodes = [TreeNode(b, {'display_name': b}) for b in top_level_branches if b in branches]
-    remaining_branches = [b for b in branches if b not in top_level_branches]
-    prebuilt_nodes = [TreeNode(b, {'display_name': b}) for b in remaining_branches if b.endswith("-prebuilt")]
-    non_prebuilt_nodes = [TreeNode(b, {'display_name': b}) for b in remaining_branches if not b.endswith("-prebuilt")]
-
-    folders = [
-      TreeFolder("", top_level_nodes),
-      TreeFolder("Prebuilt Branches", prebuilt_nodes),
-      TreeFolder("Non-Prebuilt Branches", non_prebuilt_nodes),
-    ]
-
-    def _on_branch_selected(result):
-      if result == DialogResult.CONFIRM and self._branch_dialog is not None:
-        selection = self._branch_dialog.selection_ref
-        if selection:
-          ui_state.params.put("UpdaterTargetBranch", selection)
-          self._branch_btn.action_item.set_value(selection)
-          subprocess.run(["pkill", "-SIGUSR1", "-f", "openpilot.system.updated.updated"], check=False)
-      self._branch_dialog = None
-
-    self._branch_dialog = TreeOptionDialog(tr("Select a branch"), folders, current_target, "",
-                                           on_exit=_on_branch_selected)
-
-    gui_app.push_widget(self._branch_dialog)
-
-  def _update_state(self):
-    super()._update_state()
-    show_advanced = ui_state.params.get_bool("ShowAdvancedControls")
-    self.disable_updates_toggle.action_item.set_enabled(ui_state.is_offroad())
-    self.disable_updates_toggle.set_visible(show_advanced)
-
-    disable_updates_desc = tr(DESCRIPTIONS["disable_updates_offroad"] if ui_state.is_offroad() else DESCRIPTIONS["disable_updates_onroad"])
-    self.disable_updates_toggle.set_description(disable_updates_desc)
