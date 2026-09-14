@@ -16,6 +16,7 @@ from openpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.common.swaglog import cloudlog
 
 from openpilot.sunnypilot.selfdrive.controls.lib.longitudinal_planner import LongitudinalPlannerSP
+from openpilot.sunnypilot.selfdrive.controls.lib.traffic_stop import TrafficStopController, taper_toward_less_conservative_output
 
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
 A_CRUISE_MAX_BP = [0., 10.0, 25., 40.]
@@ -73,6 +74,13 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     self.a_desired_trajectory = np.zeros(CONTROL_N)
     self.j_desired_trajectory = np.zeros(CONTROL_N)
 
+    # CP 移植：红绿灯/停止标志虚拟停止线障碍物
+    self.traffic_stop = TrafficStopController(self.CP, self.dt)
+    # 第 8.13 项：独立追踪「上一帧赢家来源 / 上一帧最终输出」。
+    # 不要共用 a_prev / self.output_a_target —— 它们在本方法中途会被其他用途覆写。
+    self._prev_winning_source = LongitudinalPlanSource.cruise
+    self._prev_output_a_target = float(init_a)
+
   def update(self, sm):
     LongitudinalPlannerSP.update(self, sm)
 
@@ -115,9 +123,19 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     # Get new v_cruise and a_target from Smart Cruise Control and Speed Limit Assist
     v_cruise, self.output_a_target = LongitudinalPlannerSP.update_targets(self, sm, self.v_desired_filter.x, self.output_a_target, v_cruise)
 
+    # CP 移植：红绿灯/停止标志虚拟停止线。
+    # 回传 (虚拟障碍物距离, 软限速)；这是第二层冗余 —— 软限速会喂进 cruise 候选。
+    # 未接管(not reset_state == False)时不注入障碍物也不限速，但状态机与滤波器
+    # 照常运作，因此一接管就能立刻生效，不会因为刚接管而错过已经在接近的红灯。
+    traffic_stop_dist, v_cruise_limited = self.traffic_stop.update(
+      sm, self.v_desired_filter.x, sm['carState'].aEgo, v_cruise, not reset_state)
+    if v_cruise_limited is not None:
+      v_cruise = min(v_cruise, v_cruise_limited)
+
     self.mpc.set_weights(prev_accel_constraint, personality=sm['selfdriveState'].personality)
     self.mpc.set_cur_state(self.v_desired_filter.x, self.output_a_target)
-    self.mpc.update(sm['radarState'], personality=sm['selfdriveState'].personality)
+    self.mpc.update(sm['radarState'], personality=sm['selfdriveState'].personality,
+                    traffic_stop_obstacle=traffic_stop_dist)
 
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
     self.a_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.a_solution)
@@ -147,12 +165,29 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
 
     candidates = [(output_a_target_mpc, self.mpc.source, output_should_stop_mpc),
                   (self.a_cruise, LongitudinalPlanSource.cruise, cruise_should_stop)]
-    if is_e2e:
+    # CP 移植（规格文档第 9 节，选「安全网一律启用」这一支）：
+    # 主动停等中把 e2e 自己的煞车判断从候选池排除，改由带虚拟障碍物的 MPC 候选
+    # 与 v_cruise 软限速主导；其余时间 e2e 照常参与。
+    if is_e2e and not self.traffic_stop.active:
       candidates.append((output_a_target_e2e, LongitudinalPlanSource.e2e, output_should_stop_e2e))
 
     output_a_target, self.mpc.source, _ = min(candidates, key=lambda c: c[0])
     self.output_should_stop = any(should_stop for _, _, should_stop in candidates)
+
+    # 第 8.13 项：上一帧赢家是 e2e、这一帧不是 → 把「变得更不保守」的变化量夹住。
+    # 数学关键 min(A,B,C) <= min(A,B)：候选池变大不可能让结果更不保守，
+    # 所以只有「池变小且少掉的正好是上一帧赢家」这个方向需要修。
+    # 只限制加速方向 —— 任何更保守的候选值 min() 会立刻选中，不受这个函数限制，
+    # 因此这个修正不可能延迟任何真正需要的紧急煞车。
+    winning_source = self.mpc.source
+    if self._prev_winning_source == LongitudinalPlanSource.e2e and winning_source != LongitudinalPlanSource.e2e:
+      j_taper = float(np.interp(v_ego, A_CRUISE_MAX_BP, J_CRUISE_VALS))
+      output_a_target = taper_toward_less_conservative_output(
+        output_a_target, self._prev_output_a_target, j_taper, self.dt)
+    self._prev_winning_source = winning_source
+
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
+    self._prev_output_a_target = float(self.output_a_target)
 
     self.v_desired_filter.x = self.v_desired_filter.x + self.dt * (self.output_a_target + a_prev) / 2.0
 

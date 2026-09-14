@@ -297,4 +297,21 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"TorqueParamsOverrideEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TorqueParamsOverrideFriction", {PERSISTENT | BACKUP, FLOAT, "0.1"}},
     {"TorqueParamsOverrideLatAccelFactor", {PERSISTENT | BACKUP, FLOAT, "2.5"}},
+    // Custom centering features (added 2026-09-14)
+    {"AutoCenteringCorrection", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"CurveCentering", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"SkipOnroadCompile", {PERSISTENT | BACKUP, BOOL, "0"}},
+    // CP 移植：自动开启巡航（点油门 / 靠近前车）
+    {"AutoGasTokSpeed", {PERSISTENT | BACKUP, INT, "0"}},
+    {"CruiseOnDist", {PERSISTENT | BACKUP, INT, "0"}},
+
+    // CP 移植：有车道线时的轨迹颜色（0=关闭; 1-10=CP颜色索引0-9; 11-20=同色+描边）
+    {"ShowPathColorLane", {PERSISTENT | BACKUP, INT, "0"}},
+    // CP 移植：广角/长焦摄像头切换速度（km/h，菜单单位；默认36/54 == 原10/15 m/s）
+    {"WideCamSpeedKph", {PERSISTENT | BACKUP, INT, "36"}},
+    {"TeleCamSpeedKph", {PERSISTENT | BACKUP, INT, "54"}},
+
+    // CP 移植：红绿灯/停止标志虚拟停止线（TrafficStop）
+    {"TrafficStopEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"TrafficStopDistanceAdjust", {PERSISTENT | BACKUP, FLOAT, "0.0"}},
 };

@@ -1,3 +1,5 @@
+import io
+import socket
 import time
 import pyray as rl
 from collections.abc import Callable
@@ -60,6 +62,12 @@ class HomeLayout(Widget):
 
     self._exp_mode_button = ExperimentalModeButton()
     self._setup_callbacks()
+
+    # 网页工具箱二维码：纹理按 URL 缓存，IP 变化时自动重建
+    self._qr_texture = None
+    self._qr_url = ""
+    self._qr_ip: str | None = None
+    self._qr_ip_time = 0.0
 
   def show_event(self):
     super().show_event()
@@ -209,23 +217,106 @@ class HomeLayout(Widget):
     )
     self._render_qr_code(qr_rect)
 
-  def _render_qr_code(self, rect: rl.Rectangle):
-    import socket
-    import qrcode
-    from PIL import Image
-    import io
+  def _get_device_ip(self) -> str:
+    """取设备当前 IPv4。3 秒内复用缓存，因此网络/IP 变化后会自动跟随。"""
+    now = time.monotonic()
+    if self._qr_ip is not None and now - self._qr_ip_time < 3.0:
+      return self._qr_ip
 
-    # 获取设备 IP
+    ip = ""
+
+    # 1) 找默认路由的出口网卡，再直接读该网卡 IPv4（不发包、不依赖外网）
     try:
+      import fcntl
+      import struct
+
+      iface = ""
+      with open("/proc/net/route", encoding="utf-8") as f:
+        next(f)
+        for line in f:
+          cols = line.split()
+          # Destination=00000000 且 Mask=00000000 即默认路由
+          if len(cols) >= 8 and cols[1] == "00000000" and cols[7] == "00000000":
+            iface = cols[0]
+            break
+
+      if iface:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
+        try:
+          # SIOCGIFADDR = 0x8915
+          packed = struct.pack("256s", iface[:15].encode("utf-8"))
+          ip = socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, packed)[20:24])
+        finally:
+          s.close()
     except Exception:
-        ip = "127.0.0.1"
+      ip = ""
 
-    url = f"http://{ip}:5588"
+    # 2) 兜底：UDP connect 探路由（只查路由表，不发包）
+    if not ip or ip.startswith("127."):
+      for target in (("8.8.8.8", 80), ("1.1.1.1", 53), ("192.168.5.1", 80)):
+        try:
+          s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          try:
+            s.connect(target)
+            probe = s.getsockname()[0]
+          finally:
+            s.close()
+          if probe and not probe.startswith("127."):
+            ip = probe
+            break
+        except Exception:
+          continue
 
+    if not ip:
+      ip = "127.0.0.1"
+
+    self._qr_ip = ip
+    self._qr_ip_time = now
+    return ip
+
+  def _get_qr_texture(self, url: str):
+    """按 URL 缓存二维码纹理，只有 URL 变了才重新生成；失败返回 None。"""
+    if url == self._qr_url and self._qr_texture is not None:
+      return self._qr_texture
+
+    if self._qr_texture is not None:
+      try:
+        rl.unload_texture(self._qr_texture)
+      except Exception:
+        pass
+      self._qr_texture = None
+      self._qr_url = ""
+
+    try:
+      import qrcode
+
+      qr = qrcode.QRCode(version=1, box_size=20, border=2)
+      qr.add_data(url)
+      qr.make(fit=True)
+      img = qr.make_image(fill_color="black", back_color="white")
+
+      buf = io.BytesIO()
+      img.save(buf, format="PNG")
+      data = buf.getvalue()
+
+      qr_img = rl.load_image_from_memory(".png", data, len(data))
+      texture = rl.load_texture_from_image(qr_img)
+      rl.unload_image(qr_img)
+
+      if texture.width <= 0 or texture.height <= 0:
+        raise RuntimeError(f"纹理尺寸异常 {texture.width}x{texture.height}")
+
+      rl.set_texture_filter(texture, rl.TEXTURE_FILTER_BILINEAR)
+      self._qr_texture = texture
+      self._qr_url = url
+    except Exception as e:
+      print(f"[home] 二维码生成失败: {type(e).__name__}: {e}")
+      self._qr_texture = None
+      self._qr_url = ""
+
+    return self._qr_texture
+
+  def _render_qr_code(self, rect: rl.Rectangle):
     # 画背景
     rl.draw_rectangle_rounded(rect, 0.1, 20, rl.Color(30, 30, 30, 255))
 
@@ -238,35 +329,34 @@ class HomeLayout(Widget):
     title_y = int(rect.y + 20)
     rl.draw_text_ex(title_font, title, rl.Vector2(title_x, title_y), title_size, 0, rl.WHITE)
 
+    # 设备当前 IP（网络变化后自动跟随）
+    ip = self._get_device_ip()
+    url = f"http://{ip}:5588"
+
     # 二维码大小
-    qr_size = min(rect.width - 80, rect.height - 120)
+    qr_size = max(1, int(min(rect.width - 80, rect.height - 120)))
     qr_x = int(rect.x + (rect.width - qr_size) / 2)
     qr_y = int(rect.y + 80)
 
-    # 生成二维码
-    qr = qrcode.QRCode(version=1, box_size=10, border=2)
-    qr.add_data(url)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-
-    # 保存为 PNG 到内存
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-
-    # 加载纹理
-    texture = rl.load_texture_from_memory(".png", buf.getvalue(), len(buf.getvalue()))
-    rl.gen_texture_mipmaps(texture)
-    rl.set_texture_filter(texture, rl.TEXTURE_FILTER_BILINEAR)
-
-    # 画二维码
-    rl.draw_texture_pro(
-      texture,
-      rl.Rectangle(0, 0, texture.width, texture.height),
-      rl.Rectangle(qr_x, qr_y, qr_size, qr_size),
-      rl.Vector2(0, 0), 0, rl.WHITE
-    )
-    rl.unload_texture(texture)
+    # 画二维码（纹理按 URL 缓存）
+    texture = self._get_qr_texture(url)
+    if texture is not None:
+      rl.draw_texture_pro(
+        texture,
+        rl.Rectangle(0, 0, texture.width, texture.height),
+        rl.Rectangle(qr_x, qr_y, qr_size, qr_size),
+        rl.Vector2(0, 0), 0, rl.WHITE
+      )
+    else:
+      msg_font = gui_app.font(FontWeight.NORMAL)
+      msg = "二维码生成失败"
+      msg_size = 32
+      msg_w = measure_text_cached(msg_font, msg, msg_size).x
+      rl.draw_text_ex(
+        msg_font, msg,
+        rl.Vector2(int(rect.x + (rect.width - msg_w) / 2), int(qr_y + qr_size / 2)),
+        msg_size, 0, rl.Color(201, 34, 49, 255)
+      )
 
     # URL 文字
     url_font = gui_app.font(FontWeight.NORMAL)

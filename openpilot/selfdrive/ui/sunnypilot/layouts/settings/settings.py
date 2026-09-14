@@ -24,6 +24,7 @@ from openpilot.selfdrive.ui.sunnypilot.layouts.settings.sunnylink import Sunnyli
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.trips import TripsLayout
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.vehicle import VehicleLayout
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.visuals import VisualsLayout
+from openpilot.selfdrive.ui.sunnypilot.layouts.settings.features import FeaturesLayout
 from openpilot.system.ui.lib.application import gui_app, MousePos
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -50,6 +51,7 @@ OP.PanelType = IntEnum(  # type: ignore[assignment] # ty: ignore[invalid-assignm
     "NAVIGATION",
     "TRIPS",
     "VEHICLE",
+    "FEATURES",
   ],
   start=0,
 )
@@ -112,6 +114,7 @@ class SettingsLayoutSP(OP.SettingsLayout):
       OP.PanelType.DEVICE: PanelInfo(tr("Device"), DeviceLayoutSP(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_home.png"),
       OP.PanelType.NETWORK: PanelInfo(tr("Network"), NetworkUISP(wifi_manager), icon="icons/network.png"),
       OP.PanelType.SUNNYLINK: PanelInfo(tr("sunnylink"), SunnylinkLayout(), icon="icons/wifi_strength_full.png"),
+      OP.PanelType.FEATURES: PanelInfo(tr("功能"), FeaturesLayout(), icon="icons/road.png"),
       OP.PanelType.TOGGLES: PanelInfo(tr("Toggles"), TogglesLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_toggle.png"),
       OP.PanelType.SOFTWARE: PanelInfo(tr("Software"), SoftwareLayoutSP(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_software.png"),
       OP.PanelType.MODELS: PanelInfo(tr("Models"), ModelsLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_models.png"),

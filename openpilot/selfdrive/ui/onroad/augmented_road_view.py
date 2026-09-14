@@ -33,6 +33,7 @@ BORDER_COLORS = {
   **BORDER_COLORS_SP,
 }
 
+# 默认值（m/s）。CP 移植后可在「功能」菜单用 km/h 覆盖：WideCamSpeedKph / TeleCamSpeedKph。
 WIDE_CAM_MAX_SPEED = 10.0  # m/s (22 mph)
 ROAD_CAM_MIN_SPEED = 15.0  # m/s (34 mph)
 INF_POINT = np.array([1000.0, 0.0, 0.0])
@@ -56,6 +57,12 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
     self._hud_renderer = HudRenderer()
     self.alert_renderer = AlertRenderer()
     self.driver_state_renderer = DriverStateRenderer()
+
+    # CP 移植：广角/长焦摄像头切换速度（参数值 km/h，内部换算成 m/s）
+    self._cam_speed_counter = 0
+    self._wide_cam_speed_ms = WIDE_CAM_MAX_SPEED
+    self._road_cam_speed_ms = ROAD_CAM_MIN_SPEED
+    self._refresh_cam_speed_params()
 
   def _render(self, rect):
     # Only render when system is started to avoid invalid data access
@@ -119,12 +126,29 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
                                rect.width - 2 * UI_BORDER_SIZE, rect.height - 2 * UI_BORDER_SIZE)
     rl.draw_rectangle_rounded_lines_ex(border_rect, border_roundness, 10, UI_BORDER_SIZE, border_color)
 
+  def _refresh_cam_speed_params(self):
+    """CP 移植：读取广角/长焦摄像头切换速度（菜单单位 km/h -> 内部 m/s）。"""
+    try:
+      wide_kph = float(ui_state.params.get("WideCamSpeedKph", return_default=True))
+      tele_kph = float(ui_state.params.get("TeleCamSpeedKph", return_default=True))
+      self._wide_cam_speed_ms = max(0.0, wide_kph) / 3.6
+      self._road_cam_speed_ms = max(0.0, tele_kph) / 3.6
+    except Exception:
+      # 参数不可用时回落到编译期默认值
+      self._wide_cam_speed_ms = WIDE_CAM_MAX_SPEED
+      self._road_cam_speed_ms = ROAD_CAM_MIN_SPEED
+
   def _switch_stream_if_needed(self, sm):
+    # 参数每 60 帧刷新一次（约 1 秒），避免每帧读 Params
+    if self._cam_speed_counter % 60 == 0:
+      self._refresh_cam_speed_params()
+    self._cam_speed_counter += 1
+
     if sm['selfdriveState'].experimentalMode and WIDE_CAM in self.available_streams:
       v_ego = sm['carState'].vEgo
-      if v_ego < WIDE_CAM_MAX_SPEED:
+      if self._wide_cam_speed_ms > 0.0 and v_ego < self._wide_cam_speed_ms:
         target = WIDE_CAM
-      elif v_ego > ROAD_CAM_MIN_SPEED:
+      elif self._road_cam_speed_ms > 0.0 and v_ego > self._road_cam_speed_ms:
         target = NARROW_ROAD_CAM
       else:
         # Hysteresis zone - keep current stream

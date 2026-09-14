@@ -82,6 +82,24 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
       cp = messaging.log_from_bytes(car_params, car.CarParams)
       self._longitudinal_control = cp.openpilotLongitudinalControl
 
+    # CP 移植：有车道线时的轨迹颜色（ShowPathColorLane）
+    # 颜色表与 carrotpilot 的 _carrot_colors 一致（注意：CP 菜单文字描述有误，以代码为准）
+    self._lane_path_colors = [
+      rl.Color(255, 0, 0, 120),      # 0 红
+      rl.Color(255, 153, 0, 120),    # 1 橙
+      rl.Color(218, 202, 37, 120),   # 2 黄
+      rl.Color(0, 153, 0, 120),      # 3 绿
+      rl.Color(0, 0, 255, 120),      # 4 蓝
+      rl.Color(0, 0, 128, 120),      # 5 深蓝
+      rl.Color(0x8B, 0, 0xFF, 120),  # 6 紫
+      rl.Color(218, 111, 37, 120),   # 7 棕
+      rl.Color(255, 255, 255, 120),  # 8 白
+      rl.Color(0, 0, 0, 120),        # 9 黑
+    ]
+    self._lane_path_color = 0
+    self._lane_path_color_counter = 0
+    self._refresh_lane_path_color()
+
   def set_transform(self, transform: np.ndarray):
     self._car_space_transform = transform.astype(np.float32)
     self._transform_dirty = True
@@ -108,6 +126,11 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
     if self._counter % 60 == 0:
       self._camera_offset = ui_state.params.get("CameraOffset", return_default=True) if ui_state.active_bundle else 0.0
     self._counter += 1
+
+    # CP 移植：车道线轨迹颜色参数也按 1 秒节奏刷新
+    if self._lane_path_color_counter % 60 == 0:
+      self._refresh_lane_path_color()
+    self._lane_path_color_counter += 1
 
     if sm.updated['carParams']:
       self._longitudinal_control = sm['carParams'].openpilotLongitudinalControl
@@ -296,6 +319,11 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
       self.rainbow_path.draw_rainbow_path(self._rect, self._path)
       return
 
+    # CP 移植：识别到车道线时，轨迹改用参数指定的颜色
+    if self._lane_path_color > 0 and self._has_lane_lines():
+      self._draw_lane_path_color()
+      return
+
     if self._experimental_mode:
       # Draw with acceleration coloring
       if len(self._exp_gradient.colors) > 1:
@@ -313,6 +341,42 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
         stops=[0.0, 0.5, 1.0],
       )
       draw_polygon(self._rect, self._path.projected_points, gradient=gradient)
+
+  def _refresh_lane_path_color(self):
+    """CP 移植：读取「有车道线时的轨迹颜色」参数。"""
+    try:
+      self._lane_path_color = int(ui_state.params.get("ShowPathColorLane", return_default=True))
+    except Exception:
+      self._lane_path_color = 0
+
+  def _has_lane_lines(self) -> bool:
+    """当前模型是否稳定识别到左右车道线（laneLineProbs 的 1/2 号位）。"""
+    try:
+      if len(self._lane_line_probs) < 3:
+        return False
+      return bool(self._lane_line_probs[1] > 0.5 and self._lane_line_probs[2] > 0.5)
+    except Exception:
+      return False
+
+  def _draw_lane_path_color(self):
+    """CP 移植：用参数指定的颜色绘制轨迹。参数值 = CP 索引 + 1，>10 表示带描边。"""
+    idx = (self._lane_path_color - 1) % 10
+    color = self._lane_path_colors[idx]
+    pts = self._path.projected_points
+    draw_polygon(self._rect, pts, color)
+
+    if self._lane_path_color > 10:
+      # 描边：沿轨迹左右两条边各画一条实色线
+      n = len(pts) // 2
+      stroke = rl.Color(color.r, color.g, color.b, 255)
+      for chain in (pts[:n], pts[n:][::-1]):
+        limit = min(len(chain), 80)
+        for i in range(limit - 1):
+          rl.draw_line_ex(
+            rl.Vector2(float(chain[i][0]), float(chain[i][1])),
+            rl.Vector2(float(chain[i + 1][0]), float(chain[i + 1][1])),
+            2.0, stroke,
+          )
 
   def _draw_lead_indicator(self):
     # Draw lead vehicles if available

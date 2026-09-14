@@ -58,35 +58,15 @@ class MetricData:
 
 class SidebarSP:
   def __init__(self):
-    self._sunnylink_status = MetricData(tr_noop("SUNNYLINK"), tr_noop("OFFLINE"), Colors.WARNING)
+    self._sunnylink_status = MetricData(tr_noop("联网"), tr_noop("永久在线"), Colors.GOOD)
     self._chestnut_green_img = gui_app.texture("icons_mici/chestnut_green.png", CHESTNUT_ICON_WIDTH, CHESTNUT_ICON_HEIGHT)
     self._chestnut_default_img = gui_app.texture("icons_mici/chestnut.png", CHESTNUT_ICON_WIDTH, CHESTNUT_ICON_HEIGHT)
     self._chestnut_orange_img = gui_app.texture("icons_mici/chestnut_orange.png", CHESTNUT_ICON_WIDTH, CHESTNUT_ICON_HEIGHT)
     self._egpu_offline_img = gui_app.texture("icons_mici/egpu_offline.png", CHESTNUT_ICON_WIDTH, CHESTNUT_ICON_HEIGHT)
 
   def _update_sunnylink_status(self):
-    if not ui_state.params.get_bool("SunnylinkEnabled"):
-      self._sunnylink_status.update(tr_noop("SUNNYLINK"), tr_noop("DISABLED"), Colors.DISABLED)
-      return
-
-    last_ping = ui_state.params.get("LastSunnylinkPingTime") or 0
-    dongle_id = ui_state.params.get("SunnylinkDongleId")
-
-    is_online = last_ping and (time.monotonic_ns() - last_ping) < PING_TIMEOUT_NS
-    is_temp_fault = ui_state.params.get_bool("SunnylinkTempFault")
-    is_registering = not is_temp_fault and dongle_id in (None, "", UNREGISTERED_SUNNYLINK_DONGLE_ID)
-
-    # Determine status/color pair based on priority
-    if last_ping:
-      status, color = (tr_noop("ONLINE"), Colors.GOOD) if is_online else (tr_noop("ERROR"), Colors.DANGER)
-    elif is_temp_fault:
-      status, color = (tr_noop("FAULT"), Colors.WARNING)
-    elif is_registering:
-      status, color = (tr_noop("REGIST..."), Colors.PROGRESS)
-    else:
-      status, color = (tr_noop("OFFLINE"), Colors.DANGER)
-
-    self._sunnylink_status.update(tr_noop("SUNNYLINK"), status, color)
+    # 卡片固定显示「永久在线」（不再显示 离线/注册中/异常/已禁用）
+    self._sunnylink_status.update(tr_noop("联网"), tr_noop("永久在线"), Colors.GOOD)
 
   def _get_home_icon(self, default_img: rl.Texture) -> tuple[rl.Texture, rl.Vector2, float]:
     state = ui_state.chestnut_state

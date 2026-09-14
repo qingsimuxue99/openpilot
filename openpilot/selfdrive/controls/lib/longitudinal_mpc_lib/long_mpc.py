@@ -311,7 +311,7 @@ class LongitudinalMpc:
     lead_xv = self.extrapolate_lead(x_lead, v_lead, a_lead, a_lead_tau)
     return lead_xv
 
-  def update(self, radarstate, personality=log.LongitudinalPersonality.standard):
+  def update(self, radarstate, personality=log.LongitudinalPersonality.standard, traffic_stop_obstacle=None):
     t_follow = get_T_FOLLOW(personality)
 
     lead_xv_0 = self.process_lead(radarstate.leadOne)
@@ -325,6 +325,13 @@ class LongitudinalMpc:
 
     x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle])
     self.source = MPC_SOURCES[np.argmin(x_obstacles[0])]
+
+    # CP 移植：红绿灯/停止标志虚拟停止线（规格文档第 7 节架构 B）。
+    # 虚拟障碍物本身是静止的，不需要 get_stopped_equivalence_factor 转换，
+    # 直接作为额外一列参与每帧的 min()。source 仍只由 lead0/lead1 决定
+    # （不新增 cereal enum，保持最小改动 + 不触发全量 C++ 重建）。
+    if traffic_stop_obstacle is not None:
+      x_obstacles = np.column_stack([x_obstacles, np.full(N + 1, float(traffic_stop_obstacle))])
 
     self.yref[:,:] = 0.0
     for i in range(N):

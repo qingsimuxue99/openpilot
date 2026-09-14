@@ -21,6 +21,7 @@ from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper, V_CRUISE_MAX
+from openpilot.sunnypilot.selfdrive.car.carrot_cruise_engage import CarrotCruiseEngage
 from openpilot.selfdrive.car.helpers import convert_carControlSP, convert_to_capnp
 
 from openpilot.sunnypilot.mads.helpers import set_alternative_experience, set_car_specific_params
@@ -87,7 +88,7 @@ class Car:
 
   def __init__(self, CI=None, RI=None) -> None:
     self.can_sock = messaging.sub_sock('can', timeout=20)
-    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents'] + ['carControlSP', 'longitudinalPlanSP'])
+    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'radarState'] + ['carControlSP', 'longitudinalPlanSP'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'] + ['carParamsSP', 'carStateSP'])
 
     self.can_rcv_cum_timeout_counter = 0
@@ -195,6 +196,7 @@ class Car:
     self.params.put("CarParamsSPPersistent", cp_sp_bytes)
 
     self.v_cruise_helper = VCruiseHelper(self.CP, self.CP_SP)
+    self.carrot_cruise_engage = CarrotCruiseEngage(self.CP, self.CP_SP)
 
     self.is_metric = self.params.get_bool("IsMetric")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
@@ -243,6 +245,7 @@ class Car:
 
     self.v_cruise_helper.update_speed_limit_assist(self.is_metric, self.sm['longitudinalPlanSP'])
     self.v_cruise_helper.update_v_cruise(CS, self.sm['carControl'].enabled, self.is_metric)
+    self._update_carrot_cruise_engage(CS)
     if self.sm['carControl'].enabled and not self.CC_prev.enabled:
       # Use CarState w/ buttons from the step selfdrived enables on
       self.v_cruise_helper.initialize_v_cruise(self.CS_prev, self.experimental_mode, self.dynamic_experimental_control)
@@ -262,6 +265,23 @@ class Car:
       CS.vCruiseCluster = float(self.v_cruise_helper.v_cruise_cluster_kph)
 
     return CS, CS_SP, RD
+
+  def _update_carrot_cruise_engage(self, CS: car.CarState) -> None:
+    """CP 移植：点油门 / 靠近前车 -> 自动开启巡航。
+
+    判定结果直接写到同进程的 CarController 上（不经过 cereal schema），
+    由 hyundai carcontroller 负责模拟按下 RES+ 按键。
+    """
+    try:
+      engage = self.carrot_cruise_engage.update(CS, self.sm, self.sm['carControl'], self.is_metric)
+    except Exception as e:
+      if self.sm.frame % 500 == 0:
+        print(f"[card] carrot cruise engage error: {type(e).__name__}: {e}")
+      return
+
+    cc = self.CI.CC
+    if cc is not None:
+      cc.carrot_activate_cruise = engage
 
   def state_publish(self, CS: car.CarState, CS_SP: custom.CarStateSP, RD: structs.RadarDataT | None):
     """carState and carParams publish loop"""

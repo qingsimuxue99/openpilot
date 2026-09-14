@@ -742,16 +742,12 @@ class GuiApplication(GuiApplicationExt):
       else:
         filename = font_weight.value
       with as_file(FONT_DIR) as fspath:
-        # 中文改用 unifont.otf（矢量字体，支持所有 Unicode 字符）
-        if multilang.requires_unifont() and self._active_lang_code.startswith('zh'):
-          font = rl.load_font_ex(fspath / "unifont.otf", 32, None, 0)
-        else:
+        fnt_path = fspath / filename
+        # Fall back to Regular weight if requested weight doesn't exist
+        if not fnt_path.exists() and multilang.requires_unifont():
+          filename = f"OpFont-Regular-{self._active_lang_code}.fnt"
           fnt_path = fspath / filename
-          # Fall back to Regular weight if requested weight doesn't exist
-          if not fnt_path.exists() and multilang.requires_unifont():
-            filename = f"OpFont-Regular-{self._active_lang_code}.fnt"
-            fnt_path = fspath / filename
-          font = rl.load_font(fnt_path.as_posix())
+        font = rl.load_font(fnt_path.as_posix())
         rl.set_texture_filter(font.texture, rl.TextureFilter.TEXTURE_FILTER_BILINEAR)
         self._fonts[font_weight] = font
     return self._fonts[font_weight]
