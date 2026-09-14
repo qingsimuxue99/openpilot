@@ -18,11 +18,12 @@ from openpilot.selfdrive.controls.lib.latcontrol_pid import LatControlPID
 from openpilot.selfdrive.controls.lib.latcontrol_angle import LatControlAngle, STEER_ANGLE_SATURATION_THRESHOLD
 from openpilot.selfdrive.controls.lib.latcontrol_curvature import LatControlCurvature
 from openpilot.selfdrive.controls.lib.latcontrol_torque import LatControlTorque
-from openpilot.selfdrive.controls.lib.longcontrol import LongControl
+from openpilot.selfdrive.controls.lib.longcontrol import LongControl, LongCtrlState
 from openpilot.selfdrive.modeld.modeld import LAT_SMOOTH_SECONDS
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 
 from openpilot.sunnypilot.selfdrive.controls.controlsd_ext import ControlsExt
+from openpilot.sunnypilot.selfdrive.car.carrot_accel_tuning import limit_accel_rate
 
 State = log.SelfdriveState.OpenpilotState
 LaneChangeState = log.LaneChangeState
@@ -52,6 +53,9 @@ class Controls(ControlsExt):
     self.steer_limited_by_safety = False
     self.curvature = 0.0
     self.desired_curvature = 0.0
+
+    # CP 移植：加速度变化率限制的状态（见 sunnypilot/selfdrive/car/carrot_accel_tuning.py）
+    self._accel_smoothed: float | None = None
 
     self.pose_calibrator = PoseCalibrator()
     self.calibrated_pose: Pose | None = None
@@ -137,6 +141,15 @@ class Controls(ControlsExt):
     override_longitudinal = any(e.overrideLongitudinal for e in self.sm['onroadEvents'])
     actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop,
                                             pid_accel_limits, freeze_integrator=override_longitudinal))
+
+    # CP 移植：加速度变化率限制（一阶斜率限制）。
+    # 原本在 opendbc 子模块 hyundai/carcontroller.py::update() 里，为了让子模块保持与
+    # 上游一致、仓库可以 clone --recursive 直装，搬到父仓库。这里才是 actuators.accel 的
+    # 产生处，同样是 100 Hz。品牌 clamp 区间 CarControllerParams.ACCEL_MIN/MAX(-3.5/2.0)
+    # 与 planner 上游 ACCEL_MIN/MAX 完全相同、实际不生效，所以先限幅再 clamp 等价。
+    self._accel_smoothed = limit_accel_rate(actuators.accel, self._accel_smoothed, CS.aEgo,
+                                            actuators.longControlState == LongCtrlState.stopping)
+    actuators.accel = float(self._accel_smoothed)
 
     # Steering PID loop and lateral MPC
     # Reset desired curvature to current to avoid violating the limits on engage

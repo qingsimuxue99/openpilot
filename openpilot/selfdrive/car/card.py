@@ -22,6 +22,7 @@ from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper, V_CRUISE_MAX
 from openpilot.sunnypilot.selfdrive.car.carrot_cruise_engage import CarrotCruiseEngage
+from openpilot.sunnypilot.selfdrive.car.carrot_accel_tuning import install_jerk_hook, set_long_control_state
 from openpilot.selfdrive.car.helpers import convert_carControlSP, convert_to_capnp
 
 from openpilot.sunnypilot.mads.helpers import set_alternative_experience, set_car_specific_params
@@ -198,6 +199,13 @@ class Car:
     self.v_cruise_helper = VCruiseHelper(self.CP, self.CP_SP)
     self.carrot_cruise_engage = CarrotCruiseEngage(self.CP, self.CP_SP)
 
+    # CP 移植：ACC jerk 上限收紧(1.5/0.5)。装在调用点是因为 jerk 在 opendbc 子模块内部
+    # 算完就直传了；带启动自检，上游签名一变就只是不安装 + 打日志，不会静默改错东西。
+    try:
+      install_jerk_hook()
+    except Exception as e:
+      print(f"[card] install_jerk_hook failed: {type(e).__name__}: {e}")
+
     self.is_metric = self.params.get_bool("IsMetric")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
 
@@ -334,6 +342,8 @@ class Car:
     if self.sm.all_alive(['carControl']):
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
+      # CP 移植：把本帧的 longControlState 递给 jerk hook（子模块原本直接读 actuators）
+      set_long_control_state(CC.actuators.longControlState)
       self.last_actuators_output, can_sends = self.CI.apply(CC, convert_carControlSP(CC_SP), now_nanos)
       # CP 移植：自动开启巡航的模拟按键报文。
       # 判定在 state_update() 里完成；两者在同一个 step() 内顺序执行、同帧同线程，
