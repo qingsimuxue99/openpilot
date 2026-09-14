@@ -12,14 +12,17 @@ CP(carrotpilot) 功能移植 —— 自动开启巡航判定：
   2) CruiseOnDist     定速-自动开启距离
      巡航未开启时，与前车距离小于该值（米）-> 请求开启巡航
 
-本模块只负责「要不要开巡航」的判定，不做任何 CAN 发送。
-真正的按键由同进程（card.py）里的 Hyundai CarController 读取
-`self.carrot_activate_cruise` 后模拟按下 RES+ 实现，
-见 opendbc/car/hyundai/carcontroller.py::create_carrot_engage_messages。
+本模块负责两件事：
+  a) 判定「要不要开巡航」            —— update() / _update_gas_tok() / _lead_distance()
+  b) 把判定结果翻译成模拟按下 RES+ 的 CAN 报文 —— create_engage_messages()
+
+两者都在父仓库完成，**opendbc 子模块保持与上游完全一致**，
+因此 `git clone --recursive` 直装即可生效，不依赖任何子模块改动。
 
 之所以不改 cereal 的 CarState 结构（CP 是加 activateCruise 字段），
-是因为改动 capnp schema 需要重建全部 C++ 目标；而 card.py 与 CarController
-同进程，直接传属性即可，既不碰 schema 也不影响其他车型。
+是因为改动 capnp schema 需要重建全部 C++ 目标；而 card.py 的 state_update()
+（判定）与 controls_update()（发送）在同一个 step() 内顺序执行、同帧同线程，
+所以直接在 card.py 里把报文追加到 can_sends 即可，既不碰 schema 也不影响其他车型。
 """
 from openpilot.common.constants import CV
 from openpilot.common.params import Params
@@ -30,6 +33,25 @@ GAS_TOK_HOLD = int(0.3 / DT_CTRL)       # 判定成立后的保持时间：0.3 s
 PARAM_REFRESH_FRAMES = 10               # 参数刷新周期（100 Hz -> 10 Hz）
 MIN_ENGAGE_SPEED_KPH = 10.0             # 无前车时按下巡航键的最低车速（与 CP 一致）
 MAX_STEERING_ANGLE_DEG = 70.0           # 方向盘角度过大时不介入（与 CP 一致）
+
+
+ENGAGE_BUTTON_MIN_INTERVAL_S = 0.5      # 两次模拟按键的最短间隔（与 CP 的按键节奏一致）
+ENGAGE_BUTTON_SENDS = 25                # 非 CANFD：连续发 25 帧 CLU11
+ENGAGE_BUTTON_SENDS_CANFD = 20          # CANFD：连续发 20 帧 CRUISE_BUTTONS
+ENGAGE_BUTTON_BRANDS = ("hyundai", "kia", "genesis")
+
+# 惰性加载：只有真的要发按键时才 import hyundai 的 CAN 构造器，
+# 避免非 HKG 车型白白付出 import 开销、也避免 import 失败影响判定逻辑。
+_CAN_MODULES = None
+
+
+def _load_can_modules():
+  global _CAN_MODULES
+  if _CAN_MODULES is None:
+    from opendbc.car.hyundai import hyundaican, hyundaicanfd
+    from opendbc.car.hyundai.values import Buttons, HyundaiFlags
+    _CAN_MODULES = (hyundaican, hyundaicanfd, Buttons, HyundaiFlags)
+  return _CAN_MODULES
 
 
 class CarrotCruiseEngage:
@@ -48,6 +70,7 @@ class CarrotCruiseEngage:
     self._gas_frames = 0            # 油门连续按住的帧数
     self._gas_tok = False
     self._gas_tok_left = 0
+    self._last_button_frame = 0     # 上次发送模拟按键时的 CarController 帧号
 
   @property
   def enabled(self) -> bool:
@@ -96,7 +119,71 @@ class CarrotCruiseEngage:
       pass
     return 0.0
 
-  def update(self, CS, sm, CC, is_metric: bool) -> int:
+  def create_engage_messages(self, cs, cc, cp) -> list:
+    """把本帧的开启请求翻译成「模拟按下 RES+」的 CAN 报文。
+
+    这是从 opendbc/car/hyundai/carcontroller.py::create_carrot_engage_messages
+    1:1 平移过来的（只把隐式 self 换成显式传入的 cs / cc / cp），
+    判据、报文数量、0.5 s 节流、清除时机全部保持原样。
+    搬回父仓库是为了让 opendbc 子模块保持与上游一致、仓库可直接安装。
+
+    cs : 平台 CarState（card.py 的 self.CI.CS）—— 提供 out / clu11 / buttons_counter
+    cc : CarController 实例（card.py 的 self.CI.CC）—— 提供 packer / CAN / frame
+    cp : CarParams —— 提供 brand / flags
+
+    返回要追加到 can_sends 的报文列表（可能为空）。本函数不做任何判定。
+    """
+    if self.engage <= 0:
+      return []
+
+    # 发出去之前再确认一次：有踏板动作、或巡航已经开了，就放弃
+    out = getattr(cs, "out", None)
+    if out is None or out.gasPressed or out.brakePressed or out.cruiseState.enabled:
+      self.engage = 0
+      return []
+
+    if cc is None or getattr(cp, "brand", None) not in ENGAGE_BUTTON_BRANDS:
+      return []
+
+    # 与 CP 一致：最短 0.5 s 间隔（cc.frame 每个控制周期 +1，即 100 Hz）
+    frame = int(getattr(cc, "frame", 0))
+    if (frame - self._last_button_frame) * DT_CTRL < ENGAGE_BUTTON_MIN_INTERVAL_S:
+      return []
+
+    packer = getattr(cc, "packer", None)
+    if packer is None:
+      return []
+
+    try:
+      hyundaican, hyundaicanfd, Buttons, HyundaiFlags = _load_can_modules()
+    except Exception:
+      return []
+
+    can_sends = []
+    try:
+      if cp.flags & HyundaiFlags.CANFD:
+        can_bus = getattr(cc, "CAN", None)
+        if can_bus is None:
+          return []
+        counter = int(getattr(cs, "buttons_counter", 0)) + 1
+        for _ in range(ENGAGE_BUTTON_SENDS_CANFD):
+          can_sends.append(hyundaicanfd.create_buttons(packer, cp, can_bus, counter, Buttons.RES_ACCEL))
+      else:
+        clu11 = getattr(cs, "clu11", None)
+        if clu11 is None:
+          return []
+        for _ in range(ENGAGE_BUTTON_SENDS):
+          can_sends.append(hyundaican.create_clu11(packer, frame, clu11, Buttons.RES_ACCEL, cp))
+    except Exception as e:
+      if self.frame % 500 == 0:
+        print(f"[CarrotCruiseEngage] 生成开启巡航按键报文失败: {type(e).__name__}: {e}")
+      return []
+
+    self._last_button_frame = frame
+    self.engage = 0
+    return can_sends
+
+  def update(self, CS, sm, CC, is_metric: int) -> int:
     """每帧（100 Hz）调用，返回 1 表示请求开启巡航。"""
     self.frame += 1
     if self.frame % PARAM_REFRESH_FRAMES == 0:

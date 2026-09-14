@@ -267,21 +267,17 @@ class Car:
     return CS, CS_SP, RD
 
   def _update_carrot_cruise_engage(self, CS: car.CarState) -> None:
-    """CP 移植：点油门 / 靠近前车 -> 自动开启巡航。
+    """CP 移植：点油门 / 靠近前车 -> 自动开启巡航（判定部分）。
 
-    判定结果直接写到同进程的 CarController 上（不经过 cereal schema），
-    由 hyundai carcontroller 负责模拟按下 RES+ 按键。
+    判定结果保留在 CarrotCruiseEngage 内部，不经过 cereal schema；
+    真正的模拟按键报文由 controls_update() 追加到 can_sends。
+    这样 opendbc 子模块无需任何改动，仓库可以 clone --recursive 直装。
     """
     try:
-      engage = self.carrot_cruise_engage.update(CS, self.sm, self.sm['carControl'], self.is_metric)
+      self.carrot_cruise_engage.update(CS, self.sm, self.sm['carControl'], self.is_metric)
     except Exception as e:
       if self.sm.frame % 500 == 0:
         print(f"[card] carrot cruise engage error: {type(e).__name__}: {e}")
-      return
-
-    cc = self.CI.CC
-    if cc is not None:
-      cc.carrot_activate_cruise = engage
 
   def state_publish(self, CS: car.CarState, CS_SP: custom.CarStateSP, RD: structs.RadarDataT | None):
     """carState and carParams publish loop"""
@@ -339,6 +335,19 @@ class Car:
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
       self.last_actuators_output, can_sends = self.CI.apply(CC, convert_carControlSP(CC_SP), now_nanos)
+      # CP 移植：自动开启巡航的模拟按键报文。
+      # 判定在 state_update() 里完成；两者在同一个 step() 内顺序执行、同帧同线程，
+      # 所以直接取本帧的判定结果即可。报文在父仓库生成，opendbc 子模块保持上游原样。
+      # 防御：即使将来 opendbc 升级改了 API，最坏也只是不发按键，绝不打断 card 主循环。
+      # 另外只有真的要发按键时才拼接，平时零额外分配。
+      try:
+        engage_msgs = self.carrot_cruise_engage.create_engage_messages(self.CI.CS, self.CI.CC, self.CP)
+      except Exception as e:
+        engage_msgs = []
+        if self.sm.frame % 500 == 0:
+          print(f"[card] carrot engage can error: {type(e).__name__}: {e}")
+      if engage_msgs:
+        can_sends = list(can_sends) + engage_msgs
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
       self.CC_prev = CC
