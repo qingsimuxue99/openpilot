@@ -1,0 +1,11 @@
+{
+  "channel": "release",
+  "openpilot": {
+    "version": "0.9.9",
+    "release_notes": "CP prebuilt release 2026-09-14 (fix version.h)",
+    "git_commit": "d4250ba",
+    "git_origin": "https://github.com/qingsimuxue99/openpilot",
+    "git_commit_date": "2026-09-14",
+    "build_style": "prebuilt"
+  }
+}

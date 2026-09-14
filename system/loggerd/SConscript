@@ -1,0 +1,42 @@
+Import('env', 'arch', 'messaging', 'common', 'visionipc')
+
+
+# Vendored ffmpeg (shared with selfdrive/ui/qt/screenrecorder/ffmpeg,
+# committed in 43c51f7). 不复制, 复用同一目录.
+ffmpeg_root = '../../selfdrive/ui/qt/screenrecorder/ffmpeg'
+env['CPPPATH'] += [ffmpeg_root + '/include']
+env['LIBPATH'] = [ffmpeg_root + '/lib'] + env.get('LIBPATH', [])
+# rpath 用 $ORIGIN(二进制所在目录)相对定位 vendored ffmpeg: 不绑定安装路径,
+# worktree / 异路径构建同样有效.
+# 注意: scons 经 /bin/sh -c 执行命令, 裸 $ORIGIN 会被 shell 当变量展开为空,
+# 必须用 shell 单引号包住; 若不带引号, RUNPATH 会退化成 /qt/... 这种无效路径.
+# rpath-link 仅链接期使用($ORIGIN 在链接期不展开), 保留绝对路径.
+env.Append(LINKFLAGS=['-Wl,-rpath,\'$$ORIGIN/../../selfdrive/ui/qt/screenrecorder/ffmpeg/lib\'',
+                      '-Wl,-rpath-link,/data/openpilot/selfdrive/ui/qt/screenrecorder/ffmpeg/lib',
+                      # swresample/x264 强保留为直接 NEEDED(见 ui/SConscript 同款注释)
+                      '-Wl,--no-as-needed'])
+libs = [common, messaging, visionipc,
+        'avformat', 'avcodec', 'avutil',
+        'swresample', 'x264',
+        'yuv', 'OpenCL', 'pthread', 'zstd']
+
+src = ['logger.cc', 'zstd_writer.cc', 'video_writer.cc', 'encoder/encoder.cc', 'encoder/v4l_encoder.cc', 'encoder/jpeg_encoder.cc']
+if arch != "larch64":
+  src += ['encoder/ffmpeg_encoder.cc']
+
+if arch == "Darwin":
+  # fix OpenCL
+  del libs[libs.index('OpenCL')]
+  env['FRAMEWORKS'] = ['OpenCL']
+  # exclude v4l
+  del src[src.index('encoder/v4l_encoder.cc')]
+
+logger_lib = env.Library('logger', src)
+libs.insert(0, logger_lib)
+
+env.Program('loggerd', ['loggerd.cc'], LIBS=libs)
+env.Program('encoderd', ['encoderd.cc'], LIBS=libs + ["jpeg"])
+env.Program('bootlog.cc', LIBS=libs)
+
+if GetOption('extras'):
+  env.Program('tests/test_logger', ['tests/test_runner.cc', 'tests/test_logger.cc', 'tests/test_zstd_writer.cc'], LIBS=libs + ['curl', 'crypto'])
