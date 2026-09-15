@@ -319,8 +319,8 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
       self.rainbow_path.draw_rainbow_path(self._rect, self._path)
       return
 
-    # CP 移植：识别到车道线时，轨迹改用参数指定的颜色
-    if self._lane_path_color > 0 and self._has_lane_lines():
+    # CP 移植：选了颜色就用指定颜色绘制轨迹
+    if self._lane_path_color > 0:
       self._draw_lane_path_color()
       return
 
