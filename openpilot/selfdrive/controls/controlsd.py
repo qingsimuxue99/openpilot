@@ -110,17 +110,36 @@ class Controls(ControlsExt):
     long_plan = self.sm['longitudinalPlan']
     model_v2 = self.sm['modelV2']
 
-    # 转弯最低速度限制：大曲率转弯时，不低于设定速度
+    # 视觉弯道限速 + 最低速度下限
     try:
+        # 读参数
+        vision_turn_speed_enabled = ui_state.params.get_bool("VisionTurnSpeedEnabled")
         curve_min_speed_kph = ui_state.params.get_int("AutoCurveSpeedLowerLimit")
+        turn_speed_aggressiveness = ui_state.params.get_int("TurnSpeedAggressiveness") * 0.01  # 激进程度
+
+        # 模型期望曲率（取中间点）
+        exp_curv = abs(model_v2.orientation.x[len(model_v2.orientation.x)//2])
+
+        # 1. 视觉弯道限速：转弯时自动减速
+        if vision_turn_speed_enabled and exp_curv > 0.001:
+            # 目标横向加速度（激进程度越大，允许的横向加速度越大，速度越快）
+            target_lat_a = 2.0 * turn_speed_aggressiveness  # 默认2.0 * 1.0 = 2.0 m/s²
+            # 根据曲率计算目标速度：v = sqrt(a / κ)
+            target_curve_speed = (target_lat_a / max(exp_curv, 0.001)) ** 0.5
+            # 限制速度范围
+            target_curve_speed = max(target_curve_speed, curve_min_speed_kph / 3.6 if curve_min_speed_kph > 0 else 5.0)
+            target_curve_speed = min(target_curve_speed, 250.0 / 3.6)
+            # 如果当前速度高于目标转弯速度 → 施加减速
+            if CS.vEgo > target_curve_speed:
+                decel_needed = (CS.vEgo - target_curve_speed) * 0.5  # 减速率
+                if long_plan.aTarget < -decel_needed:
+                    long_plan.aTarget = -decel_needed  # 限制加速度
+
+        # 2. 转弯最低速度下限：大曲率转弯时，不低于设定速度
         if curve_min_speed_kph > 0:
             curve_min_speed_ms = curve_min_speed_kph / 3.6
-            # 模型期望曲率（取中间点）
-            exp_curv = abs(model_v2.orientation.x[len(model_v2.orientation.x)//2])
-            # 大曲率转弯（>0.005 1/m ≈ 转弯半径200米）
             if exp_curv > 0.005 and CS.vEgo < curve_min_speed_ms:
                 long_plan.shouldStop = False  # 转弯时不让停
-                # 加速度下限：保证不会减速到太低
                 if long_plan.aTarget < -0.5:
                     long_plan.aTarget = -0.5
     except Exception:
