@@ -298,8 +298,6 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"TorqueParamsOverrideFriction", {PERSISTENT | BACKUP, FLOAT, "0.1"}},
     {"TorqueParamsOverrideLatAccelFactor", {PERSISTENT | BACKUP, FLOAT, "2.5"}},
     // Custom centering features (added 2026-09-14)
-    {"AutoCenteringCorrection", {PERSISTENT | BACKUP, BOOL, "0"}},
-    {"CurveCentering", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"SkipOnroadCompile", {PERSISTENT | BACKUP, BOOL, "0"}},
     // CP 移植：自动开启巡航（点油门 / 靠近前车）
     {"AutoGasTokSpeed", {PERSISTENT | BACKUP, INT, "0"}},
@@ -308,11 +306,14 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // CP 移植：有车道线时的轨迹颜色（0=关闭; 1-10=CP颜色索引0-9; 11-20=同色+描边）
     {"ShowPathColorLane", {PERSISTENT | BACKUP, INT, "0"}},
     {"AutoCenterMode", {PERSISTENT | BACKUP, INT, "2"}},
+    {"AutoCenterGain", {PERSISTENT | BACKUP, INT, "40"}},
     {"CurveCenterMode", {PERSISTENT | BACKUP, INT, "0"}},
+    {"CurveCenterGain", {PERSISTENT | BACKUP, INT, "60"}},
+    {"CurveCenterCurv", {PERSISTENT | BACKUP, INT, "4"}},
     {"VisionTurnSpeedEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TurnSpeedAggressiveness", {PERSISTENT | BACKUP, INT, "100"}},
     {"AutoCurveSpeedLowerLimit", {PERSISTENT | BACKUP, INT, "30"}},
-    {"StopDistance", {PERSISTENT | BACKUP, FLOAT, "8.0"}},
+    {"StopDistance", {PERSISTENT | BACKUP, FLOAT, "6.0"}},
     {"BrakeExitLongitudinal", {PERSISTENT | BACKUP, BOOL, "0"}},
     // CP 移植：广角/长焦摄像头切换速度（km/h，菜单单位；默认36/54 == 原10/15 m/s）
     {"WideCamSpeedKph", {PERSISTENT | BACKUP, INT, "36"}},
@@ -321,4 +322,6 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // CP 移植：红绿灯/停止标志虚拟停止线（TrafficStop）
     {"TrafficStopEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TrafficStopDistanceAdjust", {PERSISTENT | BACKUP, FLOAT, "0.0"}},
+    // CP 移植：停等状态（0=巡航 1=煞车中 2=已停止）。traffic_stop 写、UI 胶囊图标读。
+    {"TrafficStopState", {CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION, INT, "0"}},
 };

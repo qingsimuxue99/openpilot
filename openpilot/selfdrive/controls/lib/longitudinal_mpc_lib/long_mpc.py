@@ -6,6 +6,7 @@ from openpilot.cereal import log
 from opendbc.car.interfaces import ACCEL_MIN, ACCEL_MAX
 from openpilot.common.realtime import DT_MDL
 from openpilot.common.swaglog import cloudlog
+from openpilot.common.params import Params
 # WARNING: imports outside of constants will not trigger a rebuild
 from openpilot.selfdrive.modeld.constants import index_function
 from openpilot.selfdrive.controls.radard import _LEAD_ACCEL_TAU
@@ -58,6 +59,15 @@ COMFORT_BRAKE = 2.5
 import os
 _stop_dist_param = os.environ.get('STOP_DISTANCE_OVERRIDE', '8.0')
 STOP_DISTANCE = 8.0  # 默认值，__init__ 里会覆盖
+
+# CP 移植：生成代码（c_generated_code/long_cost/long_cost_y_0_fun.c）里的停车距离是
+# **字面量**，属于 acados 代码生成期常量 —— 改上面这个 Python 常量不会生效（只有重跑
+# codegen 才会）。实测生成代码里的字面量是 6.0 m，而 Python 侧写的是 8.0，两者不一致，
+# 以生成代码为准。若将来重新生成代码，必须同步更新这个基线。
+_STOP_DISTANCE_EFFECTIVE_BASELINE = 6.0
+_STOP_DISTANCE_PARAM_MIN = 2.0
+_STOP_DISTANCE_PARAM_MAX = 15.0
+_STOP_DISTANCE_REFRESH_FRAMES = 100  # 100 Hz 下约每 1 秒读一次参数
 MIN_X_LEAD_FACTOR = 0.5
 
 def get_jerk_factor(personality=log.LongitudinalPersonality.standard):
@@ -250,6 +260,15 @@ class LongitudinalMpc:
     # timers
     self.solve_time = 0.0
     self.x0 = np.zeros(X_DIM)
+
+    # CP 移植：停车距离运行期可调。
+    # 代价函数是 (x_obstacle - x_ego) - desired_dist_comfort，而 desired_dist_comfort 里的
+    # 停车距离是编译期字面量、改不动；但把 x_obstacle 整体平移同一个量是完全等价的。
+    # 所以这里偏移 x_obstacle，纯 Python、不需要重跑 codegen。
+    self._params_obj = Params()
+    self._stop_dist_frame = 0
+    self._stop_dist_offset = 0.0
+
     self.set_weights()
 
   def set_cost_weights(self, cost_weights, constraint_cost_weights):
@@ -329,6 +348,15 @@ class LongitudinalMpc:
     x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle])
     self.source = MPC_SOURCES[np.argmin(x_obstacles[0])]
 
+    # CP 移植：停车距离可调 —— 只平移跟车两列，不干扰红绿灯虚拟停止线（那一列由
+    # 「停等距离微调」参数单独控制）。偏移量通常只有几米，对「无前车」时表示无限远的
+    # 虚拟障碍物没有实际影响。source 已在偏移前算出，障碍物优先级不受影响。
+    self._stop_dist_frame += 1
+    if self._stop_dist_frame % _STOP_DISTANCE_REFRESH_FRAMES == 0:
+      self._refresh_stop_distance_offset()
+    if self._stop_dist_offset != 0.0:
+      x_obstacles = x_obstacles + self._stop_dist_offset
+
     # CP 移植：红绿灯/停止标志虚拟停止线（规格文档第 7 节架构 B）。
     # 虚拟障碍物本身是静止的，不需要 get_stopped_equivalence_factor 转换，
     # 直接作为额外一列参与每帧的 min()。source 仍只由 lead0/lead1 决定
@@ -354,6 +382,16 @@ class LongitudinalMpc:
       self.crash_cnt += 1
     else:
       self.crash_cnt = 0
+
+  def _refresh_stop_distance_offset(self) -> None:
+    """CP 移植：读 StopDistance（绝对目标距离，米）并转成 x_obstacle 偏移量。"""
+    try:
+      v = self._params_obj.get("StopDistance", return_default=True)
+      target = float(v) if v is not None else _STOP_DISTANCE_EFFECTIVE_BASELINE
+    except (TypeError, ValueError):
+      target = _STOP_DISTANCE_EFFECTIVE_BASELINE
+    target = max(_STOP_DISTANCE_PARAM_MIN, min(_STOP_DISTANCE_PARAM_MAX, target))
+    self._stop_dist_offset = target - _STOP_DISTANCE_EFFECTIVE_BASELINE
 
   def run(self):
     for i in range(N+1):

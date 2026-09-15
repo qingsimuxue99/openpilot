@@ -16,28 +16,61 @@ class FeaturesLayout(Widget):
   def __init__(self):
     super().__init__()
 
-    self._auto_centering_toggle = toggle_item_sp(
-      param="AutoCenterMode",
+    # CP 移植：自动居中 / 弯道居中。
+    # 注意：这两个参数是**多态**（自动居中 0=关 1=实时 2=实时+长期学习），
+    # 必须用 option_item_sp。原来用 toggle_item_sp 会被 put_bool 写成 0/1，
+    # 把用户设的 2 静默降级成 1。
+    self._auto_centering_item = option_item_sp(
       title=lambda: tr("自动居中纠偏"),
-      description=lambda: tr("开启后，系统将持续把车辆自动纠偏回车道中心，抑制横向漂移。"),
+      param="AutoCenterMode",
+      min_value=0,
+      max_value=2,
+      value_change_step=1,
+      description=lambda: tr("0=关闭；1=实时纠偏；2=实时纠偏加长期学习。数值越大介入越强。"),
     )
-    self._curve_centering_toggle = toggle_item_sp(
-      param="CurveCenterMode",
+    self._curve_centering_item = option_item_sp(
       title=lambda: tr("弯道居中"),
+      param="CurveCenterMode",
+      min_value=0,
+      max_value=1,
+      value_change_step=1,
       description=lambda: tr("开启后，在弯道中优先保持车道居中，提升过弯横向稳定性。"),
     )
 
-    # CP 移植：自动开启巡航（已移除，功能无效）
-
-    # CP 移植：车道线轨迹颜色 + 广角/长焦摄像头切换速度
-    # 自动弯道速度下限
+    # CP 移植：视觉弯道限速（复用 SP 原生 Smart Cruise Control - Vision 的物理算法，
+    # 新增「激进程度」与「最低速度下限」两个上游没有的可调项）
+    self._vision_turn_toggle = toggle_item_sp(
+      param="VisionTurnSpeedEnabled",
+      title=lambda: tr("视觉弯道限速"),
+      description=lambda: tr("开启后，根据驾驶模型预测的轨迹估算过弯所需的速度，提前主动减速。"
+                             "与「弯道激进程度」和「自动弯道速度下限」配合使用。"),
+    )
+    self._turn_aggr_item = option_item_sp(
+      title=lambda: tr("弯道激进程度"),
+      param="TurnSpeedAggressiveness",
+      min_value=50,
+      max_value=150,
+      value_change_step=5,
+      description=lambda: tr("视觉弯道限速的强度。100 为标准；小于 100 过弯更慢更保守，大于 100 过弯更快。"),
+    )
     self._curve_min_speed_item = option_item_sp(
       title=lambda: tr("自动弯道速度下限"),
       param="AutoCurveSpeedLowerLimit",
-      min_value=10,
+      min_value=0,
       max_value=60,
       value_change_step=5,
-      description=lambda: tr("转弯时最低速度下限，防止转弯太慢或停半路。0=不限。"),
+      description=lambda: tr("弯道中允许的最低速度（km/h）。防止转弯被压得过慢或停在半路。0=不限。"),
+    )
+
+    # CP 移植：跟车停车距离（运行期可调，出厂基准 6 米）
+    self._stop_distance_item = option_item_sp(
+      title=lambda: tr("停车距离"),
+      param="StopDistance",
+      min_value=200,
+      max_value=1500,
+      value_change_step=50,
+      use_float_scaling=True,
+      description=lambda: tr("跟车停止时与前车保持的目标距离（米）。数值越大停得越远，出厂基准为 6 米。"),
     )
 
     self._lane_path_color_item = option_item_sp(
@@ -81,18 +114,22 @@ class FeaturesLayout(Widget):
       max_value=500,
       value_change_step=10,
       use_float_scaling=True,
-      description=lambda: tr("微调停等位置（米）。正值＝停得更早、离停止线更远；负值＝更靠近停止线。"
+      description=lambda: tr("微调停等位置（米）。正值=停得更早、离停止线更远；负值=更靠近停止线。"
                              "默认 0 已经包含固定的相机安装物理修正，通常不需要调。"),
     )
 
     items = [
-      self._auto_centering_toggle,
+      self._auto_centering_item,
       LineSeparatorSP(40),
-      self._curve_centering_toggle,
+      self._curve_centering_item,
       LineSeparatorSP(40),
-      self._auto_gas_tok_speed,
+      self._vision_turn_toggle,
       LineSeparatorSP(40),
-      self._cruise_on_dist,
+      self._turn_aggr_item,
+      LineSeparatorSP(40),
+      self._curve_min_speed_item,
+      LineSeparatorSP(40),
+      self._stop_distance_item,
       LineSeparatorSP(40),
       self._lane_path_color_item,
       LineSeparatorSP(40),

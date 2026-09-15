@@ -176,6 +176,9 @@ class TrafficStopController:
     self.stop_sign_count = 0
     self.start_sign_count = 0
 
+    # CP 移植：向 UI 发布停等状态（左下角胶囊图标用）
+    self._published_state = -1
+
     # 距离链(第 6 节)
     self._stop_x_rl: float | None = None
     self._x_median = _MovingWindow(MEDIAN_WINDOW, median=True)
@@ -197,6 +200,20 @@ class TrafficStopController:
       if not self._param_read_failed:
         cloudlog.warning(f"[TrafficStop] 读取参数失败,功能已停用: {type(e).__name__}: {e}")
       self._param_read_failed = True
+
+  def _publish_state(self) -> None:
+    """CP 移植：把停等状态写入 Params 供 UI 读取（左下角胶囊图标）。
+
+    UI 拿不到停等状态是因为 longitudinalPlan 没有该字段，而新增 cereal 字段会触发
+    全量 C++ 重建；Params 做单向通知零编译成本。只在状态变化时写，几乎无磁盘开销。
+    """
+    if self.state == self._published_state:
+      return
+    self._published_state = self.state
+    try:
+      self.params.put("TrafficStopState", int(self.state))
+    except Exception:
+      pass
 
   # -- 状态 --------------------------------------------------------------
   @property
@@ -275,6 +292,9 @@ class TrafficStopController:
     self._frame += 1
     if self._frame % PARAM_REFRESH_FRAMES == 0:
       self._refresh_params()
+
+    # CP 移植：把上一帧的停等状态发布给 UI（左下角胶囊图标）。只在状态变化时写。
+    self._publish_state()
 
     if not self.enabled:
       self.reset()

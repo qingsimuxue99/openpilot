@@ -10,6 +10,7 @@ import openpilot.cereal.messaging as messaging
 from openpilot.cereal import custom
 from openpilot.common.params import Params
 from openpilot.common.realtime import DT_MDL
+from openpilot.common.constants import CV
 from openpilot.selfdrive.car.cruise import V_CRUISE_UNSET
 from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
 from openpilot.sunnypilot.selfdrive.controls.lib.smart_cruise_control import MIN_V
@@ -28,6 +29,25 @@ _LEAVING_LAT_ACC_TH = 1.3  # Lat Acc threshold to trigger leaving turn state.
 _FINISH_LAT_ACC_TH = 1.1  # Lat Acc threshold to trigger the end of the turn cycle.
 
 _A_LAT_REG_MAX = 2.  # Maximum lateral acceleration
+
+# CP 移植：功能菜单可调项。默认值严格等于上游行为（100% / 0 km/h / 关闭），
+# 因此不动参数时这套增强完全不改变车辆表现。
+_A_LAT_REG_MAX_DEFAULT = _A_LAT_REG_MAX
+_AGGRESSIVENESS_MIN = 50
+_AGGRESSIVENESS_MAX = 150
+# 保底速度的物理安全上限（m/s²）。弯道太急时 safe_v 会低于保底值，保底自动失效，
+# 仍由物理决定，因此这里不可能让车辆以超出横向极限的速度过弯。
+_CURVE_FLOOR_MAX_LAT_ACC = 2.8
+
+
+def _read_int_param(params, key: str, default: int, lo: int, hi: int) -> int:
+  """CP 移植：sunnypilot 的 Params 没有 get_int()，用 get(return_default=True) 兜底。"""
+  try:
+    v = params.get(key, return_default=True)
+    v = int(v) if v is not None else default
+  except (TypeError, ValueError):
+    v = default
+  return max(lo, min(hi, v))
 
 _NO_OVERSHOOT_TIME_HORIZON = 4.  # s. Time to use for velocity desired based on a_target when not overshooting.
 
@@ -66,18 +86,45 @@ class SmartCruiseControlVision:
     self.current_lat_acc = 0.
     self.max_pred_lat_acc = 0.
 
+    # CP 移植：功能菜单可调项（默认值 = 上游行为）
+    self._a_lat_reg_max = _A_LAT_REG_MAX_DEFAULT
+    self._curve_floor = 0.0           # 弯道最低速度下限（m/s），0 = 不限
+    self._max_curve = 1e-6            # 本帧预测最大曲率，供保底速度做安全约束
+    self._own_vision_enabled = False  # 「视觉弯道限速」开关
+
   def get_a_target_from_control(self) -> float:
     return self.a_target
 
   def get_v_target_from_control(self) -> float:
     if self.is_active:
-      return max(self.v_target, MIN_V) + self.a_target * _NO_OVERSHOOT_TIME_HORIZON
+      v = max(self.v_target, MIN_V)
+
+      # CP 移植：弯道最低速度保底 —— 防止过弯被压得过慢、或在大路口停在半路。
+      # 保底值同时受横向加速度安全上限约束：弯道太急时 safe_v 低于保底值，保底自动
+      # 失效，仍由物理决定。返回值只参与 planner 的 min() 竞争，比别人大就等于弃权，
+      # 所以它不可能让车辆跑过巡航设定速度，也不可能压过任何更保守的候选。
+      if self._curve_floor > 0.0:
+        safe_v = (_CURVE_FLOOR_MAX_LAT_ACC / max(self._max_curve, 1e-6)) ** 0.5
+        v = min(max(v, self._curve_floor), max(safe_v, MIN_V))
+
+      return v + self.a_target * _NO_OVERSHOOT_TIME_HORIZON
 
     return V_CRUISE_UNSET
 
   def _update_params(self) -> None:
     if self.frame % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
-      self.enabled = self.params.get_bool("SmartCruiseControlVision")
+      # CP 移植：功能菜单的「视觉弯道限速」与 SP 原生开关，任一开启即生效。
+      self._own_vision_enabled = self.params.get_bool("VisionTurnSpeedEnabled")
+      self.enabled = self.params.get_bool("SmartCruiseControlVision") or self._own_vision_enabled
+
+      # CP 移植：弯道激进程度（100 = 上游默认 2.0 m/s²）
+      aggr = _read_int_param(self.params, "TurnSpeedAggressiveness", 100,
+                             _AGGRESSIVENESS_MIN, _AGGRESSIVENESS_MAX)
+      self._a_lat_reg_max = _A_LAT_REG_MAX_DEFAULT * (aggr / 100.0)
+
+      # CP 移植：弯道最低速度下限（km/h，0 = 不限）
+      floor_kph = _read_int_param(self.params, "AutoCurveSpeedLowerLimit", 0, 0, 120)
+      self._curve_floor = floor_kph * CV.KPH_TO_MS
 
   def _update_calculations(self, sm: messaging.SubMaster) -> None:
     if not self.long_enabled:
@@ -95,9 +142,10 @@ class SmartCruiseControlVision:
       # get the maximum curve based on the current velocity
       v_ego = max(self.v_ego, 0.1)  # ensure a value greater than 0 for calculations
       max_curve = self.max_pred_lat_acc / (v_ego**2)
+      self._max_curve = max_curve  # CP 移植：留给保底速度做安全约束
 
       # Get the target velocity for the maximum curve
-      self.v_target = (_A_LAT_REG_MAX / max_curve) ** 0.5
+      self.v_target = (self._a_lat_reg_max / max_curve) ** 0.5
 
   def _update_state_machine(self) -> tuple[bool, bool]:
     # ENABLED, ENTERING, TURNING, LEAVING, OVERRIDING

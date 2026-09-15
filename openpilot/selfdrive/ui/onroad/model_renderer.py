@@ -350,11 +350,13 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
       self._lane_path_color = 0
 
   def _has_lane_lines(self) -> bool:
-    """当前模型是否稳定识别到左右车道线（laneLineProbs 的 1/2 号位）。"""
+    """当前模型是否识别到车道线（laneLineProbs 的 1/2 号位，任一即可）。"""
     try:
       if len(self._lane_line_probs) < 3:
         return False
-      return bool(self._lane_line_probs[1] > 0.5 and self._lane_line_probs[2] > 0.5)
+      # CP 修正：原来要求左右概率**同时** > 0.5，实际驾驶中很难满足，
+      # 导致颜色几乎永不生效。改为任一车道线可用即视为「有车道线」。
+      return bool(self._lane_line_probs[1] > 0.5 or self._lane_line_probs[2] > 0.5)
     except Exception:
       return False
 

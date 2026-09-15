@@ -72,6 +72,10 @@ class HudRenderer(Widget):
 
     self._exp_button: ExpButton = ExpButton(UI_CONFIG.button_size, UI_CONFIG.wheel_icon_size)
 
+    # CP 移植：左下角状态胶囊（弯道限速 + 红灯停等）
+    self._capsule_counter = 0
+    self._capsule_stop_state = 0
+
   def _update_state(self) -> None:
     """Update HUD state based on car state and controls state."""
     sm = ui_state.sm
@@ -183,70 +187,73 @@ class HudRenderer(Widget):
     rl.draw_text_ex(self._font_medium, unit_text, unit_pos, FONT_SIZES.speed_unit, 0, COLORS.WHITE_TRANSLUCENT)
 
 
+  # ---- 左下角胶囊布局常量 ----
+  # 底部「状态栏」= SP 的前车距离/速度/TTC 显示（chevron_metrics），
+  # 它逐行往上排，最底一行距内容区底边 _LEAD_MARGIN。
+  _CAPSULE_EDGE = 20        # 胶囊距左边框
+  _CAPSULE_GAP = 20         # 胶囊距下方状态栏（前车距离）上沿
+  _CAPSULE_STACK_GAP = 10   # 两个胶囊同时出现时的间距
+  _CAPSULE_H = 30
+  _LEAD_MARGIN = 20         # 与 chevron_metrics.margin 保持一致
+  _LEAD_LINE_H = 50         # 与 chevron_metrics.line_height 保持一致
+
+  def _lead_status_line_count(self) -> int:
+    """底部状态栏当前占几行（0 = 未开启）。ChevronInfo: 1=距离 2=速度 3=TTC 4=全部。"""
+    try:
+      opt = int(getattr(ui_state, "chevron_metrics", 0) or 0)
+    except Exception:
+      opt = 0
+    lines = 0
+    if opt in (1, 4):
+      lines += 1
+    if opt in (2, 4):
+      lines += 1
+    if opt in (3, 4):
+      lines += 1
+    return lines
+
   def _draw_status_capsules(self, rect: rl.Rectangle) -> None:
-    """左下角胶囊图标：弯道限速（绿）+ 红灯减速（红）"""
-    sm = ui_state.sm  # 正确获取 sm，不用全局变量
-    
-    capsule_x = rect.x + 20  # 左边距 20px
-    capsule_y = rect.y + rect.height - 80  # 底部状态栏上方
-    capsule_height = 30
-    spacing = 10
-    
+    """左下角状态胶囊：弯道限速（绿）/ 红绿灯停等（红）。
+
+    仅在实际识别到弯道或红灯时出现，平时完全隐藏。
+    位置：距左边框 20px、距底部状态栏（前车距离/速度/TTC）上沿 20px；
+    两者同时出现时向上堆叠，不互相覆盖。
+    """
+    sm = ui_state.sm
+    h = self._CAPSULE_H
+    x = rect.x + self._CAPSULE_EDGE
+
+    lines = self._lead_status_line_count()
+    status_block = (self._LEAD_MARGIN + lines * self._LEAD_LINE_H) if lines else 0
+    base_y = rect.y + rect.height - status_block - self._CAPSULE_GAP - h
+    slot = 0
+
     # 1. 弯道限速胶囊（绿色）
     try:
-        if sm.recv_frame.get("modelV2", 0) >= ui_state.started_frame:
-            model_v2 = sm['modelV2']
-            curvature = abs(model_v2.orientation.x[0])
-            if curvature > 0.005:  # 有明显曲率
-                # 画绿色胶囊
-                text = "Curve Limit"
-                text_width = rl.text_length(text, self._font_medium)
-                capsule_width = text_width + 30
-                
-                rl.draw_rectangle_rounded(
-                    int(capsule_x),
-                    int(capsule_y),
-                    int(capsule_width),
-                    int(capsule_height),
-                    15,
-                    rl.Color(34, 139, 34, 200),  # 绿色半透明
-                )
-                rl.draw_text_ex(
-                    self._font_medium,
-                    text,
-                    rl.Vector2(capsule_x + 15, capsule_y + 6),
-                    20,
-                    1,
-                    rl.WHITE,
-                )
-                capsule_y += capsule_height + spacing
+      if sm.recv_frame.get("longitudinalPlanSP", 0) >= ui_state.started_frame:
+        if sm["longitudinalPlanSP"].smartCruiseControl.vision.active:
+          self._draw_capsule(x, base_y - slot * (h + self._CAPSULE_STACK_GAP), h, "Curve Limit",
+                             rl.Color(34, 139, 34, 200))
+          slot += 1
     except Exception:
-        pass
-    
-    # 2. 红灯减速胶囊（红色）
+      pass
+
+    # 2. 红灯/停止标志停等胶囊（红色）。每秒读一次参数，够用且不占资源。
     try:
-        if sm.recv_frame.get("longitudinalPlan", 0) >= ui_state.started_frame:
-            long_plan = sm['longitudinalPlan']
-            if long_plan.trafficState == 1:  # 红灯
-                text = "Red Light"
-                text_width = rl.text_length(text, self._font_medium)
-                capsule_width = text_width + 30
-                
-                rl.draw_rectangle_rounded(
-                    int(capsule_x),
-                    int(capsule_y),
-                    int(capsule_width),
-                    int(capsule_height),
-                    15,
-                    rl.Color(220, 50, 50, 200),  # 红色半透明
-                )
-                rl.draw_text_ex(
-                    self._font_medium,
-                    text,
-                    rl.Vector2(capsule_x + 15, capsule_y + 6),
-                    20,
-                    1,
-                    rl.WHITE,
-                )
+      if self._capsule_counter % 20 == 0:
+        v = ui_state.params.get("TrafficStopState", return_default=True)
+        self._capsule_stop_state = int(v) if v is not None else 0
+      self._capsule_counter += 1
+      if self._capsule_stop_state in (1, 2):
+        text = "Red Light" if self._capsule_stop_state == 1 else "Stopped"
+        self._draw_capsule(x, base_y - slot * (h + self._CAPSULE_STACK_GAP), h, text,
+                           rl.Color(220, 50, 50, 200))
     except Exception:
-        pass
+      pass
+
+  def _draw_capsule(self, x: float, y: float, height: float, text: str, color: rl.Color) -> None:
+    """CP 移植：画一个左下角状态胶囊。"""
+    text_width = rl.text_length(text, self._font_medium)
+    width = text_width + 30
+    rl.draw_rectangle_rounded(int(x), int(y), int(width), int(height), 15, color)
+    rl.draw_text_ex(self._font_medium, text, rl.Vector2(x + 15, y + 6), 20, 1, rl.WHITE)

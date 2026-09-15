@@ -35,19 +35,27 @@ class AutoCenter:
     self.MAX_TOTAL = 0.003         # 最大总修正
     self.RATE_LIMIT = 0.0002       # 每秒最大变化
 
+  def _pint(self, key, default):
+    """sunnypilot 的 Params 没有 get_int()，用 get(return_default=True) + int 兜底。"""
+    try:
+      v = self.params.get(key, return_default=True)
+      return int(v) if v is not None else default
+    except (TypeError, ValueError):
+      return default
+
   def _read_params(self):
     self._pc += 1
     if self._pc % 100 != 0:  # ~1秒读一次
       return
     try:
-      self._mode = self.params.get_int("AutoCenterMode")
-      g = self.params.get_int("AutoCenterGain")
+      self._mode = self._pint("AutoCenterMode", 2)
+      g = self._pint("AutoCenterGain", 40)
       self._gain = max(0.1, min(1.0, g * 0.01)) if g > 0 else 0.4
 
-      self._curve_mode = self.params.get_int("CurveCenterMode")
-      cg = self.params.get_int("CurveCenterGain")
+      self._curve_mode = self._pint("CurveCenterMode", 0)
+      cg = self._pint("CurveCenterGain", 60)
       self._curve_gain = max(0.1, min(1.0, cg * 0.01)) if cg > 0 else 0.6
-      cc = self.params.get_int("CurveCenterCurv")
+      cc = self._pint("CurveCenterCurv", 4)
       self._curve_min_curv = max(0.001, min(0.010, cc * 0.001)) if cc > 0 else 0.004
     except Exception:
       pass
