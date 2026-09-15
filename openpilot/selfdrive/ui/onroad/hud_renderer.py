@@ -121,6 +121,31 @@ class HudRenderer(Widget):
     button_y = rect.y + UI_CONFIG.border_size
     self._exp_button.render(rl.Rectangle(button_x, button_y, UI_CONFIG.button_size, UI_CONFIG.button_size))
 
+    # left bottom capsules
+    self._draw_status_capsules(rect)
+
+  def _draw_status_capsules(self, rect: rl.Rectangle) -> None:
+    try:
+      model_v2 = sm['modelV2']
+      exp_curv = abs(model_v2.orientation.x[len(model_v2.orientation.x)//2])
+      if exp_curv > 0.005:
+        self._draw_capsule(rect, 0, "Curve Limit", rl.Color(45, 90, 61, 220))
+
+      long_plan = sm['longitudinalPlan']
+      if hasattr(long_plan, 'trafficState') and long_plan.trafficState == 1:
+        self._draw_capsule(rect, 1, "Red Light", rl.Color(90, 45, 45, 220))
+    except Exception:
+      pass
+
+  def _draw_capsule(self, rect: rl.Rectangle, index: int, text: str, bg_color: rl.Color) -> None:
+    x = rect.x + 20
+    y = rect.y + rect.height - 120 - index * 50
+    w = 140
+    h = 36
+
+    rl.draw_rectangle(x, y, w, h, bg_color, radius=18)
+    rl.draw_text(x + 36, y + 10, text, 20, rl.Color(240, 240, 240, 255))
+
   def user_interacting(self) -> bool:
     return self._exp_button.is_pressed
 
