@@ -112,7 +112,7 @@ class Controls(ControlsExt):
 
     # 转弯最低速度限制：大曲率转弯时，不低于设定速度
     try:
-        curve_min_speed_kph = ui_state.params.get_int("CurveMinSpeed")
+        curve_min_speed_kph = ui_state.params.get_int("AutoCurveSpeedLowerLimit")
         if curve_min_speed_kph > 0:
             curve_min_speed_ms = curve_min_speed_kph / 3.6
             # 模型期望曲率（取中间点）

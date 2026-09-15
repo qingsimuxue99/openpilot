@@ -17,12 +17,12 @@ class FeaturesLayout(Widget):
     super().__init__()
 
     self._auto_centering_toggle = toggle_item_sp(
-      param="AutoCenteringCorrection",
+      param="AutoCenterMode",
       title=lambda: tr("自动居中纠偏"),
       description=lambda: tr("开启后，系统将持续把车辆自动纠偏回车道中心，抑制横向漂移。"),
     )
     self._curve_centering_toggle = toggle_item_sp(
-      param="CurveCentering",
+      param="CurveCenterMode",
       title=lambda: tr("弯道居中"),
       description=lambda: tr("开启后，在弯道中优先保持车道居中，提升过弯横向稳定性。"),
     )
@@ -30,12 +30,12 @@ class FeaturesLayout(Widget):
     # CP 移植：自动开启巡航（已移除，功能无效）
 
     # CP 移植：车道线轨迹颜色 + 广角/长焦摄像头切换速度
-    # 转弯最低速度
+    # 自动弯道速度下限
     self._curve_min_speed_item = option_item_sp(
-      title=lambda: tr("转弯最低速度"),
-      param="CurveMinSpeed",
+      title=lambda: tr("自动弯道速度下限"),
+      param="AutoCurveSpeedLowerLimit",
       min=10, max=60, step=5, unit="km/h",
-      description=lambda: tr("转弯时不低于此速度，防止转弯太慢或停半路。0=不限。"),
+      description=lambda: tr("转弯时最低速度下限，防止转弯太慢或停半路。0=不限。"),
     )
 
     self._lane_path_color_item = option_item_sp(
