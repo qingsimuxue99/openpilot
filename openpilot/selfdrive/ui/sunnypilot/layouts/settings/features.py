@@ -34,7 +34,9 @@ class FeaturesLayout(Widget):
     self._curve_min_speed_item = option_item_sp(
       title=lambda: tr("自动弯道速度下限"),
       param="AutoCurveSpeedLowerLimit",
-      min=10, max=60, step=5, unit="km/h",
+      min_value=10,
+      max_value=60,
+      value_change_step=5,
       description=lambda: tr("转弯时最低速度下限，防止转弯太慢或停半路。0=不限。"),
     )
 
