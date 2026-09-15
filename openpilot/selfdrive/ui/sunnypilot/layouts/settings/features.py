@@ -27,23 +27,7 @@ class FeaturesLayout(Widget):
       description=lambda: tr("开启后，在弯道中优先保持车道居中，提升过弯横向稳定性。"),
     )
 
-    # CP 移植：自动开启巡航
-    self._auto_gas_tok_speed = option_item_sp(
-      title=lambda: tr("轻踩油门开启巡航"),
-      param="AutoGasTokSpeed",
-      min_value=0,
-      max_value=150,
-      value_change_step=5,
-      description=lambda: tr("巡航未开启时，点一下油门（0.4 秒内抬起）且车速不低于此值，自动开启巡航。0 = 关闭。"),
-    )
-    self._cruise_on_dist = option_item_sp(
-      title=lambda: tr("定速-自动开启距离"),
-      param="CruiseOnDist",
-      min_value=0,
-      max_value=60,
-      value_change_step=1,
-      description=lambda: tr("巡航未开启时，与前车距离小于此值（米）自动开启巡航。0 = 关闭。"),
-    )
+    # CP 移植：自动开启巡航（已移除，功能无效）
 
     # CP 移植：车道线轨迹颜色 + 广角/长焦摄像头切换速度
     self._lane_path_color_item = option_item_sp(
