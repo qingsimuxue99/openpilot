@@ -54,7 +54,10 @@ T_IDXS = np.array(T_IDXS_LST)
 FCW_IDXS = T_IDXS < 5.0
 T_DIFFS = np.diff(T_IDXS, prepend=[0.])
 COMFORT_BRAKE = 2.5
-STOP_DISTANCE = 8.0  # 停车距离调大，避免太近
+# 停车距离（可配置，重启生效）
+import os
+_stop_dist_param = os.environ.get('STOP_DISTANCE_OVERRIDE', '8.0')
+STOP_DISTANCE = float(_stop_dist_param)
 MIN_X_LEAD_FACTOR = 0.5
 
 def get_jerk_factor(personality=log.LongitudinalPersonality.standard):
