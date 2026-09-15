@@ -56,8 +56,7 @@ T_DIFFS = np.diff(T_IDXS, prepend=[0.])
 COMFORT_BRAKE = 2.5
 # 停车距离（可配置，重启生效）
 import os
-from openpilot.common.params import Params
-_stop_dist_param = Params().get('StopDistance', return_default=True) or '8.0'
+_stop_dist_param = os.environ.get('STOP_DISTANCE_OVERRIDE', '8.0')
 STOP_DISTANCE = float(_stop_dist_param)
 MIN_X_LEAD_FACTOR = 0.5
 
