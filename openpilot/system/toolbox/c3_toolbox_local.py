@@ -97,7 +97,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -778,7 +778,7 @@ def api_param_meta():
 def ensure_tmux_log():
     """设备端创建一个 tmux 会话 c3logs 持续 tail 工具箱日志，方便在设备 shell 执行 `tmux a -t c3logs` 实时查看。"""
     try:
-        log_path = os.path.join(SCRIPT_DIR, 'server.log')
+        log_path = LOG_FILE
         cmd = "tmux has-session -t c3logs 2>/dev/null || tmux new-session -d -s c3logs 'tail -F %s'" % log_path
         subprocess.run(cmd, shell=True, timeout=5)
     except Exception:
@@ -807,7 +807,7 @@ def api_command():
 @app.route('/api/logstream')
 def api_logstream():
     """实时日志流 (SSE)：网页终端执行 `tmux a` 时改用此接口持续推送 server.log 新内容。"""
-    log_path = os.path.join(SCRIPT_DIR, 'server.log')
+    log_path = LOG_FILE
 
     def gen():
         yield "data: ┌── 实时日志 (tmux a) 已连接 ──┐\n\n"
