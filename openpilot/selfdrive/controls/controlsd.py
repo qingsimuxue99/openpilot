@@ -122,9 +122,17 @@ class Controls(ControlsExt):
     CC.latActive = _lat_active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
                    (not standstill or self.CP.steerAtStandstill)
     CC.longActive = CC.enabled and (self.CP.openpilotLongitudinalControl or not self.CP_SP.pcmCruiseSpeed)
-    # 踩刹车退出纵向控制
-    if CS.brakePressed:
-      CC.longActive = False
+    # 踩刹车退出纵向控制（开关门模式：踩了就一直退出，按恢复键才开）
+    if ui_state.params.get_bool("BrakeExitLongitudinal"):
+      if CS.brakePressed:
+        self.brake_exited_long = True  # 踩刹车 → 标记退出
+      # 如果用户重新启用巡航（enabled从False变True）→ 清除标志
+      if CC.enabled and not self.prev_enabled:
+        self.brake_exited_long = False
+      self.prev_enabled = CC.enabled
+      # 只要标志是True，纵向就一直关
+      if self.brake_exited_long:
+        CC.longActive = False
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state

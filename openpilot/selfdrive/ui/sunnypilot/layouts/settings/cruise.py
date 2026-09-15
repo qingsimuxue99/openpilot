@@ -87,9 +87,16 @@ class CruiseLayout(Widget):
       description=tr("Enable toggle to allow the model to determine when to use sunnypilot ACC or sunnypilot End to End Longitudinal."),
       param="DynamicExperimentalControl")
 
+    # 踩刹车退出纵向控制
+    self.brake_exit_long_toggle = toggle_item_sp(
+      title=tr("踩刹车退出纵向"),
+      description=tr("开启后，踩刹车立即退出纵向控制，不再继续加速。"),
+      param="BrakeExitLongitudinal")
+
     items = [
     #   self.icbm_toggle,
       self.dec_toggle,
+      self.brake_exit_long_toggle,
       self.scc_v_toggle,
     #   self.scc_m_toggle,
       self.custom_acc_toggle,
