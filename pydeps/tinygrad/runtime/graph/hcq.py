@@ -6,7 +6,6 @@ from tinygrad.device import Buffer, BufferSpec, Compiled, Device, MultiBuffer, P
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp, Ops, Variable
 from tinygrad.engine.jit import GraphRunner, MultiGraphRunner
-from tinygrad.runtime.ops_rdma import RDMACopyQueue
 
 class HCQGraph(MultiGraphRunner):
   def __init__(self, *args, **kwargs):
@@ -50,7 +49,7 @@ class HCQGraph(MultiGraphRunner):
 
     self.comp_queues: dict[HCQCompiled, HWQueue] = {dev: unwrap(dev.hw_compute_queue_t)() for dev in self.devices}
     self.copy_queues: dict[tuple[HCQCompiled, int], HWQueue] = {} # lazy allocation, keyed by (device, queue_idx)
-    self.rdma_queues: dict[tuple[HCQCompiled, HCQCompiled], RDMACopyQueue] = {} # lazy allocation, keyed by device pair
+    self.rdma_queues: dict[tuple[HCQCompiled, HCQCompiled], "RDMACopyQueue"] = {} # lazy allocation, keyed by device pair
     self.num_copy_queues: int = getenv("HCQ_NUM_SDMA", min(len(self.devices), 8) if ALL2ALL >= 1 else 1)
     self.num_rdma_ops: dict[tuple[HCQCompiled, HCQCompiled], int] = collections.defaultdict(int)
 
@@ -97,13 +96,13 @@ class HCQGraph(MultiGraphRunner):
 
       # set any fixedvars on the device
       self.device_vars[enqueue_dev] = merge_dicts([self.device_vars.get(enqueue_dev, {}), device_vars])
-      if runtime is not None: self.device_vars[enqueue_dev] = merge_dicts([self.device_vars[enqueue_dev], {k: 0 for k in ast.arg.runtimevars}])
 
       if runtime is not None:
         enqueue_queue = self.comp_queues[enqueue_dev]
       elif is_rdma:
         enqueue_queue = self.comp_queues[enqueue_dev]
         rdma_key = (cast(HCQCompiled, Device[bufs[0].device]).rdma_dev(), enqueue_dev.rdma_dev())
+        from tinygrad.runtime.ops_rdma import RDMACopyQueue
         self.rdma_queues.setdefault(rdma_key, RDMACopyQueue(enqueue_dev.rdma_dev()))
       else:
         assert (enqueue_dev.hw_copy_queue_t is not None), "device must implement a copy queue"
@@ -136,10 +135,11 @@ class HCQGraph(MultiGraphRunner):
         sig_st = prev_ji * 2 + 1 if len(opt_deps) == 0 and (prev_ji:=self.last_j[enqueue_queue]) is not None else j * 2
 
         # Description based on the command.
-        prof_ji_desc = runtime.name if runtime is not None else TracingKey(f"{bufs[1].device} -> {bufs[0].device}", ret=bufs[0].nbytes) # type: ignore
+        prof_ji_desc = runtime.name if runtime is not None else TracingKey(f"{bufs[1].device} -> {bufs[0].device}", ret=bufs[0].nbytes)
 
         prof_name = enqueue_dev.device if runtime is not None else f"{enqueue_dev.device}:SDMA:{queue_idx}"
-        self.prof_graph_entries.append(ProfileGraphEntry(prof_name, prof_ji_desc, sig_st, j * 2 + 1))
+        self.prof_graph_entries.append(ProfileGraphEntry(prof_name, prof_ji_desc, sig_st, j * 2 + 1,
+                                                         runtime.profile_key if runtime is not None else None))
         self.prof_graph_deps.append([d - 1 for _, d in rdeps])
 
       self.last_j[enqueue_queue] = j
@@ -172,7 +172,7 @@ class HCQGraph(MultiGraphRunner):
 
       # Encode main commands based on ji type.
       if runtime is not None:
-        enqueue_queue.exec(runtime, self.ji_args[j], ast.arg.global_size or (1,1,1), ast.arg.local_size or (1,1,1))  # type: ignore[arg-type]
+        enqueue_queue.exec(runtime, self.ji_args[j], ast.arg.global_size, ast.arg.local_size)
       elif j in self.rdma_deps:
         dest_queue, dest_deps, dest_out_signal, dest_out_val = self.rdma_deps[j]
         for sig, val in dest_deps: dest_queue.wait(sig, val)
@@ -200,7 +200,7 @@ class HCQGraph(MultiGraphRunner):
         uop_replace_j = dict(self.uop_replace[j])
         for bufid in range(len(bufs)):
           if (replace_iidx:=uop_replace_j.get(bufid)) is not None: self.input_replace_map[enqueue_dev].add((replace_iidx, dev_idx))
-          else: cast(HCQAllocator, enqueue_dev.allocator).map(self.hcq_bufs[j][bufid])
+          else: cast(HCQAllocator, enqueue_dev.allocator)._map(self.hcq_bufs[j][bufid])
         enqueue_queue.copy(self.hcq_bufs[j][0], self.hcq_bufs[j][1], dest.nbytes)
         self.copy_to_devs[cast(HCQCompiled, Device[dest.device])].add(cast(HCQCompiled, Device[src.device]))
 
@@ -212,7 +212,7 @@ class HCQGraph(MultiGraphRunner):
     for dev in self.devices:
       for dep_dev in list(self.copy_to_devs[dev]) + [dev]:
         for copy_q in self._dev_copy_queues(dep_dev):
-          if copy_q in self.signals: self.comp_queues[dev].wait(self.signals[copy_q], cast(int, self.last_j[copy_q]) + 1)
+          if copy_q in self.signals: self.comp_queues[dev].wait(self.signals[copy_q], unwrap(self.last_j[copy_q]) + 1)
 
       self.comp_queues[dev].signal(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev] + 1).bind(dev)
       for copy_q in self._dev_copy_queues(dev): copy_q.bind(dev)
@@ -221,7 +221,7 @@ class HCQGraph(MultiGraphRunner):
     self.queue_signals_to_reset = [self.signals[q] for q in list(self.comp_queues.values()) + list(self.copy_queues.values()) if q in self.signals]
 
   def _resolve_deps(self, bufs, outs, enqueue_queue, enqueue_dev, out_signal, j, is_copy, rdma_qp=None):
-    rdeps = self._access_resources(bufs, outs, (enqueue_queue, j + 1)) #type:ignore
+    rdeps = self._access_resources(bufs, outs, (enqueue_queue, j + 1))
 
     # Order shared QP doorbell record writes across different compute queues (head+1 must complete before head+2).
     if rdma_qp is not None and (prev:=self.rdma_last_dest.get(id(rdma_qp))) is not None and prev[0] is not enqueue_queue:
@@ -265,7 +265,7 @@ class HCQGraph(MultiGraphRunner):
     for dev in self.devices:
       for iidx, dev_idx in self.input_replace_map[dev]:
         buf = b.bufs[dev_idx] if isinstance(b:=input_uops[iidx].buffer, MultiBuffer) else b
-        cast(HCQAllocator, dev.allocator).map(buf._buf)
+        cast(HCQAllocator, dev.allocator)._map(buf._buf)
 
     # Wait and restore signals
     self.kickoff_value += 1

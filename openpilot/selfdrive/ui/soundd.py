@@ -1,3 +1,4 @@
+import contextlib
 import math
 import numpy as np
 import time
@@ -168,12 +169,17 @@ class Soundd(QuietMode):
     volume = ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
     return math.pow(VOLUME_BASE, (np.clip(volume, MIN_VOLUME, MAX_VOLUME) - 1))
 
-  @retry(attempts=10, delay=3)
+  @retry(attempts=3, delay=1)
   def get_stream(self, sd):
     # reload sounddevice to reinitialize portaudio
     sd._terminate()
     sd._initialize()
-    return sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.callback, blocksize=SAMPLE_BUFFER)
+    stream = sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.callback, blocksize=SAMPLE_BUFFER)
+    if not stream.active:
+      # PortAudio can hand back a stream that never starts (e.g. no speaker / no playback route)
+      stream.close()
+      raise RuntimeError("audio output stream did not become active")
+    return stream
 
   def soundd_thread(self):
     # sounddevice must be imported after forking processes
@@ -182,10 +188,22 @@ class Soundd(QuietMode):
 
     sm = messaging.SubMaster(['selfdriveState', 'selfdriveStateSP', 'soundPressure'])
 
-    with self.get_stream(sd) as stream:
+    # Not every device has a usable audio output (e.g. no speaker connected). PortAudio either
+    # refuses to open a stream or hands back one that never becomes active. Degrade to silent mode
+    # instead of crash-looping under the manager.
+    stream = None
+    try:
+      stream = self.get_stream(sd)
+    except Exception as e:
+      cloudlog.warning(f"soundd: no usable audio output device, running in silent mode: {e}")
+
+    with (stream if stream is not None else contextlib.nullcontext()) as stream:
       rk = Ratekeeper(20)
 
-      cloudlog.info(f"soundd stream started: {stream.samplerate=} {stream.channels=} {stream.dtype=} {stream.device=}, {stream.blocksize=}")
+      if stream is None:
+        cloudlog.warning("soundd: silent mode enabled (no alert sounds will be played)")
+      else:
+        cloudlog.info(f"soundd stream started: {stream.samplerate=} {stream.channels=} {stream.dtype=} {stream.device=}, {stream.blocksize=}")
       while True:
         sm.update(0)
 
@@ -207,7 +225,8 @@ class Soundd(QuietMode):
 
         rk.keep_time()
 
-        assert stream.active
+        if stream is not None:
+          assert stream.active
 
 
 def main():

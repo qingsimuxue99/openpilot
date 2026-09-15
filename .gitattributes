@@ -38,3 +38,7 @@ openpilot/selfdrive/assets/training/step17.png -filter=lfs -diff=lfs -merge=lfs
 openpilot/selfdrive/assets/training/step18.png -filter=lfs -diff=lfs -merge=lfs
 openpilot/sunnypilot/selfdrive/assets/images/lead_depart.png -filter=lfs -diff=lfs -merge=lfs
 openpilot/sunnypilot/selfdrive/assets/images/spinner_sunnypilot.png -filter=lfs -diff=lfs -merge=lfs
+
+# pydeps/ 是设备运行时依赖(纯 Python + 小图标), 不做 LFS 转换,
+# 保证 clone 后即可直接运行, 不依赖外部 LFS 服务器凭据
+pydeps/** -filter -diff -merge

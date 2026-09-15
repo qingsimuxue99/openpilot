@@ -23,6 +23,7 @@ const colored = n => d3.create("span").call(s => s.selectAll("span").data(typeof
                        .style("color", d => d.color).text(d => d.st)).node();
 
 const rect = (s) => (typeof s === "string" ? document.querySelector(s) : s).getBoundingClientRect();
+const viewBounds = () => [rect(".ctx-list-parent").right, rect(".metadata-parent").left];
 
 // dims of shapes on the canvas aren't tracked by the browser, we compute it
 const canvasRect = (s, pixelScale) => {
@@ -57,11 +58,14 @@ function intersectRect(r1, r2) {
 }
 
 function addTags(root, path) {
-  root.selectAll("circle").data(d => [d]).join("circle").attr("r", 5);
+  root.selectAll("circle").data(d => d.rect ? [] : [d]).join("circle").attr("r", 5).style("fill", d => d.fill ?? null).style("stroke", d => d.stroke ?? null);
+  root.selectAll("rect").data(d => d.rect ? [d] : []).join("rect").attr("x", d => -d.width/2).attr("y", d => -d.height/2)
+    .attr("width", d => d.width).attr("height", d => d.height).style("fill", d => d.fill ?? null).style("stroke", d => d.stroke ?? null);
   if (path != null) root.selectAll("path").data(d => [d]).join("path").attr("d", path);
-  else root.selectAll("text").data(d => [d]).join("text").text(d => d).attr("dy", "0.35em");
+  else root.selectAll("text").data(d => [d]).join("text").text(d => d.text).attr("dy", "0.35em");
 }
 
+anchor = null;
 const drawGraph = (data) => {
   const g = dagre.graphlib.json.read(data);
   // draw nodes
@@ -69,11 +73,6 @@ const drawGraph = (data) => {
   const callCount = g.graph().callCount;
   const nodes = d3.select("#nodes").selectAll("g").data(g.nodes().map(id => g.node(id)), d => d).join("g").attr("class", d => d.className ?? "node")
     .attr("transform", d => `translate(${d.x},${d.y})`).on("click", (e,d) => {
-      if (d.callNode) {
-        if (state.callSrcMask.has(d.id)) state.callSrcMask.delete(d.id); else state.callSrcMask.add(d.id);
-        if (state.callSrcMask.size >= callCount) { showCallSrc.toggle.checked = !showCallSrc.toggle.checked; state.callSrcMask.clear(); }
-        return setState({});
-      }
       const parents = g.predecessors(d.id);
       const children = g.successors(d.id);
       if (parents == null && children == null) return;
@@ -89,7 +88,7 @@ const drawGraph = (data) => {
     .attr("x", d => -d.width/2).attr("y", d => -d.height/2).classed("node", true);
   const STROKE_WIDTH = 1.4, textSpace = g.graph().textSpace;
   const labels = nodes.selectAll("g.label").data(d => [d]).join("g").attr("class", "label");
-  labels.attr("transform", d => `translate(-${d.labelWidth/2}, -${d.labelHeight/2+STROKE_WIDTH*2})`);
+  labels.attr("transform", d => `translate(${d.labelX-d.labelWidth/2}, -${d.labelHeight/2+STROKE_WIDTH*2})`);
   const rectGroup = labels.selectAll("g.rect-group").data(d => [d]).join("g").attr("class", "rect-group");
   const tokens = labels.selectAll("g.text-group").data(d => [d]).join("g").attr("class", "text-group").selectAll("text").data(d => {
     if (Array.isArray(d.label)) return [d.label];
@@ -116,11 +115,26 @@ const drawGraph = (data) => {
     tokensBg.classed("highlight", (d, i, nodes) => !nodes[i].classList.contains("highlight") && d.keys.some(k => keys?.includes(k)));
   });
   addTags(nodes.selectAll("g.tag").data(d => d.tag != null ? [d] : []).join("g").attr("class", "tag")
-    .attr("transform", d => `translate(${-d.width/2+8}, ${-d.height/2+8})`).datum(e => e.tag));
-  addTags(nodes.selectAll("g.type").data(d => d.callNode ? [d] : []).join("g").attr("class", d => `tag ${d.collapsed ? 'collapsed' : 'expanded'}`)
-    .attr("transform", d => `translate(${-d.width/2}, ${0})`).datum(d => d.collapsed ? "+" : "−"));
+    .attr("transform", d => `translate(${-d.width/2+8}, ${-d.height/2+8})`).datum(e => ({ text:e.tag })));
+  addTags(nodes.selectAll("g.addrspace").data(d => d.addrspace != null ? [d] : []).join("g").attr("class", "tag addrspace")
+    .attr("transform", d => `translate(${d.width/2-8}, ${-d.height/2+8})`).datum(e => ({ rect:true, width:10, height:10, fill:e.addrspace, stroke:"none" })));
+  const CALL_TAG_WIDTH = 14;
+  addTags(nodes.selectAll("g.type").data(d => d.collapsible ? [d] : []).join("g").attr("class", d => `tag clickable ${d.collapsed ? 'collapsed' : 'expanded'}`)
+    .attr("transform", d => d.collapsePorts != null ? `translate(${CALL_TAG_WIDTH/2-d.width/2}, ${0})` : `translate(${-d.width/2}, ${0})`)
+    .datum(d => ({ ...d, text:d.collapsed ? "+" : "−", fill:d.collapsePorts != null ? null : d.color,
+      ...(d.collapsePorts != null && { rect:true, width:CALL_TAG_WIDTH }) })).on("click", (e,d) => {
+      e.stopPropagation();
+      const t = d3.zoomTransform(document.getElementById("graph-svg"));
+      const [x, y] = t.apply([d.x, d.y]);
+      anchor = {id:d.id, x, y, k:t.k};
+      if (d.callNode) {
+        if (state.callSrcMask.has(d.id)) state.callSrcMask.delete(d.id); else state.callSrcMask.add(d.id);
+        if (state.callSrcMask.size >= callCount) { showCallSrc.toggle.checked = !showCallSrc.toggle.checked; state.callSrcMask.clear(); }
+      } else { if (state.expandedNodes.has(d.id)) state.expandedNodes.delete(d.id); else state.expandedNodes.add(d.id); }
+      return setState({});
+    }));
   addTags(nodes.selectAll("g.ref").data(d => d.ref != null ? [d] : []).join("g").attr("class", "tag ref")
-    .attr("transform", d => `translate(${d.width/2-2}, ${-d.height/2+2})`).on("click", (e,d) => { e.stopPropagation(); switchCtx(d.ref); }),
+    .attr("transform", d => `translate(${d.width/2-2}, ${-d.height/2+2})`).on("click", (e,d) => { e.stopPropagation(); switchCtx(d.ref); }).datum(d => ({ref:d.ref})),
     "M-1.7 1.7 L1.7 -1.7 M-0.55 -1.7 H1.7 V0.55");
   // draw edges
   const line = d3.line().x(d => d.x).y(d => d.y).curve(d3.curveBasis), edges = g.edges();
@@ -131,6 +145,7 @@ const drawGraph = (data) => {
     points.push(intersectRect(g.node(e.w), points[points.length-1]));
     return line(points);
   }).attr("marker-end", "url(#arrowhead)").attr("stroke", e => g.edge(e).color || "#4a4b57");
+  return g;
 }
 
 // ** UOp graph
@@ -155,7 +170,7 @@ function renderDag(layoutSpec, { recenter }) {
     const data = e.data.result;
     displaySelection("#graph");
     updateProgress(Status.COMPLETE);
-    drawGraph(data);
+    const g = drawGraph(data);
     addTags(d3.select("#edge-labels").selectAll("g").data(data.edges).join("g").attr("transform", (e) => {
       // get a point near the end
       const [p1, p2] = e.value.points.slice(-2);
@@ -170,8 +185,12 @@ function renderDag(layoutSpec, { recenter }) {
       const x = p2.x - ux * offset;
       const y = p2.y - uy * offset;
       return `translate(${x}, ${y})`
-    }).attr("class", e => e.value.label.type).attr("id", e => `${e.v}-${e.w}`).datum(e => e.value.label.text));
-    if (recenter) document.getElementById("zoom-to-fit-btn").click();
+    }).attr("class", e => e.value.label.type).attr("id", e => `${e.v}-${e.w}`).datum(e => ({ text:e.value.label.text })));
+    if (anchor != null) {
+      const n = g.node(anchor.id);
+      if (n != null) d3.select("#graph-svg").call(svgZoom.transform, d3.zoomIdentity.translate(anchor.x-n.x*anchor.k, anchor.y-n.y*anchor.k).scale(anchor.k));
+    } else if (recenter) document.getElementById("zoom-to-fit-btn").click();
+    anchor = null;
   };
   worker.onerror = (e) => {
     e.preventDefault();
@@ -211,7 +230,7 @@ const waveColor = (op) => {
 };
 const colorScheme = {TINY:new Map([["Schedule","#1b5745"],["precompile","#1d2e62"],["compile","#63b0cd"],["DEFAULT","#354f52"]]),
   DEFAULT:["#2b2e39", "#2c2f3a", "#31343f", "#323544", "#2d303a", "#2e313c", "#343746", "#353847", "#3c4050", "#404459", "#444862", "#4a4e65"],
-  BUFFER:["#342483", "#3E2E94", "#4938A4", "#5442B4", "#5E4CC2", "#674FCA"], SIMD:new Map([["OCC", "#101725"], ["INST", "#0A2042"]]),
+  BUFFER:["#342483", "#3E2E94", "#4938A4", "#5442B4", "#5E4CC2", "#674FCA"],
   GPC:new Map([["NONE","#1a7a2e"],["MEMORY_DEPENDENCY","#8b1a00"],["EXEC_DEPENDENCY","#006b6b"],["INST_FETCH","#7a7a00"],["SYNC","#6b006b"],
     ["PIPE_BUSY","#7a4a00"],["MEMORY_THROTTLE","#5c0000"],["CONSTANT_MEMORY","#1a3d7a"],["NOT_SELECTED","#2e2e3a"],["OTHER","#4a4a55"],
     ["SLEEPING","#1a1a2a"],["DEFAULT","#3a3a45"]]), WAVE:waveColor, VMEMEXEC:waveColor, ALUEXEC:waveColor}
@@ -283,12 +302,13 @@ function timeAtCycle(clk) {
 }
 
 function getZoomIdentity() {
+  const xscale = timelineScale(), deviceRight = rect("#device-list").right, [viewLeft, sidebarLeft] = viewBounds();
+  const viewRight = sidebarLeft || rect(".main-container").right;
+  const x0 = Math.max(0, viewLeft-deviceRight), x1 = Math.min(canvasDims()[0], viewRight-deviceRight);
   // for packets, set zoom to the full range of instruction events
-  if (data.instSt != null) {
-    const k = (data.dur - data.first) / (data.instEt - data.instSt), xscale = timelineScale();
-    return d3.zoomIdentity.translate(-xscale(data.instSt) * k, 0).scale(k);
-  }
-  return d3.zoomIdentity;
+  const [st, et] = data.instSt != null ? [data.instSt, data.instEt] : [data.first, data.dur];
+  const k = (x1-x0)/(xscale(et)-xscale(st));
+  return d3.zoomIdentity.translate(x0-xscale(st)*k, 0).scale(k);
 }
 
 const Modes = {0:'read', 1:'write', 2:'write+read'};
@@ -466,13 +486,6 @@ async function renderProfiler(path, opts) {
           const steps = ctxs[ref.ctx+1].steps;
           for (let si=start; si<steps.length; si++) {
             if (steps[si].name == e.name) { ref.step = si; shapeRef = ref; break; }
-          }
-        } else {
-          const steps = ctxs[state.currentCtx].steps;
-          for (let i=state.currentStep+1; i<steps.length; i++) {
-            const loc = steps[i].loc;
-            if (loc == null) break;
-            if (loc === e.name) { shapeRef = {ctx:state.currentCtx-1, step:i}; break; }
           }
         }
         // tiny device events go straight to the rewrite rule
@@ -715,6 +728,7 @@ async function renderProfiler(path, opts) {
     }
   }
 
+  let lastCanvasRect = null;
   function resize() {
     const [width, height] = canvasDims();
     if (canvas.width === width*dpr && canvas.height === height*dpr) return;
@@ -723,6 +737,11 @@ async function renderProfiler(path, opts) {
     canvas.style.height = `${height}px`;
     canvas.style.width = `${width}px`;
     ctx.scale(dpr, dpr);
+    const newRect = rect(canvas);
+    if (lastCanvasRect != null && lastCanvasRect.width > 0) {
+      zoomLevel = d3.zoomIdentity.translate(zoomLevel.x+lastCanvasRect.left-newRect.left, 0).scale(zoomLevel.k*lastCanvasRect.width/width);
+    }
+    lastCanvasRect = { left:newRect.left, width };
     d3.select(canvas).call(canvasZoom.transform, zoomLevel);
   }
 
@@ -787,8 +806,7 @@ document.getElementById("zoom-to-fit-btn").addEventListener("click", () => {
   const svg = d3.select("#graph-svg");
   svg.call(svgZoom.transform, d3.zoomIdentity);
   const mainRect = rect(".main-container");
-  const x0 = rect(".ctx-list-parent").right;
-  const x1 = rect(".metadata-parent").left;
+  const [x0, x1] = viewBounds();
   const pad = 16;
   const R = { x: x0+pad, y: mainRect.top+pad, width: (x1>0 ? x1-x0 : mainRect.width)-2*pad, height: mainRect.height-2*pad };
   const r = rect("#render");
@@ -859,9 +877,9 @@ const evtSources = [];
 // rewrite: a single UOp transformation
 // step: collection of rewrites
 // context: collection of steps
-const state = {currentCtx:-1, currentStep:0, currentRewrite:0, expandSteps:false, callSrcMask:new Set()};
+const state = {currentCtx:-1, currentStep:0, currentRewrite:0, expandSteps:false, callSrcMask:new Set(), expandedNodes:new Set()};
 function setState(ns) {
-  saveToHistory(state);
+  if (["currentCtx", "currentStep", "currentRewrite"].some(k => k in ns && state[k] !== ns[k])) saveToHistory(state);
   const { ctx:prevCtx, step:prevStep } = select(state.currentCtx, state.currentStep);
   const prevRewrite = state.currentRewrite;
   Object.assign(state, ns);
@@ -974,15 +992,6 @@ async function main() {
   }
   if (!ckey.startsWith("/graph")) {
     if (!(ckey in cache)) cache[ckey] = ret = await fetchValue(ckey);
-    if (ret.steps?.length > 0) {
-      const el = select(state.currentCtx, state.currentStep);
-      if (el.step.querySelectorAll("ul").length === ret.steps.length) return;
-      // re render the list with new items
-      ctx.steps.push(...ret.steps);
-      while (el.ctx.children.length > 1) el.ctx.children[1].remove();
-      appendSteps(el.ctx, state.currentCtx, ctx.steps);
-      return setState({ currentStep:state.currentStep+1, expandSteps:true });
-    }
     // timeline with cycles on the x axis
     if (ret instanceof ArrayBuffer) {
       const pkts = step.query.includes("sqtt");
@@ -1025,23 +1034,19 @@ async function main() {
       }
       return table;
     }
-    if (ret.ref != null) {
-      const disasmIdx = ctxs[ret.ref+1].steps.findIndex(s => s.name === "View Disassembly")
-      metadata.appendChild(d3.create("a").text("View Disassembly").on("click", () => switchCtx(ret.ref, disasmIdx)).node());
-    }
     if (ret.cols != null) renderTable(root, ret);
     else if (ret.src != null) root.append(() => codeBlock(ret.src, ret.lang));
     return document.querySelector("#custom").replaceChildren(root.node());
   }
   // ** Graph view
   // if we don't have a complete cache yet we start streaming graphs in this step
-  if (!(ckey in cache) || (cache[ckey].length !== step.match_count+1 && activeSrc == null)) {
+  if (!(ckey in cache) || (!cache[ckey].done && activeSrc == null)) {
     ret = [];
     cache[ckey] = ret;
     const eventSource = new EventSource(ckey);
     evtSources.push(eventSource);
     eventSource.onmessage = (e) => {
-      if (e.data === "[DONE]") return eventSource.close();
+      if (e.data === "[DONE]") { ret.done = true; eventSource.close(); return; }
       const chunk = JSON.parse(e.data);
       ret.push(chunk);
       // if it's the first one render this new rgaph
@@ -1054,12 +1059,13 @@ async function main() {
   if (ret.length === 0) return;
   // ** center graph
   const data = ret[currentRewrite];
-  const render = (opts) => renderDag({ data, opts }, { recenter:currentRewrite === 0 });
-  const getOpts = () => ({ showIndexing:showIndexing.toggle.checked, showCallSrc:showCallSrc.toggle.checked, showSink:showSink.toggle.checked, callSrcMask:state.callSrcMask });
-  render(getOpts());
-  showIndexing.toggle.onchange = () => render(getOpts());
-  showCallSrc.toggle.onchange = () => { state.callSrcMask.clear(); render(getOpts()); }
-  showSink.toggle.onchange = () => render(getOpts());
+  const render = (layoutOpts, renderOpts) => renderDag({ data, opts:layoutOpts }, renderOpts);
+  const getOpts = () => ({ showIndexing:showIndexing.toggle.checked, showCallSrc:showCallSrc.toggle.checked, showSink:showSink.toggle.checked,
+    callSrcMask:state.callSrcMask, expandedNodes:state.expandedNodes });
+  render(getOpts(), { recenter:currentRewrite === 0 });
+  showIndexing.toggle.onchange = () => render(getOpts(), { recenter:true });
+  showCallSrc.toggle.onchange = () => { state.callSrcMask.clear(); render(getOpts(), { recenter:true }); }
+  showSink.toggle.onchange = () => render(getOpts(), { recenter:true });
   // ** right sidebar metadata
   metadata.innerHTML = "";
   if (ckey.includes("rewrites")) metadata.append(showIndexing.label, showCallSrc.label, showSink.label);
