@@ -39,13 +39,6 @@ class SoftwareLayoutSP(SoftwareLayout):
     )
     self._scroller.add_widget(self.disable_updates_toggle)
 
-    self.skip_compile_toggle = toggle_item_sp(
-      lambda: tr("开机跳过编译"),
-      description="",
-      initial_state=ui_state.params.get_bool("SkipOnroadCompile"),
-      callback=self._on_skip_compile_toggled,
-    )
-    self._scroller.add_widget(self.skip_compile_toggle)
 
   def _handle_reboot(self, result):
     if result == DialogResult.CONFIRM:
@@ -58,11 +51,6 @@ class SoftwareLayoutSP(SoftwareLayout):
     dialog = ConfirmDialog(tr("修改后需要重启生效，立即重启？"), tr("重启"), callback=self._handle_reboot)
     gui_app.push_widget(dialog)
 
-  def _on_skip_compile_toggled(self, enabled):
-    ui_state.params.put_bool("SkipOnroadCompile", enabled)
-    if enabled:
-      dialog = ConfirmDialog(tr("开启后开机将跳过编译直接启动，用于预编译版本。修改后重启生效。"), tr("知道了"), callback=None)
-      gui_app.push_widget(dialog)
 
   def _on_select_branch(self):
     current_git_branch = ui_state.params.get("GitBranch") or ""
