@@ -28,6 +28,18 @@ class FeaturesLayout(Widget):
       value_change_step=1,
       description=lambda: tr("0=关闭；1=实时纠偏；2=实时纠偏加长期学习。数值越大介入越强。"),
     )
+    # CP 移植：自动居中的力度参数（原实现只能靠工具箱改，这里补菜单入口）
+    self._auto_center_gain_item = option_item_sp(
+      title=lambda: tr("自动居中纠偏强度"),
+      param="AutoCenterGain",
+      min_value=0,
+      max_value=200,
+      value_change_step=5,
+      description=lambda: tr("车道居中纠偏的力度（单位 0.01）。40 为标准：每偏离车道中心 1 米，"
+                             "约产生 0.6 m/s² 的横向加速度修正；数值越大纠得越快越硬。"
+                             "0 = 使用内置的保守值。仅在「自动居中纠偏」非关闭时有效。"),
+    )
+
     self._curve_centering_item = option_item_sp(
       title=lambda: tr("弯道居中"),
       param="CurveCenterMode",
@@ -35,6 +47,28 @@ class FeaturesLayout(Widget):
       max_value=1,
       value_change_step=1,
       description=lambda: tr("开启后，在弯道中优先保持车道居中，提升过弯横向稳定性。"),
+    )
+
+    # CP 移植：弯道居中的两个参数（同上，补菜单入口）
+    self._curve_center_gain_item = option_item_sp(
+      title=lambda: tr("弯道居中强度"),
+      param="CurveCenterGain",
+      min_value=0,
+      max_value=200,
+      value_change_step=5,
+      description=lambda: tr("弯道中在「自动居中纠偏强度」基础上额外加强的倍数（单位 0.01）。"
+                             "60 为标准：相当于把纠偏力度再乘 1.2 倍；数值越大，过弯时贴中线越紧。"
+                             "0 = 使用内置值。"),
+    )
+    self._curve_center_curv_item = option_item_sp(
+      title=lambda: tr("弯道居中触发曲率"),
+      param="CurveCenterCurv",
+      min_value=1,
+      max_value=10,
+      value_change_step=1,
+      description=lambda: tr("弯道居中开始介入所需的弯道曲率（单位 0.001 1/m）。"
+                             "数值越小，越缓的弯道也会介入：1 = 半径 1000 米以上，2 = 半径 500 米，"
+                             "4 = 半径 250 米，10 = 半径 100 米以内的急弯才介入。出厂值 2。"),
     )
 
     # CP 移植：视觉弯道限速（复用 SP 原生 Smart Cruise Control - Vision 的物理算法，
@@ -121,7 +155,13 @@ class FeaturesLayout(Widget):
     items = [
       self._auto_centering_item,
       LineSeparatorSP(40),
+      self._auto_center_gain_item,
+      LineSeparatorSP(40),
       self._curve_centering_item,
+      LineSeparatorSP(40),
+      self._curve_center_gain_item,
+      LineSeparatorSP(40),
+      self._curve_center_curv_item,
       LineSeparatorSP(40),
       self._vision_turn_toggle,
       LineSeparatorSP(40),

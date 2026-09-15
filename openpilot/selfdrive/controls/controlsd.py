@@ -176,12 +176,17 @@ class Controls(ControlsExt):
       new_desired_curvature = self.sm['lateralManeuverPlan'].desiredCurvature if CC.latActive else self.curvature
     else:
       new_desired_curvature = model_v2.action.desiredCurvature if CC.latActive else self.curvature
-    self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, self.desired_curvature, new_desired_curvature, lp.roll)
-
     # 自动居中 + 弯道居中：修正期望曲率
+    # CP 移植修正（2026-09-15）：注入点必须在 clip_curvature() 之前。原先在限幅之后相加，
+    # 会完全绕过 ISO 横向 jerk / 横向加速度 / MAX_CURVATURE 三重安全限幅，且
+    # curvature_limited 标志不再反映真实曲率。并入目标值后由 clip_curvature 统一约束。
     lane_change_active = model_v2.meta.laneChangeState != 0
-    cur_correct = self.auto_center.update(model_v2, CS.vEgo, CS.steeringPressed, lane_change_active)
-    self.desired_curvature = self.desired_curvature + cur_correct
+    # F：横向控制未激活时不介入 —— 此时横向执行器无输出，修正只会污染
+    # self.desired_curvature（它同时是下一帧速率限制的 prev_curvature）。
+    cur_correct = self.auto_center.update(model_v2, CS.vEgo, CS.steeringPressed,
+                                          lane_change_active, CC.latActive)
+    self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, self.desired_curvature,
+                                                              new_desired_curvature + cur_correct, lp.roll)
 
     lat_delay = self.sm["lateralDelay"].lateralDelay + LAT_SMOOTH_SECONDS
 

@@ -309,7 +309,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"AutoCenterGain", {PERSISTENT | BACKUP, INT, "40"}},
     {"CurveCenterMode", {PERSISTENT | BACKUP, INT, "0"}},
     {"CurveCenterGain", {PERSISTENT | BACKUP, INT, "60"}},
-    {"CurveCenterCurv", {PERSISTENT | BACKUP, INT, "4"}},
+    {"CurveCenterCurv", {PERSISTENT | BACKUP, INT, "2"}},
     {"VisionTurnSpeedEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TurnSpeedAggressiveness", {PERSISTENT | BACKUP, INT, "100"}},
     {"AutoCurveSpeedLowerLimit", {PERSISTENT | BACKUP, INT, "30"}},
