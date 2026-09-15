@@ -158,6 +158,12 @@ class Controls(ControlsExt):
     else:
       new_desired_curvature = model_v2.action.desiredCurvature if CC.latActive else self.curvature
     self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, self.desired_curvature, new_desired_curvature, lp.roll)
+
+    # 自动居中 + 弯道居中：修正期望曲率
+    lane_change_active = model_v2.meta.laneChangeState != 0
+    cur_correct = self.auto_center.update(model_v2, CS.vEgo, CS.steeringPressed, lane_change_active)
+    self.desired_curvature = self.desired_curvature + cur_correct
+
     lat_delay = self.sm["lateralDelay"].lateralDelay + LAT_SMOOTH_SECONDS
 
     actuators.curvature = self.desired_curvature
