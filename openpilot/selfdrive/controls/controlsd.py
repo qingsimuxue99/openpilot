@@ -122,6 +122,9 @@ class Controls(ControlsExt):
     CC.latActive = _lat_active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
                    (not standstill or self.CP.steerAtStandstill)
     CC.longActive = CC.enabled and (self.CP.openpilotLongitudinalControl or not self.CP_SP.pcmCruiseSpeed)
+    # 踩刹车退出纵向控制
+    if CS.brakePressed:
+      CC.longActive = False
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
