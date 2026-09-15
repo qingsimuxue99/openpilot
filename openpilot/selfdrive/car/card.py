@@ -259,7 +259,7 @@ class Car:
       self.v_cruise_helper.initialize_v_cruise(self.CS_prev, self.experimental_mode, self.dynamic_experimental_control)
 
     # TODO: mirror the carState.cruiseState struct?
-    CS.vCruise = float(self.v_cruise_helper.v_cruise_kph)
+    CS.vCruise = float(self.v_cruise_helper.v_cruise_kph) * 0.95  # 5%减速补偿：现代车仪表有正偏差
     # In experimental mode the planner follows traffic/limits, so the actual cruising speed
     # can be lower than the set speed. Show the effective target so the displayed speed
     # matches what the car is actually cruising at.
