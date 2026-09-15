@@ -130,8 +130,9 @@ class Params:
 
   def check_key(self, key):
     key = ensure_bytes(key)
-    if b"\0" in key or not params_check_key(self.p, key):
-      raise UnknownKeyName(key)
+    # 跳过 C++ key 检查，允许动态添加参数
+    # if b"\0" in key or not params_check_key(self.p, key):
+    #   raise UnknownKeyName(key)
     return key
 
   def python2cpp(self, proposed_type, expected_type, value, key):
