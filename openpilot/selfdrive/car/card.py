@@ -37,6 +37,21 @@ carlog.addHandler(ForwardingHandler(cloudlog))
 
 TESLA_SPEED_LIMIT_CONTEXT_STALE_S = 0.2
 
+# === 轮速标定补偿表（SP-XL 定制）=================================================
+# carFingerprint -> wheelSpeedFactor
+# 车载 ABS(WHL_SPD11) 换算出的 vEgo 若与真实车速不符，会让 openpilot 的定速、
+# 跟车距离、制动时机统统一致地偏掉。上游对 hyundai 未设置该系数（默认 1.0），
+# 下面这张表用于逐车型修正。数值 = 真实车速 / vEgo 读数。
+# 本车 HYUNDAI_ELANTRA_2021 实测：定速 50 时 vEgo=49.68、真实=55（手机 GPS 与车机仪表一致）
+#   => 系数 = 55 / 49.68 = 1.107（菜单里取整为 1.11）
+# 运行期可被参数 WheelSpeedFactor 覆盖（设置 -> 功能 -> 车速校正系数）；
+# 该参数只对本表列出的车型生效，避免误伤上游已标好的 honda(1.025)/toyota(1.035)。
+# 判定工具：python3 /data/verify_vs_imu.py（IMU 独立真值）、/data/analyze_route_speed_steer.py
+WHEEL_SPEED_FACTOR_OVERRIDE = {
+  "HYUNDAI_ELANTRA_2021": 1.11,
+}
+# ================================================================================
+
 
 def get_tesla_speed_limit_context(sm: messaging.SubMaster, now: float) -> tuple[float, bool, float]:
   # 仅采用新鲜且已启用“限速辅助”的最终目标；信息/警告模式不得改动原车设定速度。
@@ -139,6 +154,26 @@ class Car:
     else:
       self.CI, self.CP, self.CP_SP = CI, CI.CP, CI.CP_SP
       self.RI = RI
+
+    # === 轮速标定补偿（SP-XL 定制）：把 vEgo 校到真实车速 ===
+    # 不这么做的话，设定 50 会被忠实执行成「vEgo=50」，而真实车速是 55。
+    # self.CP 是可写 builder，且与 CarState 共享同一对象引用，改这里立刻生效。
+    try:
+      _factor = WHEEL_SPEED_FACTOR_OVERRIDE.get(self.CP.carFingerprint)
+      if _factor is not None:
+        # 菜单参数优先（设置 -> 功能 -> 车速校正系数）
+        try:
+          _pv = float(self.params.get("WheelSpeedFactor", return_default=True))
+        except Exception:
+          _pv = None
+        if _pv is not None and 0.5 <= _pv <= 1.5:
+          _factor = _pv
+      if _factor is not None and abs(_factor - 1.0) > 1e-6:
+        cloudlog.warning(f"wheelSpeedFactor override [{self.CP.carFingerprint}]: "
+                         f"{self.CP.wheelSpeedFactor:.4f} -> {_factor:.4f}")
+        self.CP.wheelSpeedFactor = _factor
+    except Exception as e:
+      cloudlog.warning(f"wheelSpeedFactor override failed: {e}")
 
     self.CP.alternativeExperience = 0
     # mads

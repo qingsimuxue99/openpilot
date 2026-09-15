@@ -10,6 +10,28 @@ from openpilot.system.ui.sunnypilot.widgets.list_view import toggle_item_sp, opt
 from openpilot.system.ui.lib.multilang import tr
 
 
+# 车速校正系数只对下面这些车型开放（出厂标定表内）。
+# 不这么做的话，上游已经标好的 honda(1.025)/toyota(1.035) 会被全局默认值误伤。
+_SPEED_CALIB_FINGERPRINTS = frozenset({"HYUNDAI_ELANTRA_2021"})
+
+
+def _speed_calib_supported() -> bool:
+  """当前车辆是否支持调「车速校正系数」。只在构造时算一次，避免每帧解析 capnp。"""
+  try:
+    from openpilot.common.params import Params
+    from opendbc.car.structs import car as car_structs
+    p = Params()
+    raw = p.get("CarParamsPersistent") or p.get("CarParams")
+    if not raw:
+      return False
+    # 注意：本 fork 的 capnp from_bytes 返回 contextmanager，必须 with 解包，
+    # 直接用 .carFingerprint 会抛 AttributeError（实测踩过）。
+    with car_structs.CarParams.from_bytes(raw) as cp:
+      return cp.carFingerprint in _SPEED_CALIB_FINGERPRINTS
+  except Exception:
+    return False
+
+
 class FeaturesLayout(Widget):
   """「功能」菜单：所有新增的独立功能开关统一放在这个面板下。"""
 
@@ -152,6 +174,21 @@ class FeaturesLayout(Widget):
                              "默认 0 已经包含固定的相机安装物理修正，通常不需要调。"),
     )
 
+    # SP-XL 定制：车速校正系数：把 openpilot 的 vEgo 校到真实车速
+    self._speed_calib_item = option_item_sp(
+      title=lambda: tr("车速校正系数"),
+      param="WheelSpeedFactor",
+      min_value=90,
+      max_value=130,
+      value_change_step=1,
+      use_float_scaling=True,
+      enabled=_speed_calib_supported(),
+      description=lambda: tr("校正 openpilot 测到的车速。数值 = 真实车速 / 它测到的车速："
+                             "例如它测到 50 而实际是 55，填 1.11 就把读数放大 11%，"
+                             "这样设定 50 就真的跑 50，不会超速。1.00 = 不校正。"
+                             "只对出厂标定表内的车型生效；改完要熄火再点火才生效。"),
+    )
+
     items = [
       self._auto_centering_item,
       LineSeparatorSP(40),
@@ -180,6 +217,8 @@ class FeaturesLayout(Widget):
       self._traffic_stop_toggle,
       LineSeparatorSP(40),
       self._traffic_stop_adjust,
+      LineSeparatorSP(40),
+      self._speed_calib_item,
     ]
     self._scroller = Scroller(items, line_separator=False, spacing=0)
 

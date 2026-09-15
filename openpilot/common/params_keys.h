@@ -314,6 +314,8 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"TurnSpeedAggressiveness", {PERSISTENT | BACKUP, INT, "100"}},
     {"AutoCurveSpeedLowerLimit", {PERSISTENT | BACKUP, INT, "30"}},
     {"StopDistance", {PERSISTENT | BACKUP, FLOAT, "6.0"}},
+    // SP-XL 定制：车速校正系数（真实车速 / vEgo 读数）。1.11 = 把读数放大 11%
+    {"WheelSpeedFactor", {PERSISTENT | BACKUP, FLOAT, "1.11"}},
     {"BrakeExitLongitudinal", {PERSISTENT | BACKUP, BOOL, "0"}},
     // CP 移植：广角/长焦摄像头切换速度（km/h，菜单单位；默认36/54 == 原10/15 m/s）
     {"WideCamSpeedKph", {PERSISTENT | BACKUP, INT, "36"}},

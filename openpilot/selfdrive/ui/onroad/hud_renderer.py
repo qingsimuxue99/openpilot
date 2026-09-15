@@ -197,6 +197,11 @@ class HudRenderer(Widget):
   _LEAD_MARGIN = 20         # 与 chevron_metrics.margin 保持一致
   _LEAD_LINE_H = 50         # 与 chevron_metrics.line_height 保持一致
 
+  # 胶囊配色：未激活=中性灰（常驻可见，用来确认功能在线）；激活后转成功能色
+  _CAPSULE_COLOR_IDLE = rl.Color(110, 110, 110, 190)         # 未激活：灰
+  _CAPSULE_COLOR_ACTIVE_CURVE = rl.Color(34, 139, 34, 220)   # 弯道限速激活：绿
+  _CAPSULE_COLOR_ACTIVE_STOP = rl.Color(220, 50, 50, 220)    # 红绿灯/停止激活：红
+
   def _lead_status_line_count(self) -> int:
     """底部状态栏当前占几行（0 = 未开启）。ChevronInfo: 1=距离 2=速度 3=TTC 4=全部。"""
     try:
@@ -213,11 +218,12 @@ class HudRenderer(Widget):
     return lines
 
   def _draw_status_capsules(self, rect: rl.Rectangle) -> None:
-    """左下角状态胶囊：弯道限速（绿）/ 红绿灯停等（红）。
+    """左下角状态胶囊：弯道限速（激活=绿）/ 红绿灯停等（激活=红）。
 
-    仅在实际识别到弯道或红灯时出现，平时完全隐藏。
+    两个胶囊**常驻显示**：未激活时为灰色，激活后转成对应的功能色，
+    这样一眼就能确认功能是否在线、当前是否在工作。
     位置：距左边框 20px、距底部状态栏（前车距离/速度/TTC）上沿 20px；
-    两者同时出现时向上堆叠，不互相覆盖。
+    两个胶囊固定上下堆叠（弯道限速在下、红绿灯在上），位置不随状态跳变。
     """
     sm = ui_state.sm
     h = self._CAPSULE_H
@@ -226,34 +232,47 @@ class HudRenderer(Widget):
     lines = self._lead_status_line_count()
     status_block = (self._LEAD_MARGIN + lines * self._LEAD_LINE_H) if lines else 0
     base_y = rect.y + rect.height - status_block - self._CAPSULE_GAP - h
-    slot = 0
 
-    # 1. 弯道限速胶囊（绿色）
+    # 1. 弯道限速胶囊（未激活灰 / 激活绿）
+    curve_active = False
     try:
       if sm.recv_frame.get("longitudinalPlanSP", 0) >= ui_state.started_frame:
-        if sm["longitudinalPlanSP"].smartCruiseControl.vision.active:
-          self._draw_capsule(x, base_y - slot * (h + self._CAPSULE_STACK_GAP), h, "Curve Limit",
-                             rl.Color(34, 139, 34, 200))
-          slot += 1
+        curve_active = bool(sm["longitudinalPlanSP"].smartCruiseControl.vision.active)
     except Exception:
-      pass
+      curve_active = False
+    self._draw_capsule(x, base_y, h, "Curve Limit",
+                       self._CAPSULE_COLOR_ACTIVE_CURVE if curve_active else self._CAPSULE_COLOR_IDLE)
 
-    # 2. 红灯/停止标志停等胶囊（红色）。每秒读一次参数，够用且不占资源。
+    # 2. 红灯/停止标志停等胶囊（未激活灰 / 激活红）。每秒读一次参数，够用且不占资源。
     try:
       if self._capsule_counter % 20 == 0:
         v = ui_state.params.get("TrafficStopState", return_default=True)
         self._capsule_stop_state = int(v) if v is not None else 0
       self._capsule_counter += 1
-      if self._capsule_stop_state in (1, 2):
-        text = "Red Light" if self._capsule_stop_state == 1 else "Stopped"
-        self._draw_capsule(x, base_y - slot * (h + self._CAPSULE_STACK_GAP), h, text,
-                           rl.Color(220, 50, 50, 200))
     except Exception:
       pass
 
+    if self._capsule_stop_state in (1, 2):
+      text = "Red Light" if self._capsule_stop_state == 1 else "Stopped"
+      color = self._CAPSULE_COLOR_ACTIVE_STOP
+    else:
+      text = "Red Light"
+      color = self._CAPSULE_COLOR_IDLE
+    self._draw_capsule(x, base_y - (h + self._CAPSULE_STACK_GAP), h, text, color)
+
   def _draw_capsule(self, x: float, y: float, height: float, text: str, color: rl.Color) -> None:
-    """CP 移植：画一个左下角状态胶囊。"""
-    text_width = rl.text_length(text, self._font_medium)
+    """CP 移植：画一个左下角状态胶囊（全圆角 pill）。
+
+    ⚠️ comma 的 raylib 分支 ABI（实测反射 _raylib_cffi_comma.lib）：
+      • `TextLength(char*)` —— **只吃 text，没有 font 参数**，不能用来按字体量宽；
+        要带字体量宽必须用 `measure_text_cached(font, text, size)`。
+      • `DrawRectangleRounded(Rectangle, float roundness, int segments, Color)`
+        —— 第一个参数是 **Rectangle 对象**，不是 x/y/w/h 四个数。
+      roundness=1.0 → 圆角半径 = 短边一半 = 完整胶囊。
+    """
+    font_size = 20
+    spacing = 1
+    text_width = measure_text_cached(self._font_medium, text, font_size, spacing).x
     width = text_width + 30
-    rl.draw_rectangle_rounded(int(x), int(y), int(width), int(height), 15, color)
-    rl.draw_text_ex(self._font_medium, text, rl.Vector2(x + 15, y + 6), 20, 1, rl.WHITE)
+    rl.draw_rectangle_rounded(rl.Rectangle(float(x), float(y), float(width), float(height)), 1.0, 10, color)
+    rl.draw_text_ex(self._font_medium, text, rl.Vector2(x + 15, y + 6), font_size, spacing, rl.WHITE)
