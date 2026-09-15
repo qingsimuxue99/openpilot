@@ -110,6 +110,22 @@ class Controls(ControlsExt):
     long_plan = self.sm['longitudinalPlan']
     model_v2 = self.sm['modelV2']
 
+    # 转弯最低速度限制：大曲率转弯时，不低于设定速度
+    try:
+        curve_min_speed_kph = ui_state.params.get_int("CurveMinSpeed")
+        if curve_min_speed_kph > 0:
+            curve_min_speed_ms = curve_min_speed_kph / 3.6
+            # 模型期望曲率（取中间点）
+            exp_curv = abs(model_v2.orientation.x[len(model_v2.orientation.x)//2])
+            # 大曲率转弯（>0.005 1/m ≈ 转弯半径200米）
+            if exp_curv > 0.005 and CS.vEgo < curve_min_speed_ms:
+                long_plan.shouldStop = False  # 转弯时不让停
+                # 加速度下限：保证不会减速到太低
+                if long_plan.aTarget < -0.5:
+                    long_plan.aTarget = -0.5
+    except Exception:
+        pass
+
     CC = car.CarControl.new_message()
     CC.enabled = self.sm['selfdriveState'].enabled
 

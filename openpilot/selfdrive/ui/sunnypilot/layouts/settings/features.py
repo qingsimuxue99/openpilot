@@ -30,6 +30,14 @@ class FeaturesLayout(Widget):
     # CP 移植：自动开启巡航（已移除，功能无效）
 
     # CP 移植：车道线轨迹颜色 + 广角/长焦摄像头切换速度
+    # 转弯最低速度
+    self._curve_min_speed_item = option_item_sp(
+      title=lambda: tr("转弯最低速度"),
+      param="CurveMinSpeed",
+      min=10, max=60, step=5, unit="km/h",
+      description=lambda: tr("转弯时不低于此速度，防止转弯太慢或停半路。0=不限。"),
+    )
+
     self._lane_path_color_item = option_item_sp(
       title=lambda: tr("车道线轨迹颜色"),
       param="ShowPathColorLane",
