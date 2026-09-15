@@ -121,6 +121,9 @@ class HudRenderer(Widget):
     button_y = rect.y + UI_CONFIG.border_size
     self._exp_button.render(rl.Rectangle(button_x, button_y, UI_CONFIG.button_size, UI_CONFIG.button_size))
 
+    # 左下角胶囊图标：弯道限速 + 红灯减速
+    self._draw_status_capsules(rect)
+
   def user_interacting(self) -> bool:
     return self._exp_button.is_pressed
 
@@ -178,3 +181,72 @@ class HudRenderer(Widget):
     unit_text_size = measure_text_cached(self._font_medium, unit_text, FONT_SIZES.speed_unit)
     unit_pos = rl.Vector2(rect.x + rect.width / 2 - unit_text_size.x / 2, 290 - unit_text_size.y / 2)
     rl.draw_text_ex(self._font_medium, unit_text, unit_pos, FONT_SIZES.speed_unit, 0, COLORS.WHITE_TRANSLUCENT)
+
+
+  def _draw_status_capsules(self, rect: rl.Rectangle) -> None:
+    """左下角胶囊图标：弯道限速（绿）+ 红灯减速（红）"""
+    sm = ui_state.sm  # 正确获取 sm，不用全局变量
+    
+    capsule_x = rect.x + 20  # 左边距 20px
+    capsule_y = rect.y + rect.height - 80  # 底部状态栏上方
+    capsule_height = 30
+    spacing = 10
+    
+    # 1. 弯道限速胶囊（绿色）
+    try:
+        if sm.recv_frame.get("modelV2", 0) >= ui_state.started_frame:
+            model_v2 = sm['modelV2']
+            curvature = abs(model_v2.orientation.x[0])
+            if curvature > 0.005:  # 有明显曲率
+                # 画绿色胶囊
+                text = "Curve Limit"
+                text_width = rl.text_length(text, self._font_medium)
+                capsule_width = text_width + 30
+                
+                rl.draw_rectangle_rounded(
+                    int(capsule_x),
+                    int(capsule_y),
+                    int(capsule_width),
+                    int(capsule_height),
+                    15,
+                    rl.Color(34, 139, 34, 200),  # 绿色半透明
+                )
+                rl.draw_text_ex(
+                    self._font_medium,
+                    text,
+                    rl.Vector2(capsule_x + 15, capsule_y + 6),
+                    20,
+                    1,
+                    rl.WHITE,
+                )
+                capsule_y += capsule_height + spacing
+    except Exception:
+        pass
+    
+    # 2. 红灯减速胶囊（红色）
+    try:
+        if sm.recv_frame.get("longitudinalPlan", 0) >= ui_state.started_frame:
+            long_plan = sm['longitudinalPlan']
+            if long_plan.trafficState == 1:  # 红灯
+                text = "Red Light"
+                text_width = rl.text_length(text, self._font_medium)
+                capsule_width = text_width + 30
+                
+                rl.draw_rectangle_rounded(
+                    int(capsule_x),
+                    int(capsule_y),
+                    int(capsule_width),
+                    int(capsule_height),
+                    15,
+                    rl.Color(220, 50, 50, 200),  # 红色半透明
+                )
+                rl.draw_text_ex(
+                    self._font_medium,
+                    text,
+                    rl.Vector2(capsule_x + 15, capsule_y + 6),
+                    20,
+                    1,
+                    rl.WHITE,
+                )
+    except Exception:
+        pass

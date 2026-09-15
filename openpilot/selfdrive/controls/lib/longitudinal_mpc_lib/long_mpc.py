@@ -57,7 +57,7 @@ COMFORT_BRAKE = 2.5
 # 停车距离（可配置，重启生效）
 import os
 _stop_dist_param = os.environ.get('STOP_DISTANCE_OVERRIDE', '8.0')
-STOP_DISTANCE = float(_stop_dist_param)
+STOP_DISTANCE = 8.0  # 默认值，__init__ 里会覆盖
 MIN_X_LEAD_FACTOR = 0.5
 
 def get_jerk_factor(personality=log.LongitudinalPersonality.standard):
