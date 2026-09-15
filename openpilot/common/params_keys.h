@@ -307,6 +307,13 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
 
     // CP 移植：有车道线时的轨迹颜色（0=关闭; 1-10=CP颜色索引0-9; 11-20=同色+描边）
     {"ShowPathColorLane", {PERSISTENT | BACKUP, INT, "0"}},
+    {"AutoCenterMode", {PERSISTENT | BACKUP, INT, "2"}},
+    {"CurveCenterMode", {PERSISTENT | BACKUP, INT, "0"}},
+    {"VisionTurnSpeedEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"TurnSpeedAggressiveness", {PERSISTENT | BACKUP, INT, "100"}},
+    {"AutoCurveSpeedLowerLimit", {PERSISTENT | BACKUP, INT, "30"}},
+    {"StopDistance", {PERSISTENT | BACKUP, FLOAT, "8.0"}},
+    {"BrakeExitLongitudinal", {PERSISTENT | BACKUP, BOOL, "0"}},
     // CP 移植：广角/长焦摄像头切换速度（km/h，菜单单位；默认36/54 == 原10/15 m/s）
     {"WideCamSpeedKph", {PERSISTENT | BACKUP, INT, "36"}},
     {"TeleCamSpeedKph", {PERSISTENT | BACKUP, INT, "54"}},
