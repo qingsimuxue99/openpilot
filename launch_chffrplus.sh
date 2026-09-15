@@ -125,9 +125,26 @@ function launch {
 
   # start manager
   # 启动 C3 工具箱（优先仓库内副本，工具箱随仓库安装；/data 旧副本仅兜底）
+  # TOOLBOX_DELAYED：延时启动 —— 等设备正常进入 UI（ui 进程存活并稳定 10s）后再拉起，
+  # 避免开机阶段与 manager/编译抢 CPU；最多等 5 分钟兜底（UI 起不来也照常启动）。
   TOOLBOX_PY="$DIR/openpilot/system/toolbox/c3_toolbox_local.py"
   [ -f "$TOOLBOX_PY" ] || TOOLBOX_PY="/data/c3_toolbox_local.py"
-  nohup python3 "$TOOLBOX_PY" > /tmp/toolbox.log 2>&1 &
+  (
+    waited=0
+    while [ "$waited" -lt 300 ]; do
+      if pgrep -f "selfdrive\.ui\.ui" > /dev/null 2>&1; then
+        sleep 10
+        break
+      fi
+      sleep 5
+      waited=$((waited + 5))
+    done
+    echo "[toolbox] UI ready (waited ${waited}s), starting toolbox" >> /tmp/toolbox.log
+    # TOOLBOX_PYTHONPATH：补上 cereal/pydeps 路径，否则开机启动的感知采集
+    # 会因 import cereal 失败而一直 available:false
+    PYTHONPATH="$DIR:/data/openpilot/pydeps:${PYTHONPATH:-}" \
+      nohup python3 "$TOOLBOX_PY" >> /tmp/toolbox.log 2>&1 &
+  ) &
 
   cd openpilot/system/manager
   if [ ! -f $DIR/prebuilt ] && [ ! -f /data/params/d/SkipOnroadCompile ]; then
