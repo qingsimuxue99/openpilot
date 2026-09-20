@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+
+source "$DIR/launch_env.sh"
+
+function agnos_init {
+  # TODO: move this to agnos
+  sudo rm -f /data/etc/NetworkManager/system-connections/*.nmmeta
+
+  # set success flag for current boot slot
+  sudo abctl --set_success
+
+  # TODO: do this without udev in AGNOS
+  # udev does this, but sometimes we startup faster
+  sudo chgrp gpu /dev/adsprpc-smd /dev/ion /dev/kgsl-3d0
+  sudo chmod 660 /dev/adsprpc-smd /dev/ion /dev/kgsl-3d0
+
+  # Check if AGNOS update is required
+  if [ $(< /VERSION) != "$AGNOS_VERSION" ]; then
+    AGNOS_PY="$DIR/system/hardware/tici/agnos.py"
+    MANIFEST="$DIR/system/hardware/tici/agnos.json"
+    if $AGNOS_PY --verify $MANIFEST; then
+      sudo reboot
+    fi
+    $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+  fi
+}
+
+function launch {
+
+  # Remove orphaned git lock if it exists on boot
+  [ -f "$DIR/.git/index.lock" ] && rm -f $DIR/.git/index.lock
+
+  # Check to see if there's a valid overlay-based update available. Conditions
+  # are as follows:
+  #
+  # 1. The DIR init file has to exist, with a newer modtime than anything in
+  #    the DIR Git repo. This checks for local development work or the user
+  #    switching branches/forks, which should not be overwritten.
+  # 2. The FINALIZED consistent file has to exist, indicating there's an update
+  #    that completed successfully and synced to disk.
+
+  if [ -f "${DIR}/.overlay_init" ]; then
+    find ${DIR}/.git -newer ${DIR}/.overlay_init | grep -q '.' 2> /dev/null
+    if [ $? -eq 0 ]; then
+      echo "${DIR} has been modified, skipping overlay update installation"
+    else
+      if [ -f "${STAGING_ROOT}/finalized/.overlay_consistent" ] && [ "$(cat /data/params/d/DisableUpdates 2>/dev/null)" != "1" ]; then
+        if [ ! -d /data/safe_staging/old_openpilot ]; then
+          echo "Valid overlay update found, installing"
+          LAUNCHER_LOCATION="${BASH_SOURCE[0]}"
+
+          mv $DIR /data/safe_staging/old_openpilot
+          mv "${STAGING_ROOT}/finalized" $DIR
+          cd $DIR
+
+          echo "Restarting launch script ${LAUNCHER_LOCATION}"
+          unset AGNOS_VERSION
+          exec "${LAUNCHER_LOCATION}"
+        else
+          echo "openpilot backup found, not updating"
+          # TODO: restore backup? This means the updater didn't start after swapping
+        fi
+      fi
+    fi
+  fi
+
+  # handle pythonpath
+  ln -sfn $(pwd) /data/pythonpath
+  export PYTHONPATH="$PWD"
+
+  # hardware specific init
+  if [ -f /AGNOS ]; then
+    agnos_init
+  fi
+
+  # --- 上线全部 CPU 核心 (必需: controlsd绑core4/plannerd绑core5/modeld pin core7; 不上线=核心进程全崩) ---
+  # 放在 agnos_init 之后: 开机早期 sudo 未就绪, 此时已可靠
+  for c in 4 5 6 7; do
+    ( echo 1 > /sys/devices/system/cpu/cpu$c/online ) 2>/dev/null || sudo sh -c "echo 1 > /sys/devices/system/cpu/cpu$c/online" 2>/dev/null || true
+  done
+
+  # --- C3 工具箱自启 (5588 网页工具箱; 代码随仓库分发, 运行时数据在 /data/c3_toolbox) ---
+  TBX="$DIR/selfdrive/carrot/toolbox"
+  if [ -f "$TBX/c3_toolbox_autostart.sh" ]; then
+    mkdir -p /data/c3_toolbox
+    # 工具箱为非必需进程: 后台启动, 不阻塞出画面(原同步等待网络最多30秒会卡在画面前)
+    ( sleep 3; bash "$TBX/c3_toolbox_autostart.sh" >> /tmp/c3_toolbox_autostart.log 2>&1 ) &
+  fi
+  # --- gen_qr 二维码实时刷新 (IP 变化自动重生成, 供侧栏显示/扫码) ---
+  ( sleep 8; [ -x "$TBX/gen_qr.py" ] && setsid /usr/local/venv/bin/python "$TBX/gen_qr.py" >> /tmp/gen_qr.log 2>&1 < /dev/null & )
+
+  # write tmux scrollback to a file (deferred to background, non-blocking)
+  ( sleep 4; tmux capture-pane -pq -S-1500 > /tmp/launch_log 2>/dev/null ) &
+  # flask/shapely 已 bundle 在 selfdrive/carrot/toolbox/pylibs (autostart 用 PYTHONPATH 引入), 无需 pip install
+
+  # events language init (deferred to background, non-blocking)
+  (
+    sleep 6
+    LANG=$(cat /data/params/d/LanguageSetting 2>/dev/null)
+    EVENTSTAT=$(cd "$DIR" && git status 2>/dev/null)
+    if [ "${LANG}" = "main_ko" ] && [[ ! "${EVENTSTAT}" == *"modified:   selfdrive/controls/lib/events.py"* ]]; then
+      cp -f "$DIR/selfdrive/selfdrived/events.py" "$DIR/scripts/add/events_en.py"
+      cp -f "$DIR/scripts/add/events_ko.py" "$DIR/selfdrive/selfdrived/events.py"
+    elif [ "${LANG}" = "main_en" ] && [[ "${EVENTSTAT}" == *"modified:   selfdrive/controls/lib/events.py"* ]]; then
+      cp -f "$DIR/scripts/add/events_en.py" "$DIR/selfdrive/selfdrived/events.py"
+    fi
+  ) >> /tmp/events_lang.log 2>&1 &
+
+  # start manager
+  cd system/manager
+  # --- 开机编译跳过：SkipBootBuild=1 时确保 prebuilt 存在(跳过开机编译) ---
+  if [ "$(cat /data/params/d/SkipBootBuild 2>/dev/null)" = "1" ]; then
+    touch "$DIR/prebuilt"
+  fi
+
+  if [ ! -f $DIR/prebuilt ]; then
+    ./build.py
+  fi
+  ./manager.py
+
+  # if broken, keep on screen error
+  while true; do sleep 1; done
+}
+
+launch
