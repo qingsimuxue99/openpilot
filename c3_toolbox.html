@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -501,6 +501,12 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 .sec{margin-bottom:18px}
 .sec .ph{margin-bottom:10px}
 .cmd-box{background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:10px;font-family:monospace;font-size:11px;color:var(--ink);white-space:pre-wrap;word-break:break-all;line-height:1.6}
+/* 诊断日志 (diagd) */
+.diag-stat{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin:12px 0}
+.diag-box{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg);margin-top:8px}
+.diag-box-h{padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:var(--hdr);border-bottom:1px solid var(--rule)}
+.diag-pre{margin:0;padding:12px;max-height:50vh;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.5;color:var(--ink);font-family:ui-monospace,Menlo,Consolas,monospace}
+.diag-note{color:var(--muted);font-size:12px;padding:8px 0}
 
 </style>
 </head>
@@ -866,6 +872,23 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 
     </div>
 
+      <!-- 诊断日志 (diagd) -->
+      <div class="sec" id="p-diag">
+        <div class="ph"><h2>诊断日志</h2><p>设备后台守护(diagd)实时记录的所有故障 / 错误 / 进程异常，可复制或下载分享给开发者解析</p></div>
+        <div class="bs-row" style="flex-wrap:wrap;gap:8px">
+          <button class="btn bp" onclick="loadDiag()">🔄 刷新诊断</button>
+          <button class="btn bw" onclick="diagReport()">📝 立即生成报告</button>
+          <button class="btn bw" onclick="diagDownload('report.txt')">⬇️ 下载报告</button>
+          <button class="btn bw" onclick="diagDownload('errors.log')">⬇️ 下载错误流</button>
+          <button class="btn bw" onclick="diagDownload('latest.json')">⬇️ 下载快照</button>
+        </div>
+        <div id="diagStat" class="diag-stat"></div>
+        <div class="diag-box">
+          <div class="diag-box-h">错误 / 故障 / 进程流 (errors.log 末尾 600 行)</div>
+          <pre id="diagErrors" class="diag-pre">点击「刷新诊断」加载…</pre>
+        </div>
+      </div>
+
     <!-- 关于 -->
     <div class="pnl" id="p-about">
       <div class="ph"><h2>关于</h2><p>工具箱信息与连接管理</p></div>
@@ -917,7 +940,7 @@ mark.hl{background:rgba(var(--accent-rgb),.28);color:var(--accent);border-radius
 </div>
 
 <script>
-var AP={},CP={},SP=[];
+var AP={},CP={},SP=[],KN={},MISSING={};
 
 // === Toast ===
 function toast(m,t){var c=document.getElementById('TC'),e=document.createElement('div');e.className='tst '+(t||'in');e.textContent=m;c.appendChild(e);setTimeout(function(){e.style.opacity='0';e.style.transition='opacity .3s';setTimeout(function(){e.remove()},300)},3000)}
@@ -1030,7 +1053,7 @@ function checkAutoBackup(){
 
 // === Params ===
 function loadParams(){toast('正在获取参数...','in');fetch('/api/params').then(function(r){return r.json()}).then(function(d){
-  if(d.success){AP=d.params;SP=d.sorted_keys||[];CP={};fillSortedParams();renderFav();toast(d.message,'ok')}else{toast(d.message,'er')}
+  if(d.success){AP=d.params;SP=d.sorted_keys||[];KN=d.known||{};MISSING={};Object.keys(KN).forEach(function(k){if(AP[k]===undefined)MISSING[k]=1});CP={};fillSortedParams();renderFav();toast(d.message+'，已知参数 '+Object.keys(KN).length+' 个（含未写入）','ok')}else{toast(d.message,'er')}
 }).catch(function(e){toast('获取失败: '+e.message,'er')})}
 
 var CURRENT_BRANCH='';
@@ -1114,7 +1137,10 @@ function toggleFavFilter(){
 function fillSortedParams(){
   var HIDDEN=/^SoundVolume|^Audible|^Beep|^AudibleAlert/;
   var catIds=['lateral','longitudinal','curve','lanechange','nav','display','settings','info'];
-  var keys=SP.length>0?SP:Object.keys(AP).sort();
+  // 已写入 + 已知未写入 合并展示（未写入的也可新建/编辑）
+  var merged={};(SP.length>0?SP:Object.keys(AP).sort()).forEach(function(k){merged[k]=1});
+  Object.keys(KN).forEach(function(k){merged[k]=1});
+  var keys=Object.keys(merged).sort();
   var cats={};var catCounts={};
   catIds.forEach(function(id){cats[id]=[];catCounts[id]=0});
   var other=[];
@@ -1161,6 +1187,8 @@ var BOOL_PARAMS = {
 };
 var BOOL_RE = /^(Show|CameraDebug|DriverCameraDebug|WideCameraDebug)/i;
 function isBoolParam(k){
+  if(KN[k]==='BOOL') return true;            // 服务器给的权威类型（params_keys.h）
+  if(KN[k]&&KN[k]!=='BOOL') return false;    // 已知非布尔（INT/FLOAT/STRING...）
   if(BOOL_PARAMS[k]===1) return true;
   if(BOOL_PARAMS[k]===0) return false;   // 显式标记为非布尔（如数值参数默认值恰为 0/1）
   return BOOL_RE.test(k);
@@ -1168,7 +1196,9 @@ function isBoolParam(k){
 function isIntStr(s){return /^-?\d+$/.test((s||'').trim());}
 function isFloatStr(s){return /^-?\d+\.\d+$/.test((s||'').trim()) || /^-?\.\d+$/.test((s||'').trim());}
 function isNumericStr(s){return isIntStr(s) || isFloatStr(s);}
-function inputAttrs(v){
+function inputAttrs(v,k){
+  if(k&&KN[k]==='INT')   return 'type="number" step="1"';
+  if(k&&KN[k]==='FLOAT') return 'type="number" step="0.01"';
   if(isIntStr(v))   return 'type="number" step="1"';
   if(isFloatStr(v)) return 'type="number" step="0.1"';
   return 'type="text"';
@@ -1183,6 +1213,7 @@ function renderParamCard(k, q){
   var h='<div class="param-card" id="pc-'+k+'">';
   // 左侧：名称+描述
   h+='<div class="pc-left"><div class="ptitle"><button class="pc-star'+(isFav(k)?' on':'')+'" data-fav="'+esc(k)+'" onclick="toggleFav(\''+k+'\')" title="收藏常用参数">★</button>'+hlTitle(c||k,q)+'</div>';
+  if(MISSING[k])h+='<div style="font-size:11px;color:#e67e22;border:1px solid #e67e22;border-radius:4px;padding:1px 6px;display:inline-block;margin-top:4px">未写入（保存即新建）</div>';
   if(dsc)h+='<div class="pdesc">'+esc(dsc)+'</div>';
   h+='</div>';
   // 数值列
@@ -1199,7 +1230,7 @@ function renderParamCard(k, q){
     h+='</div></div>';
   }else{
     var pv0=(pending===undefined?'' : ''+pending).trim();
-    h+='<div class="pc-ctrl"><input '+inputAttrs(pv0)+' value="'+esc(pv0)+'" data-key="'+esc(k)+'" id="inp-'+k+'" oninput="onValChange(\''+k+'\',this.value)" style="width:110px"></div>';
+    h+='<div class="pc-ctrl"><input '+inputAttrs(pv0,k)+' value="'+esc(pv0)+'" data-key="'+esc(k)+'" id="inp-'+k+'" oninput="onValChange(\''+k+'\',this.value)" style="width:110px"></div>';
   }
   // 操作按钮
   h+='<div class="ca">';
@@ -1358,7 +1389,7 @@ async function saveParam(k){
   var v=CP[k];if(v===undefined)v=AP[k]||'';
   try{var r=await fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[k]:v})});var d=await r.json();
   if(d.success){
-    AP[k]=v;delete CP[k];
+    AP[k]=v;delete CP[k];delete MISSING[k];
     var cv=document.getElementById('cv-'+k);if(cv)cv.textContent=v;
     var pv=document.getElementById('pv-'+k);if(pv){pv.textContent=v;pv.classList.remove('pending');}
     var sv=document.getElementById('sv-'+k);if(sv)sv.classList.remove('ready');
@@ -1379,9 +1410,50 @@ function onTabSwitch(id){
   else if(id==='lan'){loadLan()}
   else if(id==='fav'){renderFav();}
   else if(id==='search'){focusSearch();}
+  else if(id==='tools'){loadDiag();loadParamMeta();loadParams()}
   else if(id!=='terminal'){loadParamMeta();loadParams()}
   // 每次切换标签都静默检查更新（无需手动点击）
   checkUpdate();
+}
+
+// === 诊断日志 (diagd) ===
+function loadDiag(){
+  var box=document.getElementById('diagErrors');
+  fetch('/api/diag').then(function(r){return r.json()}).then(function(d){
+    var st=document.getElementById('diagStat');
+    if(d.snapshot){
+      var s=d.snapshot;
+      var g=s.git||{};
+      var rows='';
+      rows+=diagRow('守护运行', d.running?'是 (pid 文件存在)':'否');
+      rows+=diagRow('设备温度(最高)', (s.thermal_max_c!=null?s.thermal_max_c+'°C':'未知')+' / 区数 '+(s.thermal_zones||0));
+      rows+=diagRow('剩余空间', (s.storage_free_gb!=null?s.storage_free_gb+' GB':'未知'));
+      rows+=diagRow('分支/提交', (g.branch?g.branch+' @ ':'')+(g.short||'-'));
+      rows+=diagRow('panda 固件戳一致', (s.panda_fw_match?'是':'否')+(s.panda_fw?(' ('+s.panda_fw.slice(0,8)+')'):''));
+      rows+=diagRow('进程异常', (s.proc_missing&&s.proc_missing.length)?s.proc_missing.join(' ; '):'无');
+      rows+=diagRow('工作区未提交', (g.dirty&&g.dirty.length)?(g.dirty.length+' 项'):'无');
+      rows+=diagRow('错误流总行数', (d.errors_total||0));
+      st.innerHTML=rows;
+    } else {
+      st.innerHTML='<div class="diag-note">未检测到诊断快照，请先部署并启动 diagd.py（工具箱 → 工具 → 诊断日志会自动出现数据）</div>';
+    }
+    if(d.errors&&d.errors.length){
+      box.textContent=d.errors.join('\n');
+      box.scrollTop=box.scrollHeight;
+    } else {
+      box.textContent='（暂无错误记录，设备目前健康）';
+    }
+  }).catch(function(e){box.textContent='读取失败: '+e;});
+}
+function diagRow(k,v){return '<div class="ii"><div class="lb">'+esc(k)+'</div><div class="vl">'+esc(v)+'</div></div>';}
+function diagReport(){
+  fetch('/api/diag/report',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    toast(d.message||(d.success?'报告已生成':'生成失败'), d.success?'in':'err');
+    loadDiag();
+  }).catch(function(e){toast('生成失败: '+e,'err');});
+}
+function diagDownload(fn){
+  window.open('/api/diag/download/'+encodeURIComponent(fn), '_blank');
 }
 
 // === 局域网扫描 / 设备发现 ===

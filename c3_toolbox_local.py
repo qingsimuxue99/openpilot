@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 =====================================================
@@ -6,6 +6,12 @@ C3 设备工具箱 - 设备本地版 v2 (Carrotpilot cpv9-dev)
 """
 
 import json, os, sys, time, subprocess, urllib.request, tarfile, io, threading, traceback, re, zipfile
+
+# flask 在设备的 pydeps 目录（launch_chffrplus.sh 运行时会放进 PYTHONPATH，
+# 但 systemd/手动启动时不一定有 —— 这里主动兜底，避免"需要安装 flask"误报）
+_PYDEPS = "/data/openpilot/pydeps"
+if os.path.isdir(_PYDEPS) and _PYDEPS not in sys.path:
+    sys.path.insert(0, _PYDEPS)
 
 try:
     from flask import Flask, request, jsonify, send_file, send_from_directory, Response
@@ -28,6 +34,41 @@ def no_cache(resp):
 BASE_DIR = "/data/c3_toolbox"                 # 固定设备端数据目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # 脚本所在目录(放 HTML 用)
 PARAMS_DIR = "/data/params/d"
+
+# ===== 已知参数白名单（来自 openpilot/common/params_keys.h）=====
+# /data/params/d 里只会出现「被写入过」的参数文件；从未写入过的已知参数在
+# 老版本工具箱里完全不可见、也不可编辑（用户视角就是"参数很少"）。这里把
+# 设备上 openpilot 源码的 params_keys.h 解析出来，连同类型一起通过
+# /api/params 的 known 字段返回，前端把「已写入 + 已知未写入」合并展示。
+PARAM_KEYS_H_CANDIDATES = [
+    os.path.join(SCRIPT_DIR, '..', 'common', 'params_keys.h'),   # 仓库内部署: system/toolbox -> ../common
+    '/data/openpilot/openpilot/common/params_keys.h',            # 设备上的 openpilot 源码
+]
+
+
+def find_params_keys_h():
+    for p in PARAM_KEYS_H_CANDIDATES:
+        try:
+            if os.path.isfile(p):
+                return p
+        except Exception:
+            pass
+    return None
+
+
+def get_known_params():
+    """解析 params_keys.h -> {key: 类型}；失败返回空 dict，前端自动退回旧行为。"""
+    path = find_params_keys_h()
+    if not path:
+        return {}
+    try:
+        text = open(path, encoding='utf-8', errors='ignore').read()
+    except Exception:
+        return {}
+    known = {}
+    for m in re.finditer(r'\{"([A-Za-z0-9_]+)",\s*\{[^}]*?(STRING|BOOL|INT|FLOAT|JSON|BYTES)\s*[},]', text):
+        known[m.group(1)] = m.group(2)
+    return known
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 AUTO_BACKUP_DIR = os.path.join(BASE_DIR, "auto_backup")
 AUTO_BACKUP_FILE = os.path.join(AUTO_BACKUP_DIR, "auto_full_params.json")
@@ -56,7 +97,7 @@ EVENT_DATA = {
 #   3) 下载发布包：version.json 里的 tarball 指针（具体 tag，不可变，最新鲜）
 # 发新版本只需：改 version.json(version/tag/tarball) + 打 tag 推送，设备自动发现。
 REPO = "qingsimuxue99/openpilot"
-VERSION = "1.2.4"
+VERSION = "1.3.2"
 # 实时发现最新版本号的数据 API（属 jsdelivr 域，国内可达，不受 CDN 文件缓存影响）
 JSDELIVR_DATA_API = "https://data.jsdelivr.com/v1/package/gh/%s" % REPO
 # 读 version.json 的兜底源（当数据 API 不可用时，用浮动引用兜底；可能滞后但保证可用）
@@ -463,7 +504,7 @@ def api_get_params():
                     pass
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'params': {}, 'count': 0})
-    return jsonify({'success': True, 'message': f'成功获取 {len(params)} 个参数', 'params': params, 'sorted_keys': sorted_keys, 'count': len(params)})
+    return jsonify({'success': True, 'message': f'成功获取 {len(params)} 个参数', 'params': params, 'sorted_keys': sorted_keys, 'count': len(params), 'known': get_known_params()})
 
 
 @app.route('/api/params', methods=['POST'])
@@ -737,7 +778,7 @@ def api_param_meta():
 def ensure_tmux_log():
     """设备端创建一个 tmux 会话 c3logs 持续 tail 工具箱日志，方便在设备 shell 执行 `tmux a -t c3logs` 实时查看。"""
     try:
-        log_path = os.path.join(SCRIPT_DIR, 'server.log')
+        log_path = LOG_FILE
         cmd = "tmux has-session -t c3logs 2>/dev/null || tmux new-session -d -s c3logs 'tail -F %s'" % log_path
         subprocess.run(cmd, shell=True, timeout=5)
     except Exception:
@@ -766,7 +807,7 @@ def api_command():
 @app.route('/api/logstream')
 def api_logstream():
     """实时日志流 (SSE)：网页终端执行 `tmux a` 时改用此接口持续推送 server.log 新内容。"""
-    log_path = os.path.join(SCRIPT_DIR, 'server.log')
+    log_path = LOG_FILE
 
     def gen():
         yield "data: ┌── 实时日志 (tmux a) 已连接 ──┐\n\n"
@@ -1954,6 +1995,72 @@ def api_scan_lan():
         return jsonify({'success': True, 'subnets': subnets, 'count': len(devices), 'devices': devices})
     except Exception as e:
         return jsonify({'success': False, 'message': '扫描失败: %s' % e, 'devices': [], 'subnets': subnets})
+
+
+# ============= 诊断日志 (diagd) =============
+# 读取设备后台诊断守护(diagd.py)产出的故障/错误/进程日志，供网页工具箱展示与分享。
+DIAG_DIR = os.path.join(BASE_DIR, "diag")
+DIAG_FILES = ("errors.log", "latest.json", "report.txt", "daemon.log")
+DIAGD_SCRIPT = "/data/openpilot/selfdrive/carrot/diagd.py"
+
+@app.route('/api/diag')
+def api_diag():
+    """返回诊断快照 + 错误流末尾 + 报告文本，供前端渲染。"""
+    import json as _json
+    res = {"ok": True, "diag_dir": DIAG_DIR}
+    latest = os.path.join(DIAG_DIR, "latest.json")
+    if os.path.isfile(latest):
+        try:
+            with open(latest, encoding="utf-8") as f:
+                res["snapshot"] = _json.load(f)
+        except Exception:
+            res["snapshot"] = None
+    else:
+        res["snapshot"] = None
+    errf = os.path.join(DIAG_DIR, "errors.log")
+    if os.path.isfile(errf):
+        try:
+            with open(errf, encoding="utf-8", errors="replace") as f:
+                lines = f.read().splitlines()
+            res["errors"] = lines[-600:]
+            res["errors_total"] = len(lines)
+        except Exception:
+            res["errors"] = []
+            res["errors_total"] = 0
+    else:
+        res["errors"] = []
+        res["errors_total"] = 0
+    res["report"] = read_file(os.path.join(DIAG_DIR, "report.txt"))
+    res["running"] = os.path.isfile(os.path.join(DIAG_DIR, "diagd.pid"))
+    res["files"] = [f for f in DIAG_FILES if os.path.isfile(os.path.join(DIAG_DIR, f))]
+    return jsonify(res)
+
+@app.route('/api/diag/report', methods=['POST'])
+def api_diag_report():
+    """立即重生成 report.txt（需 diagd.py 已部署）。"""
+    if not os.path.isfile(DIAGD_SCRIPT):
+        return jsonify({"success": False, "message": "diagd.py 未部署，无法生成报告"})
+    try:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = "/data/openpilot" + os.pathsep + env.get("PYTHONPATH", "")
+        r = subprocess.run([sys.executable, DIAGD_SCRIPT, "--report"],
+                            capture_output=True, text=True, timeout=60, env=env)
+        if r.returncode == 0:
+            return jsonify({"success": True, "message": "报告已生成"})
+        return jsonify({"success": False, "message": "生成失败: " + (r.stderr or r.stdout).strip()[:200]})
+    except Exception as e:
+        return jsonify({"success": False, "message": "生成异常: %s" % e})
+
+@app.route('/api/diag/download/<filename>')
+def api_diag_download(filename):
+    """下载诊断文件（白名单限制，防目录穿越）。"""
+    fn = safe_key(filename)
+    if fn not in DIAG_FILES:
+        return jsonify({"success": False, "message": "禁止访问该文件"}), 403
+    p = os.path.join(DIAG_DIR, fn)
+    if not os.path.isfile(p):
+        return jsonify({"success": False, "message": "文件不存在"}), 404
+    return send_file(p, as_attachment=True)
 
 
 if __name__ == '__main__':
