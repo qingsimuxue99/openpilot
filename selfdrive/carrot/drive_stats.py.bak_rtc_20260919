@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Drive stats accumulator.
+
+Runs as a always-on background process. Subscribes to carState and accumulates
+per-trip driving distance / duration / trip count, then writes a JSON summary
+that the offroad home UI renders as a "driving data" panel.
+
+Data is stored as a plain JSON file (NOT a Params key, to avoid the compiled
+whitelist). The UI reads the same file directly:
+  {"today": {km, min, trips}, "week": {...}, "total": {...},
+   "daily": {YYYY-MM-DD: km, ...}, "date": YYYY-MM-DD}
+
+Historical data starts from zero (device has no pre-existing odometer feed).
+"""
+
+import json
+import os
+import time
+from datetime import date
+
+import cereal.messaging as messaging
+from openpilot.common.realtime import Ratekeeper
+
+STATS_FILE = "/data/params/d_tmp/drive_stats.json"
+SAVE_INTERVAL = 30.0  # seconds
+RATE = 20             # Hz
+
+
+def _empty_bucket():
+  return {"km": 0.0, "min": 0.0, "trips": 0}
+
+
+def _empty_stats():
+  return {"today": _empty_bucket(), "week": _empty_bucket(),
+          "total": _empty_bucket(), "daily": {}, "date": ""}
+
+
+def _iso_week(d):
+  """Return (iso_year, iso_week) for an ISO-format date string."""
+  return date.fromisoformat(d).isocalendar()[:2]
+
+
+def load_stats():
+  try:
+    if os.path.exists(STATS_FILE):
+      with open(STATS_FILE, "r") as f:
+        d = json.load(f)
+      for k in ("today", "week", "total"):
+        if not isinstance(d.get(k), dict):
+          d[k] = _empty_bucket()
+      if not isinstance(d.get("daily"), dict):
+        d["daily"] = {}
+      d.setdefault("date", "")
+      return d
+  except Exception:
+    pass
+  return _empty_stats()
+
+
+def save_stats(stats):
+  try:
+    d = os.path.dirname(STATS_FILE)
+    if d:
+      os.makedirs(d, exist_ok=True)
+    tmp = STATS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+      json.dump(stats, f)
+    os.replace(tmp, STATS_FILE)
+  except Exception:
+    pass
+
+
+def main():
+  sm = messaging.SubMaster(['carState'])
+  rk = Ratekeeper(RATE, print_delay_threshold=None)
+
+  stats = load_stats()
+  engaged_prev = False
+  last_save = 0.0
+  last_t = time.monotonic()
+  last_date = date.today().isoformat()
+  last_week = _iso_week(last_date) if last_date else None
+  stats["date"] = last_date
+
+  while True:
+    sm.update()
+    now = time.monotonic()
+    dt = now - last_t
+    last_t = now
+
+    if sm.updated['carState']:
+      cs = sm['carState']
+      engaged = cs.controlsAllowed
+      v = cs.vEgo  # m/s
+      # distance: only count actual movement while engaged
+      if engaged and v > 0.3:
+        dist_km = v * dt / 1000.0
+        for b in ("today", "week", "total"):
+          stats[b]["km"] += dist_km
+          stats[b]["min"] += dt / 60.0
+      # trip: count once per engagement session (rising edge of controlsAllowed)
+      if engaged and not engaged_prev:
+        for b in ("today", "week", "total"):
+          stats[b]["trips"] += 1
+      engaged_prev = engaged
+
+    # midnight roll-over: archive today's km into daily[date], reset today,
+    # and reset week on ISO week boundary (Monday)
+    today = date.today().isoformat()
+    if today != last_date:
+      if last_date:
+        stats["daily"][last_date] = round(stats["today"]["km"], 2)
+        cur_week = _iso_week(today)
+        if last_week is not None and cur_week != last_week:
+          stats["week"] = _empty_bucket()
+        last_week = cur_week
+      stats["today"] = _empty_bucket()
+      keys = sorted(stats["daily"].keys())
+      for k in keys[:-7]:
+        stats["daily"].pop(k, None)
+      last_date = today
+      stats["date"] = today
+
+    if now - last_save > SAVE_INTERVAL:
+      save_stats(stats)
+      last_save = now
+
+    rk.keep_time()
+
+
+if __name__ == "__main__":
+  main()
