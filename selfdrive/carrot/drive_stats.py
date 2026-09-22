@@ -102,24 +102,30 @@ def accumulate(stats, v, dt, idle_secs):
   return idle_secs + dt
 
 
-def roll_over(stats, today, last_date, last_week):
+def roll_over(stats, today, last_date):
   """Midnight / ISO-week roll-over. Pure function.
 
   Archives today's km into daily[last_date], resets today's bucket, trims
-  daily down to the last 7 entries, and resets the week bucket on a Monday
-  boundary. Returns the updated (last_date, last_week).
+  daily down to the last 7 entries, and resets the week bucket ONLY when the
+  day being closed (last_date) and the new day (today) fall in DIFFERENT ISO
+  weeks. Comparing the two dates directly (instead of a week number captured
+  at process start) is critical: the old code kept a `last_week` from daemon
+  startup, so the first rollover after a Monday would wrongly zero the *current*
+  week's mileage even though we were still inside that week.
+
+  Returns the updated last_date.
   """
   if not last_date or today == last_date:
-    return last_date, last_week
+    return last_date
   stats["daily"][last_date] = round(stats["today"]["km"], 2)
-  cur_week = _iso_week(today)
-  if last_week is not None and cur_week != last_week:
+  # 跨 ISO 周（周一界线）才清零本周；同一周内跨天不清零
+  if _iso_week(last_date) != _iso_week(today):
     stats["week"] = _empty_bucket()
   stats["today"] = _empty_bucket()
   for k in sorted(stats["daily"].keys())[:-7]:
     stats["daily"].pop(k, None)
   stats["date"] = today
-  return today, cur_week
+  return today
 
 
 def load_stats():
@@ -214,8 +220,10 @@ def main():
   idle_secs = 1e9  # pretend it has been parked, so the first move is a trip
   last_save = 0.0
   last_t = time.monotonic()
-  last_date = date.today().isoformat()
-  last_week = _iso_week(last_date)
+  # 用文件里记录的 date 作为初始 last_date，而不是 date.today()：
+  # 否则 reboot 若跨过午夜，上一日累积在 today 桶里的里程永远不会被归档进 daily，
+  # 也会被错误清零。week 的跨周判定改由 roll_over 直接比对两个日期，不再依赖此处。
+  last_date = stats.get("date") or date.today().isoformat()
   stats["date"] = last_date
 
   # Software RTC: bring the clock back from persisted time if it reset
@@ -240,8 +248,7 @@ def main():
 
     # midnight / week roll-over
     try:
-      last_date, last_week = roll_over(stats, date.today().isoformat(),
-                                       last_date, last_week)
+      last_date = roll_over(stats, date.today().isoformat(), last_date)
     except Exception:
       pass
 

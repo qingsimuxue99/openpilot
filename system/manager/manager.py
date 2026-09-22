@@ -131,6 +131,21 @@ def get_default_params():
     ("PhantomBrakeGuardConfirm", "10"),
     ("CurveCenteringStrength", "60"),
     ("CurveCenteringCurv", "4"),
+    # 静止障碍横向避让 v2（Avoidance 模块；独立开关，默认关）
+    # 注：AvoidActive / AvoidNarrowCorridor 是运行期标志，由 avoidance.py 自己写，不在此设默认值
+    # 单位：TriggerDist=m, OffsetLimit/SafeGap/EdgeMargin/MinPassWidth=cm
+    ("AvoidObstacle", "0"),
+    ("AvoidTriggerDist", "35"),
+    ("AvoidOffsetLimit", "250"),
+    ("AvoidSafeGap", "60"),
+    ("AvoidEdgeMargin", "30"),
+    ("AvoidMinPassWidth", "200"),
+    # 避让最高速度（速度上限闸门；0=不限制；默认0=不限制，恢复"任何速度都避让"的原有行为）：超过此车速即关闭横向避让
+    ("AvoidMaxSpeed", "0"),
+    # 路沿额外余量（cm，默认30=0.30m）
+    ("AvoidEdgeExtra", "30"),
+    # 让位速率上限（×0.1m/s，默认15=1.5m/s）
+    ("AvoidMaxShiftRate", "15"),
     ("CruiseMaxVals0", "80"),
     ("CruiseMaxVals1", "100"),
     ("CruiseMaxVals2", "120"),

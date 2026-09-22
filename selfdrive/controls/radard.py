@@ -704,7 +704,8 @@ def main() -> None:
   cloudlog.info("radard got CarParams")
 
   # *** setup messaging
-  sm = messaging.SubMaster(['modelV2', 'carState', 'liveTracks'], poll='modelV2')
+  sm = messaging.SubMaster(['modelV2', 'carState', 'liveTracks'], poll='modelV2',
+                           ignore_avg_freq=['carState'], ignore_alive=['carState'])
   #sm = messaging.SubMaster(['modelV2', 'carState', 'liveTracks'], poll='liveTracks')
   pm = messaging.PubMaster(['radarState'])
 

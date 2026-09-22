@@ -14,6 +14,8 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.controls.lib.lane_planner_2 import LanePlanner
 # new: 弯道居中（独立模块，独立开关，默认关=零影响）
 from openpilot.selfdrive.carrot.curve_centering import CurveCentering
+# new: 静止障碍横向避让（独立模块，独立开关，默认关=零影响）
+from openpilot.selfdrive.carrot.avoidance import Avoidance
 from collections import deque
 
 TRAJECTORY_SIZE = 33
@@ -58,6 +60,8 @@ class LateralPlanner:
     self.LP = LanePlanner()
     # new: 弯道居中控制器（独立开关，关闭时整段 no-op）
     self.cc = CurveCentering()
+    # new: 静止障碍横向避让（独立开关，关闭时整段 no-op）
+    self.avoid = Avoidance()
     self.readParams = 0
     self.lanelines_active = False
     self.lanelines_active_tmp = False
@@ -151,6 +155,10 @@ class LateralPlanner:
 
     # === 弯道居中（独立模块，独立开关，默认关=零影响）===
     self.path_xyz = self.cc.update(carrot, sm, self.path_xyz, self.LP, measured_curvature, self.v_ego, sm['carState'])
+
+    # === 静止障碍横向避让（独立模块，独立开关，默认关=零影响）===
+    # 必须在 yaw_from_path_no_scipy() 反算 yaw 之前，让 yaw/yaw_rate 跟随让位后的路径重算。
+    self.path_xyz = self.avoid.update(carrot, sm, self.path_xyz, self.LP, self.v_ego, sm['carState'])
 
     # === 横向转向平滑(新CP移植): 车道线有效时从几何平滑路径反算yaw/yaw_rate(限幅2.0), laneless保持原始yaw ===
     if self.lanelines_active:
