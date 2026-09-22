@@ -146,6 +146,17 @@ def get_default_params():
     ("AvoidEdgeExtra", "30"),
     # 让位速率上限（×0.1m/s，默认15=1.5m/s）
     ("AvoidMaxShiftRate", "15"),
+    # 「停车等待车辆」判定带宽（cm，默认60=0.60m）：障碍横向偏移小于此值视为挡在车道
+    # 正中央（等红灯/排队/正前方跟车）⇒ 交纵向跟停、不横移；大于此值才算"偏侧停靠的静止车"
+    ("AvoidCenterBand", "60"),
+    # 队列判据开关（1=启用，默认1）：障碍前方还有别的车时视为车流，不绕行
+    ("AvoidQueueCheck", "1"),
+    # 丢目标缓冲（独立模块，默认关）：radar 丢小目标时用"虚拟 lead"顶住 MPC，防丢失后加速前冲
+    ("LeadBufferEnable", "0"),
+    # 缓冲时长（×0.1s，默认25=2.5s）
+    ("LeadBufferTime", "25"),
+    # 仅当"丢失前 lead 距离"小于此值（m，默认40）时才缓冲
+    ("LeadBufferMaxDist", "40"),
     ("CruiseMaxVals0", "80"),
     ("CruiseMaxVals1", "100"),
     ("CruiseMaxVals2", "120"),

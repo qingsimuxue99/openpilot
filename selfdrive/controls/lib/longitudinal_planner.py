@@ -25,6 +25,8 @@ from openpilot.selfdrive.carrot.traffic_light_brake import TrafficLightBrake
 from openpilot.selfdrive.carrot.launch_assist import LaunchAssist
 #new: 入弯预备减速（独立模块，默认关=零影响）
 from openpilot.selfdrive.carrot.curve_anticipate import CurveAnticipate
+#new: 丢目标缓冲（独立模块，默认关=零影响）：radar 丢小目标时用虚拟 lead 顶住 MPC
+from openpilot.selfdrive.carrot.lead_buffer import LeadBuffer
 #new: 幽灵刹车抑制（置信度阻尼，独立开关，默认关=零影响）
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
@@ -103,6 +105,8 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     self.la = LaunchAssist()
     #new: 入弯预备减速控制器（独立开关，关闭时整段 no-op）
     self.ca = CurveAnticipate()
+    #new: 丢目标缓冲控制器（独立开关，关闭时整段 no-op）
+    self.lb = LeadBuffer()
     #new: 幽灵刹车抑制控制器（独立开关，关闭时整段 no-op）
     self.DynamicExperimentalSpeed = -1
     self.DynamicExperimentalLatA = 0.0
@@ -301,6 +305,13 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     accel_limits_turns[0] = min(accel_limits_turns[0], self.a_desired + 0.05)
     accel_limits_turns[1] = max(accel_limits_turns[1], self.a_desired - 0.05)
 
+    # === 丢目标缓冲（独立模块，默认关=零影响）===
+    # ★ 必须在 set_accel_limits 之前调用：缓冲期除"虚拟 lead"外还给加速度上限
+    #   (accel_cap)，双保险地防住"radar 丢目标 ⇒ MPC 失去跟随约束 ⇒ 全速冲出去"。
+    radar_state_for_mpc = self.lb.update(carrot, sm, sm['radarState'])
+    if self.lb.accel_cap is not None:
+      accel_limits_turns[1] = min(accel_limits_turns[1], float(self.lb.accel_cap))
+
     self.mpc.set_weights(prev_accel_constraint, personality=sm['selfdriveState'].personality, jerk_factor = carrot.jerk_factor_apply)
     self.mpc.set_accel_limits(accel_limits_turns[0], accel_limits_turns[1])
     self.mpc.set_cur_state(self.v_desired_filter.x, self.a_desired)
@@ -310,7 +321,7 @@ class LongitudinalPlanner(LongitudinalPlannerSP): #new
     self.la.update(carrot, sm, v_ego, v_cruise)
     # === 入弯预备减速（独立模块，默认关=零影响）===
     self.ca.update(carrot, sm, v_ego, v_cruise)
-    radar_state_for_mpc = sm['radarState']
+    # radar_state_for_mpc 已在上方由「丢目标缓冲」模块给出（模块关闭时即原对象，零影响）
     self.mpc.update(carrot, reset_state, radar_state_for_mpc, v_cruise, x, v, a, j, personality=sm['selfdriveState'].personality)
 
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)

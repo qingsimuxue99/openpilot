@@ -85,6 +85,14 @@ MAX_ABS_YREL = 6.0           # m，障碍横向位置超出此范围视为数据
 #   不应触发本车道横向避让（即修复"旁车道有车就左偏"的误触发）。旁车道信息仍被
 #   借道绕障逻辑（_bound_at 靠车道线放宽走廊）使用，本闸门不影响它，故不是删功能。
 LANE_HALF_W = 1.8           # m，≈标准车道半宽；本车道内偏置的静止障碍（yRel<1.8）仍正常触发避让
+# ★ 队列判据（区分"孤立停靠的静止车"与"车流里排队的一辆"）：
+#   前方若还有第二辆近距离 lead，说明这是车流/排队 ⇒ 不应绕行，交纵向跟停。
+QUEUE_DIST = 40.0           # m，第二辆 lead 在此距离内即视为"前方有车流"
+QUEUE_MIN_GAP = 5.0         # m ★ 判定的车必须比障碍**更远**至少这么多，才算"障碍前方还有车"
+#   ★ 为什么必须加这条：本车 radarState.leadTwo 经常就是 leadOne 的同一台车（同值），
+#     若只按"4~40m 内有第二辆"判定，孤立停靠的静止车会被自己误判成"车流" ⇒ 永远不绕。
+#     正确语义 = "障碍的前方还有别的车"（排队），所以必须 d2 > d_obs + QUEUE_MIN_GAP。
+QUEUE_BAND = 2.00           # m，队列判据只对横向偏移小于此值的障碍生效（更远处的本就不该绕）
 VLEAD_STATIC = 1.5           # m/s，目标速度低于此视为"静止/极慢"（≈5.4km/h）
 MIN_SPEED_KMH = 10.0         # km/h，**起手**速度门槛（见 _gates_ok 注释：只在"新发起"时检查）
 #   ★ 实测（晚高峰 69055 帧真实数据）：威胁帧车速 p25=2.2 / p50=12.0 / p75=20.8 km/h，
@@ -134,6 +142,8 @@ class Avoidance:
     self._max_kmh = 50.0         # km/h，0=不限制；超过此速度不再触发避让
     self._edge_extra = 0.30      # m，路沿/护栏侧的额外安全余量（UI：AvoidEdgeExtra，单位 cm）
     self._max_rate = 1.5         # m/s，让位量变化率上限（UI：AvoidMaxShiftRate，单位 ×0.1m/s）
+    self._center_band = 0.60     # m，正前方判定带宽（UI：AvoidCenterBand，单位 cm）
+    self._queue_check = True     # 队列判据开关（UI：AvoidQueueCheck）
 
     # 时序状态
     self._hit = 0
@@ -143,6 +153,7 @@ class Avoidance:
     self._narrow = 0
     self._side = 0               # 本次相遇锁定的让位侧（+1 右 / −1 左），防抖
     self._d_obs = None           # 最近一次命中时的障碍距离
+    self._q_src = ""             # 队列判据命中来源（vis / radar），仅用于回放归因
     self._post_pass_m = 0.0      # 目标丢失后已行驶里程（用于"越过障碍后再回中"）
     self._hold_t = 0.0           # 保持计时
     self._fast = False           # 本帧是否走快速释放
@@ -202,6 +213,15 @@ class Avoidance:
 
       v = self.params.get_int("AvoidMaxShiftRate")  # 让位速率(×0.1m/s)，默认15=1.5m/s
       self._max_rate = float(min(30, max(5, v))) * 0.1 if v > 0 else 1.5
+
+      # ★★ 「停车等待车辆」vs「静止车辆」的主判据（横向）：障碍中心偏离本车路径小于
+      #    此带宽 ⇒ 挡在车道正中央（等红灯 / 排队 / 正前方跟车）⇒ 交纵向跟停，横向不抢；
+      #    大于此值 ⇒ 偏侧停靠的静止车辆 ⇒ 才允许评估横移绕行。
+      v = self.params.get_int("AvoidCenterBand")
+      self._center_band = float(min(150, max(20, v))) * 0.01 if v > 0 else 0.60
+
+      v = self.params.get_int("AvoidQueueCheck")   # 1=启用队列判据（默认1）
+      self._queue_check = (v != 0)
     except Exception:
       self._mode = OFF
 
@@ -425,6 +445,39 @@ class Avoidance:
       return False
 
   # ------------------------------------------------------------------ 感知
+  def _is_queue(self, sm, d_obs):
+    """
+    队列判据：障碍的**前方还有别的车** ⇒ 这是"车流/排队"，障碍只是车流里的一辆，
+    不是孤立停靠的静止车辆 ⇒ 不绕行（交纵向跟停）。
+
+    ★ 判定的车必须比障碍更远：`d > d_obs + QUEUE_MIN_GAP`。
+      否则 radarState.leadTwo 常与 leadOne 同值（同一台车）会把孤立静止车误判成车流。
+    数据源：modelV2.leadsV3[1]（第二近视觉 lead）与 radarState.leadTwo。
+    `_q_src` 记录命中来源（vis / radar），供回放归因。
+    """
+    self._q_src = ""
+    thr = d_obs + QUEUE_MIN_GAP
+    try:
+      lv = sm['modelV2'].leadsV3
+      if lv is not None and len(lv) >= 2 and len(lv[1].x) > 0:
+        if float(lv[1].prob) >= 0.50:
+          x1 = float(lv[1].x[0])
+          if thr < x1 < QUEUE_DIST:
+            self._q_src = "vis"
+            return True
+    except Exception:
+      pass
+    try:
+      l2 = sm['radarState'].leadTwo
+      if bool(getattr(l2, "status", False)):
+        d2 = float(getattr(l2, "dRel", 0.0))
+        if thr < d2 < QUEUE_DIST:
+          self._q_src = "radar"
+          return True
+    except Exception:
+      pass
+    return False
+
   def _pick_obstacle(self, sm):
     """
     返回 {'yRel','dRel','vLead','conf','src'} 或 None。
@@ -444,7 +497,8 @@ class Avoidance:
             and (conf >= 0.40 or radar)
             and np.isfinite(yRel) and abs(yRel) < MAX_ABS_YREL
             and abs(yRel) < LANE_HALF_W):
-          return {"yRel": yRel, "dRel": dRel, "vLead": vLead, "conf": conf, "src": "radar"}
+          return {"yRel": yRel, "dRel": dRel, "vLead": vLead, "conf": conf, "src": "radar",
+                  "queue": self._is_queue(sm, dRel)}
     except Exception:
       pass
 
@@ -461,7 +515,8 @@ class Avoidance:
             and MIN_OBS_DREL < dRel < self._trig
             and np.isfinite(yRel) and abs(yRel) < MAX_ABS_YREL
             and abs(yRel) < LANE_HALF_W):
-          return {"yRel": yRel, "dRel": dRel, "vLead": vLead, "conf": prob, "src": "vision"}
+          return {"yRel": yRel, "dRel": dRel, "vLead": vLead, "conf": prob, "src": "vision",
+                  "queue": self._is_queue(sm, dRel)}
     except Exception:
       pass
 
@@ -625,10 +680,18 @@ class Avoidance:
     """
     返回 (目标让位量 m, narrow 0/1, 标签)。
     规则（按优先级）：
-      间距足够        |d| ≥ need              ⇒ 不介入
-      正前方目标      |d| < OBS_HALF_W        ⇒ 不介入（跟车/刹停是纵向 ACC 的职责，横向不抢）
+      间距足够        |d| ≥ need                  ⇒ 不介入
+      正前方目标      |d| < CENTER_BAND           ⇒ 不介入（等红灯/排队/正前方跟车，交纵向）
+      前方车流        队列判据命中且 |d| < QUEUE_BAND ⇒ 不介入（车流里的一辆，交纵向）
       侧方侵入且可让  要求位置落在 [y_min,y_max] 且让位量 ≤ 上限 ⇒ 让位（安全间距保证达成）
-      侧方侵入不可让  上面做不到            ⇒ 不让位 + narrow=1（交纵向减速）
+      侧方侵入不可让  上面做不到              ⇒ 不让位 + narrow=1（交纵向减速）
+
+    ★★ 为什么把"正前方"判据从 OBS_HALF_W(1.05m) 收窄为 CENTER_BAND(0.60m)：
+      实测一次 48 分钟真实行程中，`_pick_obstacle` 命中的 5396 帧里有 **99.7% 的 |d| < 1.05**
+      （障碍几乎压在本车路径正中心）⇒ 全部被判"正前方目标"、直接交纵向 ⇒ **避让一次都没动作**
+      （回放 28.5 万帧 `act=0`）。根因：1.05m 是"障碍半宽"，拿它当"正前方"判据等于把所有
+      障碍都吃掉。改成 CENTER_BAND 后语义才正确：**车道正中央**的静止车交纵向（跟停 / 等灯 /
+      排队），**偏侧停靠**的静止车才评估横移绕行 —— 这就是"正确识别静止车辆 vs 停车等待车辆"。
     """
     need = self._need()
     y_path = geo["y_path"]
@@ -640,10 +703,17 @@ class Avoidance:
     if abs(d) >= need:
       return (0.0, 0, "间距足够")
 
-    if abs(d) < OBS_HALF_W:
-      # 障碍压在我们的行驶线上 ⇒ 这是"正前方目标"，交给纵向跟车/刹停，
-      # 横向绝不绕行（绕过正前方静止车辆是危险且反直觉的行为）。
+    # ★★ 主判据：「停车等待车辆」vs「静止车辆」——先看横向偏置程度。
+    #   障碍中心偏离本车路径 < CENTER_BAND ⇒ 它挡在**车道正中央**（等红灯 / 排队 / 正前方
+    #   跟车），横向让开它必须跨整条车道、危险且反直觉 ⇒ 交纵向跟停，横向不抢。
+    if abs(d) < self._center_band:
       return (0.0, 0, "正前方目标")
+
+    # ★ 队列判据：障碍虽偏侧，但它前方还有别的车（车流 / 排队缓行）⇒ 它是"车流里的一辆"，
+    #   不是"孤立停靠的静止车辆" ⇒ 同样交纵向跟停，不做横移绕行。
+    #   只有"偏侧 + 前方无队列"才认定为可绕的停靠静止车辆。
+    if self._queue_check and bool(det.get("queue", False)) and abs(d) < QUEUE_BAND:
+      return (0.0, 0, "前方车流")
 
     # 从左右两侧通过所需的**让位量**（相对本车路径，右为正）
     #   s_l<0：向左让到"障碍落在我们右侧 need 处"；s_r>0：向右让到"障碍落在我们左侧 need 处"
