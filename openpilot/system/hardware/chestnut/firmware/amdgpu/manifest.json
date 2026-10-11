@@ -1,0 +1,36 @@
+{
+  "files": {
+    "psp_14_0_2_sos.bin.zst": {
+      "sha256": "42646102d34b9005e705831027ddf27ec952d5542dedd652ad82338f3b8e8ff9",
+      "size": 184938
+    },
+    "smu_14_0_2.bin.zst": {
+      "sha256": "31158ca48f44fb226c855afd066732afd179f3871a9a1689c4410bc206bee293",
+      "size": 137070
+    },
+    "sdma_7_0_0.bin.zst": {
+      "sha256": "cb68fe7868ea11440c93cf03b0b67da635b963b7a020055b6ce4c8f844236ec7",
+      "size": 18184
+    },
+    "gc_12_0_0_pfp.bin.zst": {
+      "sha256": "f8c98eea560615cf7a43fe29d16cc1bbac7976d278bbde897ed2daa45f48eb40",
+      "size": 41513
+    },
+    "gc_12_0_0_me.bin.zst": {
+      "sha256": "ba1a2a3f0c557209703ca94ef20cadcec138b67a2c6f1d4ad1fdfc8fca12128d",
+      "size": 52076
+    },
+    "gc_12_0_0_mec.bin.zst": {
+      "sha256": "dc74fcf8409bd735d9dbf5922884dc70f9c2c75948821391707b7fdb3475df38",
+      "size": 84163
+    },
+    "gc_12_0_0_imu.bin.zst": {
+      "sha256": "aaabca90b09db1b3f90f9ca717be19af0bd2f3295cfe6c227bf835c5428c3fb4",
+      "size": 21297
+    },
+    "gc_12_0_0_rlc.bin.zst": {
+      "sha256": "01806109f63d4fe294b4bd108a34a0439c9a9568d45f71a039ef476ff9cb3010",
+      "size": 48374
+    }
+  }
+}
