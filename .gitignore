@@ -140,3 +140,9 @@ openpilot/selfdrive/logcatd/logcatd
 openpilot/system/proclogd/proclogd
 openpilot/selfdrive/ui/translations/tmp
 openpilot/selfdrive/ui/translations/alerts_generated.h
+
+### Cython 自动生成的 C++ 源码（构建时重新生成，不入库）
+openpilot/system/ui/lib/_draw_native.cpp
+openpilot/selfdrive/carrot/radar_motion/_motion_native.cpp
+opendbc_repo/opendbc/can/_can_native.cpp
+*_native.cpp
