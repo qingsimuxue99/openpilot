@@ -6,6 +6,7 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
 from openpilot.selfdrive.ui.widgets.exp_mode_button import ExperimentalModeButton
 from openpilot.selfdrive.ui.widgets.prime import PrimeWidget
+from openpilot.selfdrive.ui.widgets.drive_stats_panel import DriveStatsPanel
 from openpilot.selfdrive.ui.widgets.setup import SetupWidget
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos, TextAlignment
@@ -44,6 +45,7 @@ class HomeLayout(Widget):
     self.update_available = False
     self.alert_count = 0
     self._version_text = ""
+    self._version_segments = []
     self._prev_update_available = False
     self._prev_alerts_present = False
 
@@ -58,12 +60,16 @@ class HomeLayout(Widget):
     self._prime_widget = PrimeWidget()
     self._setup_widget = SetupWidget()
 
+    # 驾驶数据面板（移植自旧版 Qt DriveStatsPanel）占据待机主页左栏
+    self._drive_stats_panel = DriveStatsPanel()
+
     self._exp_mode_button = ExperimentalModeButton()
     self._setup_callbacks()
 
   def show_event(self):
     super().show_event()
     self._exp_mode_button.show_event()
+    self._drive_stats_panel.show_event()
     self.last_refresh = time.monotonic()
     self._refresh()
 
@@ -112,17 +118,14 @@ class HomeLayout(Widget):
     content_y = self._rect.y + CONTENT_MARGIN + HEADER_HEIGHT + SPACING
     content_height = self._rect.height - CONTENT_MARGIN - HEADER_HEIGHT - SPACING - CONTENT_MARGIN
 
+    # 驾驶数据面板占满整个内容区（原右侧「完成设置/配对设备」整列已移除）
     self.content_rect = rl.Rectangle(
       self._rect.x + CONTENT_MARGIN, content_y, self._rect.width - 2 * CONTENT_MARGIN, content_height
     )
-
-    left_width = self.content_rect.width - RIGHT_COLUMN_WIDTH - SPACING
-
-    self.left_column_rect = rl.Rectangle(self.content_rect.x, self.content_rect.y, left_width, self.content_rect.height)
-
-    self.right_column_rect = rl.Rectangle(
-      self.content_rect.x + left_width + SPACING, self.content_rect.y, RIGHT_COLUMN_WIDTH, self.content_rect.height
+    self.left_column_rect = rl.Rectangle(
+      self.content_rect.x, self.content_rect.y, self.content_rect.width, self.content_rect.height
     )
+    self.right_column_rect = rl.Rectangle(0, 0, 0, 0)
 
     self.update_notif_rect.x = self.header_rect.x
     self.update_notif_rect.y = self.header_rect.y + (self.header_rect.height - 60) // 2
@@ -172,17 +175,32 @@ class HomeLayout(Widget):
       text_y = self.alert_notif_rect.y + (self.alert_notif_rect.height - text_size.y) // 2
       rl.draw_text_ex(font, alert_text, rl.Vector2(int(text_x), int(text_y)), HEAD_BUTTON_FONT_SIZE, 0, rl.WHITE)
 
-    # Version text (right aligned)
+    # 顶部版本条：竖线分段，数据全部来自设备真实信息
+    # （移植自旧版 Qt home.cc::refresh，形如
+    #  CarrotPilot 0.9.9 │ Bys~晚風 │ CP-Dev │ 394bde5 │ Sep 28）
     if self.update_available or self.alert_count > 0:
       version_text_width -= SPACING * 1.5
 
-    version_rect = rl.Rectangle(self.header_rect.x + self.header_rect.width - version_text_width, self.header_rect.y,
-                                version_text_width, self.header_rect.height)
-    gui_label(version_rect, self._version_text, 48, rl.WHITE, alignment=TextAlignment.RIGHT)
+    segments = self._version_segments
+    fs = 40
+    sep = "  │  "
+    sep_w = measure_text_cached(font, sep, fs).x
+
+    widths = [measure_text_cached(font, t, fs).x for t, _ in segments]
+    total_w = sum(widths) + sep_w * (len(segments) - 1)
+
+    x = self.header_rect.x + self.header_rect.width - total_w
+    y = self.header_rect.y + (self.header_rect.height - fs) / 2
+    for i, (text, color) in enumerate(segments):
+      rl.draw_text_ex(font, text, rl.Vector2(int(x), int(y)), fs, 0, color)
+      x += widths[i]
+      if i < len(segments) - 1:
+        rl.draw_text_ex(font, sep, rl.Vector2(int(x), int(y)), fs, 0, rl.Color(85, 85, 85, 255))
+        x += sep_w
 
   def _render_home_content(self):
+    # 右栏「完成设置/配对设备」与实验模式按钮已移除，驾驶数据面板占满内容区
     self._render_left_column()
-    self._render_right_column()
 
   def _render_update_view(self):
     self.update_alert.render(self.content_rect)
@@ -191,7 +209,8 @@ class HomeLayout(Widget):
     self.offroad_alert.render(self.content_rect)
 
   def _render_left_column(self):
-    self._prime_widget.render(self.left_column_rect)
+    # 左栏显示驾驶数据面板（对齐旧版 home.cc：DriveStatsPanel 占据该区域）
+    self._drive_stats_panel.render(self.left_column_rect)
 
   def _render_right_column(self):
     exp_height = 125
@@ -210,6 +229,7 @@ class HomeLayout(Widget):
 
   def _refresh(self):
     self._version_text = self._get_version_text()
+    self._version_segments = self._build_version_segments()
     update_available = self.update_alert.refresh()
     alert_count = self.offroad_alert.refresh()
     alerts_present = alert_count > 0
@@ -231,3 +251,76 @@ class HomeLayout(Widget):
     brand = "openpilot"
     description = self.params.get("UpdaterCurrentDescription")
     return f"{brand} {description}" if description else brand
+
+  def _build_version_segments(self):
+    """顶部版本条分段：[(文本, 颜色)]。
+
+    数据全部来自设备真实信息，与旧版 Qt home.cc::refresh 同源，**五段**：
+      CarrotPilot {Version} │ {机型} │ {GitBranch} │ {GitCommit[:7]} │ {Mmm DD}
+    （曾多出一段「Sys=就绪」，2026-10-17 按用户要求删除：老版并无此段，
+      且它只反映 deviceState 消息是否在收，信息价值低、会随抖动整段消失。）
+    """
+    def _p(name, default=""):
+      try:
+        return self.params.get(name) or default
+      except Exception:
+        return default
+
+    ver = _p("Version", "0.9.9")
+    commit = _p("GitCommit", "")[:7]
+    branch = _p("GitBranch", "")
+    model = self._read_model()
+
+    C_MODEL = rl.Color(143, 212, 240, 255)   # 淡蓝：机型
+    C_BRANCH = rl.Color(255, 154, 0, 255)    # 橙：分支
+    C_DIM = rl.Color(170, 170, 170, 255)     # 灰：commit / 日期
+
+    segs = []
+    brand = f"CarrotPilot {ver}" if ver else "CarrotPilot"
+    segs.append((brand, rl.WHITE))
+    if model:
+      segs.append((model, C_MODEL))
+    if branch:
+      segs.append((branch, C_BRANCH))
+    if commit:
+      segs.append((commit, C_DIM))
+    bdate = self._build_date()
+    if bdate:
+      segs.append((bdate, C_DIM))
+    return segs
+
+  @staticmethod
+  def _read_model() -> str:
+    """读设备机型（tici → Bys~晚風），失败回退 PC。"""
+    try:
+      with open("/sys/firmware/devicetree/base/model", "rb") as f:
+        raw = f.read().decode("utf-8", "replace").strip()
+      return "Bys~晚風" if "tici" in raw.lower() else raw
+    except OSError:
+      return "PC"
+
+  def _build_date(self) -> str:
+    """顶部日期段：优先取 params 的构建日期，退化为今天。"""
+    for key in ("BuildDate", "UpdaterBuildDate"):
+      try:
+        val = self.params.get(key)
+      except Exception:
+        continue
+      if val:
+        s = val.decode() if isinstance(val, bytes) else str(val)
+        s = s.replace("-", " ").strip()
+        # "2026 09 28" -> "Sep 28"
+        parts = s.split()
+        if len(parts) >= 3:
+          months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+          try:
+            m = int(parts[1])
+            if 1 <= m <= 12:
+              return f"{months[m - 1]} {int(parts[2])}"
+          except ValueError:
+            pass
+        if len(parts) >= 2:
+          return f"{parts[0]} {parts[1]}"
+    import datetime
+    return datetime.date.today().strftime("%b %d")

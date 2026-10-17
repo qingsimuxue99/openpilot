@@ -52,7 +52,9 @@ class HtmlElement:
   font_weight: FontWeight
   margin_top: int
   margin_bottom: int
-  line_height: float = 0.9  # matches Qt visually, unsure why not default 1.2
+  # 2026-10-17：0.9 小于 1.0，导致多行说明「上下贴死」，中文长句尤其明显。
+  # 调到 1.28（约等于常规正文 1.25~1.3 的行距），行与行之间有明显呼吸感。
+  line_height: float = 1.28
   indent_level: int = 0
 
 
@@ -83,7 +85,8 @@ class HtmlRenderer(Widget):
       ElementType.H4: {"size": round(base_p_size * 1.00), "weight": FontWeight.BOLD, "margin_top": 16, "margin_bottom": 8},
       ElementType.H5: {"size": round(base_p_size * 0.83), "weight": FontWeight.BOLD, "margin_top": 12, "margin_bottom": 6},
       ElementType.H6: {"size": round(base_p_size * 0.67), "weight": FontWeight.BOLD, "margin_top": 10, "margin_bottom": 4},
-      ElementType.P: {"size": base_p_size, "weight": FontWeight.NORMAL, "margin_top": 8, "margin_bottom": 12},
+      # 2026-10-17：margin 略放宽，让段落之间也有明显间距（原 8/12 偏紧）
+      ElementType.P: {"size": base_p_size, "weight": FontWeight.NORMAL, "margin_top": 10, "margin_bottom": 16},
       ElementType.B: {"size": base_p_size, "weight": FontWeight.BOLD, "margin_top": 8, "margin_bottom": 12},
       ElementType.LI: {"size": base_p_size, "weight": FontWeight.NORMAL, "color": rl.Color(40, 40, 40, 255), "margin_top": 6, "margin_bottom": 6},
       ElementType.BR: {"size": 0, "weight": FontWeight.NORMAL, "margin_top": 0, "margin_bottom": 12},

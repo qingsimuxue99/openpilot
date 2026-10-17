@@ -88,7 +88,6 @@ def read_border_params(params, params_memory) -> BorderParamSnapshot:
   hyundai_camera_scc = params.get_int("HyundaiCameraSCC") > 0
   nnff_model_name = params.get("NNFFModelName") or ""
   custom_sr = params.get_float("CustomSR") / 10.0
-  git_branch = params.get("GitBranch") or ""
   network_address = params_memory.get("NetworkAddress") or ""
 
   top_left = car_name + ("(CAMERA SCC)" if hyundai_camera_scc else "")
@@ -101,7 +100,7 @@ def read_border_params(params, params_memory) -> BorderParamSnapshot:
     top_left=top_left,
     top_left_op_long=top_left_op_long,
     custom_sr=custom_sr,
-    bottom_left=git_branch,
+    bottom_left="晚風V261017",
     bottom_right=network_address,
   )
 

@@ -171,6 +171,8 @@ procs = [
   PythonProcess("joystick", "openpilot.tools.joystick.joystick_control", and_(joystick, iscar)),
 
   PythonProcess("carrot_man", "openpilot.selfdrive.carrot.carrot_man", always_run, restart_if_crash=True),#, enabled=not PC),
+  # drive_stats: 驾驶数据累计器（里程/时长/行程数 → /data/drive_stats/drive_stats.json，供 UI 面板读取）
+  PythonProcess("drive_stats", "openpilot.selfdrive.carrot.drive_stats", always_run, restart_if_crash=True),
   # carrot_navi permanently owns TCP 7714 and publishes navigation data over cereal.
   PythonProcess("carrot_navi", "openpilot.selfdrive.carrot.carrot_navi", always_run, restart_if_crash=True),
 

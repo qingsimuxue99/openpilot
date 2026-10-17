@@ -11,26 +11,48 @@ from openpilot.selfdrive.ui.ui_state import ui_state
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 
-# Description constants
+# 各参数的说明文案（2026-10-17 全部中文化，按用户要求补全细节）
+#
+# ⚠️ 换行说明：设备 UI 的 `label.py` **没有实现自动换行**（源码里留着
+#   "TODO: add wrapping"），超宽文本会被 elide 截断成省略号。
+#   ListItem 的描述默认隐藏，点条目才展开，展开时走 HtmlRenderer 支持 <br>。
+#   ⇒ 因此长描述必须**手动用 <br> 分行**，否则会被截断显示不全。
 DESCRIPTIONS = {
   "OpenpilotEnabledToggle": tr_noop(
-    "Use the openpilot system for adaptive cruise control and lane keep driver assistance. " +
-    "Your attention is required at all times to use this feature."
+    "开启后由萝卜接管自适应巡航与车道保持。<br>"
+    "使用该功能时必须全程保持注意力，随时准备接管车辆，系统不会替你观察路况。"
   ),
-  "DisengageOnAccelerator": tr_noop("When enabled, pressing the accelerator pedal will disengage openpilot."),
+  "DisengageOnAccelerator": tr_noop(
+    "开启后踩下加速踏板会立即退出萝卜接管，便于手动超车。<br>"
+    "关闭后踩加速踏板不会退出接管，纵向仍由系统控制。"
+  ),
   "LongitudinalPersonality": tr_noop(
-    "Standard is recommended. In aggressive mode, openpilot will follow lead cars closer and be more aggressive with the gas and brake. " +
-    "In relaxed mode openpilot will stay further away from lead cars. On supported cars, you can cycle through these personalities with " +
-    "your steering wheel distance button."
+    "标准（推荐）：最均衡，适合日常使用。<br>"
+    "激进：跟车更近，加减速更果断。<br>"
+    "放松：跟车距离更远。<br>"
+    "更松：跟车距离最远。<br>"
+    "支持的车型可用方向盘上的距离按键循环切换。"
   ),
   "IsLdwEnabled": tr_noop(
-    "Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line " +
-    "without a turn signal activated while driving over 31 mph (50 km/h)."
+    "车道偏离预警。<br>"
+    "车速超过 50 km/h 且未打转向灯时，若车辆越过识别到的车道线，将提醒你回正方向盘。"
   ),
-  "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
-  'RecordFront': tr_noop("Upload data from the driver facing camera and help improve the driver monitoring algorithm."),
-  "IsMetric": tr_noop("Display speed in km/h instead of mph."),
-  "RecordAudio": tr_noop("Record and store microphone audio while driving. The audio will be included in the dashcam video in comma connect."),
+  "AlwaysOnDM": tr_noop(
+    "驾驶员监控常开。<br>"
+    "即使萝卜未接管，也持续进行疲劳与分心监测（仅部分车型支持）。"
+  ),
+  'RecordFront': tr_noop(
+    "记录并上传驾驶员摄像头画面，用于改进驾驶员监控算法。<br>"
+    "开启前请确认你了解并同意相关隐私政策。"
+  ),
+  "IsMetric": tr_noop(
+    "公制单位：速度以 km/h 显示；<br>"
+    "关闭则以 mph 显示。"
+  ),
+  "RecordAudio": tr_noop(
+    "记录并上传麦克风音频，<br>"
+    "会一并写入行车记录视频（仅在联网记录时生效）。"
+  ),
 }
 
 
@@ -43,49 +65,49 @@ class TogglesLayout(Widget):
     # param, title, desc, icon, needs_restart
     self._toggle_defs = {
       "OpenpilotEnabledToggle": (
-        lambda: tr("Enable openpilot"),
+        lambda: tr("启用萝卜接管"),
         DESCRIPTIONS["OpenpilotEnabledToggle"],
         "chffr_wheel.png",
         True,
       ),
       "ExperimentalMode": (
-        lambda: tr("Experimental Mode"),
+        lambda: tr("实验模式"),
         "",
         "experimental_white.png",
         False,
       ),
       "DisengageOnAccelerator": (
-        lambda: tr("Disengage on Accelerator Pedal"),
+        lambda: tr("踩加速踏板退出接管"),
         DESCRIPTIONS["DisengageOnAccelerator"],
         "disengage_on_accelerator.png",
         False,
       ),
       "IsLdwEnabled": (
-        lambda: tr("Enable Lane Departure Warnings"),
+        lambda: tr("车道偏离预警"),
         DESCRIPTIONS["IsLdwEnabled"],
         "warning.png",
         False,
       ),
       "AlwaysOnDM": (
-        lambda: tr("Always-On Driver Monitoring"),
+        lambda: tr("驾驶员监控常开"),
         DESCRIPTIONS["AlwaysOnDM"],
         "monitoring.png",
         False,
       ),
       "RecordFront": (
-        lambda: tr("Record and Upload Driver Camera"),
+        lambda: tr("记录并上传驾驶员画面"),
         DESCRIPTIONS["RecordFront"],
         "monitoring.png",
         True,
       ),
       "RecordAudio": (
-        lambda: tr("Record and Upload Microphone Audio"),
+        lambda: tr("记录并上传麦克风音频"),
         DESCRIPTIONS["RecordAudio"],
         "microphone.png",
         True,
       ),
       "IsMetric": (
-        lambda: tr("Use Metric System"),
+        lambda: tr("使用公制单位"),
         DESCRIPTIONS["IsMetric"],
         "metric.png",
         False,
@@ -93,9 +115,9 @@ class TogglesLayout(Widget):
     }
 
     self._long_personality_setting = multiple_button_item(
-      lambda: tr("Driving Personality"),
+      lambda: tr("驾驶风格"),
       lambda: tr(DESCRIPTIONS["LongitudinalPersonality"]),
-      buttons=[lambda: tr("Aggressive"), lambda: tr("Standard"), lambda: tr("Relaxed"), lambda: tr("moreRelaxed")],
+      buttons=[lambda: tr("激进"), lambda: tr("标准"), lambda: tr("放松"), lambda: tr("更松")],
       button_width=255,
       callback=self._set_longitudinal_personality,
       selected_index=self._params.get("LongitudinalPersonality", return_default=True),
@@ -122,7 +144,7 @@ class TogglesLayout(Widget):
       # Make description callable for live translation
       additional_desc = ""
       if needs_restart and not locked:
-        additional_desc = tr("Changing this setting will restart openpilot if the car is powered on.")
+        additional_desc = tr("修改该设置后，若车辆已上电，将自动重启萝卜系统使配置生效。")
       toggle.set_description(lambda og_desc=toggle.description, add_desc=additional_desc: tr(og_desc) + (" " + tr(add_desc) if add_desc else ""))
 
       # track for engaged state updates
@@ -156,15 +178,14 @@ class TogglesLayout(Widget):
     ui_state.update_params()
 
     e2e_description = tr(
-      "openpilot defaults to driving in chill mode. Experimental mode enables alpha-level features that aren't ready for chill mode. " +
-      "Experimental features are listed below:<br>" +
-      "<h4>End-to-End Longitudinal Control</h4><br>" +
-      "Let the driving model control the gas and brakes. openpilot will drive as it thinks a human would, including stopping for red lights and stop signs. " +
-      "Since the driving model decides the speed to drive, the set speed will only act as an upper bound. This is an alpha quality feature; " +
-      "mistakes should be expected.<br>" +
-      "<h4>New Driving Visualization</h4><br>" +
-      "The driving visualization will transition to the road-facing wide-angle camera at low speeds to better show some turns. " +
-      "The Experimental mode logo will also be shown in the top right corner."
+      "萝卜默认以「平稳模式」行驶。实验模式会开启尚未达到平稳模式成熟度的 alpha 级功能，"
+      "具体如下：<br>" +
+      "<h4>端到端纵向控制</h4><br>" +
+      "由驾驶模型直接控制油门与刹车，像人类一样驾驶，包括红灯停车、停车让行。"
+      "由于速度由驾驶模型决定，设定速度仅作为上限。这是 alpha 阶段的功能，仍可能有失误。<br>" +
+      "<h4>全新驾驶可视化</h4><br>" +
+      "低速时驾驶画面会切换到路向前视广角摄像头，以更好呈现部分弯道；"
+      "屏幕右上角会同时显示实验模式标识。"
     )
 
     if ui_state.CP is not None:
@@ -179,17 +200,16 @@ class TogglesLayout(Widget):
         #self._long_personality_setting.action_item.set_enabled(False)
         self._params.remove("ExperimentalMode")
 
-        unavailable = tr("Experimental mode is currently unavailable on this car since the car's stock ACC is used for longitudinal control.")
+        unavailable = tr("本车纵向控制使用原车 ACC，实验模式当前不可用。")
 
-        long_desc = unavailable + " " + tr("openpilot longitudinal control may come in a future update.")
+        long_desc = unavailable + " " + tr("萝卜的纵向控制能力将在后续更新中提供。")
         if ui_state.CP.alphaLongitudinalAvailable:
           if self._is_release:
-            long_desc = unavailable + " " + tr("An alpha version of openpilot longitudinal control can be tested, along with " +
-                                               "Experimental mode, on non-release branches.")
+            long_desc = unavailable + " " + tr("在非发布分支上，可与实验模式一起测试萝卜纵向控制的 alpha 版本。")
           else:
-            long_desc = tr("Enable the openpilot longitudinal control (alpha) toggle to allow Experimental mode.")
+            long_desc = tr("请先开启「萝卜纵向控制（alpha）」开关，才能使用实验模式。")
 
-        self._toggles["ExperimentalMode"].set_description("<b>" + long_desc + "</b><br><br>" + e2e_description)
+        self._toggles["ExperimentalMode"].set_description("<b>" + long_desc + "</b><br>" + e2e_description)
     else:
       self._toggles["ExperimentalMode"].set_description(e2e_description)
 
@@ -226,7 +246,7 @@ class TogglesLayout(Widget):
       # show confirmation dialog
       content = (f"<h1>{self._toggles['ExperimentalMode'].title}</h1><br>" +
                  f"<p>{self._toggles['ExperimentalMode'].description}</p>")
-      dlg = ConfirmDialog(content, tr("Enable"), rich=True, callback=confirm_callback)
+      dlg = ConfirmDialog(content, tr("开启"), rich=True, callback=confirm_callback)
       gui_app.push_widget(dlg)
     else:
       self._update_experimental_mode_icon()

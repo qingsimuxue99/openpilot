@@ -5,7 +5,7 @@ from itertools import zip_longest
 from typing import Union
 import pyray as rl
 
-from openpilot.system.ui.lib.application import gui_app, FontWeight, DEFAULT_TEXT_SIZE, DEFAULT_TEXT_COLOR, FONT_SCALE, TextAlignment, TextAlignmentVertical
+from openpilot.system.ui.lib.application import gui_app, FontWeight, DEFAULT_TEXT_SIZE, DEFAULT_TEXT_COLOR, FONT_SCALE, TextAlignment, TextAlignmentVertical, font_fallback
 from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.emoji import find_emoji, emoji_tex
@@ -37,7 +37,7 @@ def gui_label(
   alignment_vertical: int = TextAlignmentVertical.MIDDLE,
   elide_right: bool = True
 ):
-  font = gui_app.font(font_weight)
+  font = font_fallback(gui_app.font(font_weight))
   text_size = measure_text_cached(font, text, font_size)
   display_text = text
 
@@ -109,7 +109,7 @@ class Label(Widget):
 
     super().__init__()
     self._font_weight = font_weight
-    self._font = gui_app.font(self._font_weight)
+    self._font = font_fallback(gui_app.font(self._font_weight))
     self._font_size = font_size
     self._text_alignment = text_alignment
     self._text_alignment_vertical = text_alignment_vertical
@@ -256,7 +256,7 @@ class UnifiedLabel(Widget):
     self._text = text
     self._font_size = font_size
     self._font_weight = font_weight
-    self._font = gui_app.font(self._font_weight)
+    self._font = font_fallback(gui_app.font(self._font_weight))
     self._text_color = text_color
     self._alignment = alignment
     self._alignment_vertical = alignment_vertical
@@ -349,7 +349,7 @@ class UnifiedLabel(Widget):
     """Update the font weight."""
     if self._font_weight != font_weight:
       self._font_weight = font_weight
-      self._font = gui_app.font(self._font_weight)
+      self._font = font_fallback(gui_app.font(self._font_weight))
       self._cached_text = None  # Invalidate cache
 
   def set_alignment(self, alignment: int):

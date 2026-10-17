@@ -56,13 +56,11 @@ class DeviceLayout(Widget):
     items = [
       text_item(lambda: tr("Dongle ID"), self._params.get("DongleId") or (lambda: tr("N/A"))),
       text_item(lambda: tr("Serial"), self._params.get("HardwareSerial") or (lambda: tr("N/A"))),
-      self._pair_device_btn,
-      button_item(lambda: tr("Driver Camera"), lambda: tr("PREVIEW"), lambda: tr(DESCRIPTIONS['driver_camera']),
-                  callback=lambda: gui_app.push_widget(DriverCameraDialog()), enabled=ui_state.is_offroad),
+      # 已隐藏：配对设备（Pair Device）——下方 self._pair_device_btn 的定义与回调保留，仅从显示列表移除
       self._reset_calib_btn,
-      button_item(lambda: tr("Review Training Guide"), lambda: tr("REVIEW"), lambda: tr(DESCRIPTIONS['review_guide']),
-                  self._on_review_training_guide, enabled=ui_state.is_offroad),
-      button_item(lambda: tr("Regulatory"), lambda: tr("VIEW"), callback=self._on_regulatory, enabled=ui_state.is_offroad),
+      # 已隐藏：车内摄像头（Driver Camera）
+      # 已隐藏：查看训练指南（Review Training Guide）
+      # 已隐藏：法规（Regulatory）
       button_item(lambda: tr("Change Language"), lambda: tr("CHANGE"), callback=self._show_language_dialog),
       self._power_off_btn,
     ]

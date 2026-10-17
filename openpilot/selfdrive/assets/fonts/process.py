@@ -10,7 +10,8 @@ TRANSLATIONS_DIR = SELFDRIVE_DIR / "ui" / "translations"
 LANGUAGES_FILE = TRANSLATIONS_DIR / "languages.json"
 
 GLYPH_PADDING = 6
-EXTRA_CHARS = "–‑✓×°§•X⚙✕◀▶✔⌫⇧␣○●↳çêüñ–‑✓×°§•€£¥"
+# ⚠️ 「│」(U+2502) 用于顶部版本条分隔符，缺它会显示成 "?"（2026-10-17 实机踩过）
+EXTRA_CHARS = "–‑✓×°§•X⚙✕◀▶✔⌫⇧␣○●↳çêüñ│─┃┌┐└┘–‑✓×°§•€£¥"
 UNIFONT_LANGUAGES = {"th", "zh-CHT", "zh-CHS", "ko", "ja"}
 KR_FONTS = {"KaiGenGothicKR-Bold"}
 
@@ -19,6 +20,40 @@ def _languages():
     return {}
   with LANGUAGES_FILE.open(encoding="utf-8") as f:
     return json.load(f)
+
+
+def _ui_source_chars():
+  """收集设备 UI 里所有硬编码中文字符。
+
+  为什么需要：``.po`` 翻译文件只覆盖走 tr() 的文案，而 carrot / 软件菜单等
+  大量中文是直接写在 .py（software.py / carrot.py / home.py / sidebar.py …）
+  与 ``carrot_settings.json`` 的 ctitle/cdescr 里的，不进 .po。若字库只按
+  .po 烘焙，这些字在设备上就会显示成 "?"。
+  """
+  found = set()
+  # 1) UI 相关源码：递归扫 selfdrive/ui 与 selfdrive/carrot 下的 .py
+  for root in (SELFDRIVE_DIR / "ui", SELFDRIVE_DIR / "carrot"):
+    if not root.exists():
+      continue
+    for path in root.rglob("*.py"):
+      if "__pycache__" in path.parts or path.name == "process.py":
+        continue
+      try:
+        found.update(path.read_text(encoding="utf-8", errors="ignore"))
+      except OSError:
+        continue
+
+  # 2) 设置目录（含中文 ctitle/cdescr/ctgroup）
+  for name in ("carrot_settings.json", "carrot_setting.py"):
+    path = SELFDRIVE_DIR / name
+    if path.exists():
+      try:
+        found.update(path.read_text(encoding="utf-8", errors="ignore"))
+      except OSError:
+        pass
+
+  # 只保留 CJK 与常用中文标点，避免把代码符号塞进图集
+  return {c for c in found if "一" <= c <= "鿿" or "　" <= c <= "〿" or "＀" <= c <= "￯"}
 
 
 def _char_sets():
@@ -34,6 +69,11 @@ def _char_sets():
     except FileNotFoundError:
       continue
     (unifont if code in UNIFONT_LANGUAGES else base).update(chars)
+
+  # 设备 UI 源码里硬编码的中文（不进 .po 的那些），必须并入否则显示 "?"
+  ui_chars = _ui_source_chars()
+  unifont.update(ui_chars)
+  base.update(ui_chars)
 
   return tuple(sorted(ord(c) for c in base)), tuple(sorted(ord(c) for c in unifont))
 

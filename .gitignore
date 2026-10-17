@@ -120,3 +120,23 @@ openpilot/selfdrive/modeld/models/tg_input_devices.json
 
 # Local Windows native CPU test builds
 *.pyd
+
+# 本地Python 依赖目录（约 260MB，绝不能进仓库）
+pydeps/
+
+# 本地构建标记
+.build_stamp
+
+### 本树（fishop carrot-wip）实际路径修正：原规则写在 selfdrive/ 前缀下，
+### 但本树代码在 openpilot/ 下，导致二进制与模型未被忽略。
+openpilot/cereal/gen/
+openpilot/cereal/services.h
+openpilot/cereal/messaging/bridge
+openpilot/system/camerad/camerad
+openpilot/selfdrive/modeld/models/*.pkl
+openpilot/selfdrive/modeld/models/*.thneed
+openpilot/selfdrive/pandad/pandad
+openpilot/selfdrive/logcatd/logcatd
+openpilot/system/proclogd/proclogd
+openpilot/selfdrive/ui/translations/tmp
+openpilot/selfdrive/ui/translations/alerts_generated.h

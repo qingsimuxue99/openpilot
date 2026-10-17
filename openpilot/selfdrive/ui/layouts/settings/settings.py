@@ -2,13 +2,14 @@ import pyray as rl
 from dataclasses import dataclass
 from enum import IntEnum
 from collections.abc import Callable
+from openpilot.selfdrive.ui.layouts.settings.carrot import CarrotLayout
 from openpilot.selfdrive.ui.layouts.settings.developer import DeveloperLayout
 from openpilot.selfdrive.ui.layouts.settings.device import DeviceLayout
 from openpilot.selfdrive.ui.layouts.settings.firehose import FirehoseLayout
 from openpilot.selfdrive.ui.layouts.settings.software import SoftwareLayout
 from openpilot.selfdrive.ui.layouts.settings.toggles import TogglesLayout
 from openpilot.selfdrive.ui.layouts.settings.usbgpu import UsbGpuLayout
-from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
+from openpilot.system.ui.lib.application import FONT_SCALE, gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.wifi_manager import WifiManager
@@ -20,6 +21,7 @@ SIDEBAR_WIDTH = 500
 CLOSE_BTN_SIZE = 200
 CLOSE_ICON_SIZE = 70
 NAV_BTN_HEIGHT = 110
+NAV_BOTTOM_MARGIN = 40
 PANEL_MARGIN = 50
 
 # Colors
@@ -39,6 +41,7 @@ class PanelType(IntEnum):
   FIREHOSE = 4
   DEVELOPER = 5
   EGPU = 6
+  CARROT = 7
 
 
 @dataclass
@@ -60,9 +63,14 @@ class SettingsLayout(Widget):
     self._panels = {
       PanelType.DEVICE: PanelInfo(tr_noop("Device"), DeviceLayout()),
       PanelType.NETWORK: PanelInfo(tr_noop("Network"), NetworkUI(wifi_manager)),
-      PanelType.TOGGLES: PanelInfo(tr_noop("Toggles"), TogglesLayout()),
+      # 「Toggles」被译成「切换」语义不准（这一页放的是开关项集合，
+      # 「切换」易被理解成切页/切换分支）。按用户要求改为「设定」，
+      # 与相邻的「萝卜」一样直接硬编码中文，不走 .po 翻译。
+      PanelType.TOGGLES: PanelInfo(tr_noop("设定"), TogglesLayout()),
       PanelType.SOFTWARE: PanelInfo(tr_noop("Software"), SoftwareLayout()),
-      PanelType.FIREHOSE: PanelInfo(tr_noop("Firehose"), FirehoseLayout()),
+      PanelType.CARROT: PanelInfo(tr_noop("萝卜"), CarrotLayout()),
+      # 数据洪流（Firehose）已屏蔽：firehose.py 代码保留不删，仅从侧边栏隐藏该 UI 入口
+      # PanelType.FIREHOSE: PanelInfo(tr_noop("Firehose"), FirehoseLayout()),
       PanelType.DEVELOPER: PanelInfo(tr_noop("Developer"), DeveloperLayout()),
       PanelType.EGPU: PanelInfo(tr_noop("eGPU"), UsbGpuLayout()),
     }
@@ -117,26 +125,30 @@ class SettingsLayout(Widget):
     # Store close button rect for click detection
     self._close_btn_rect = close_btn_rect
 
-    # Navigation buttons
+    # Navigation buttons (auto-fit so every panel stays on screen)
+    nav_available = max(1.0, rect.height - 300 - NAV_BOTTOM_MARGIN)
+    btn_height = min(NAV_BTN_HEIGHT, nav_available / max(1, len(self._panels)))
+    # FONT_SCALE is applied when the text is drawn, so shrink the label to fit the button
+    label_size = max(20, min(65, int((btn_height - 12) / FONT_SCALE)))
     y = rect.y + 300
     for panel_type, panel_info in self._panels.items():
-      button_rect = rl.Rectangle(rect.x + 50, y, rect.width - 150, NAV_BTN_HEIGHT)
+      button_rect = rl.Rectangle(rect.x + 50, y, rect.width - 150, btn_height)
 
       # Button styling
       is_selected = panel_type == self._current_panel
       text_color = TEXT_SELECTED if is_selected else TEXT_NORMAL
       # Draw button text (right-aligned)
       panel_name = tr(panel_info.name)
-      text_size = measure_text_cached(self._font_medium, panel_name, 65)
+      text_size = measure_text_cached(self._font_medium, panel_name, label_size)
       text_pos = rl.Vector2(
         button_rect.x + button_rect.width - text_size.x, button_rect.y + (button_rect.height - text_size.y) / 2
       )
-      rl.draw_text_ex(self._font_medium, panel_name, text_pos, 65, 0, text_color)
+      rl.draw_text_ex(self._font_medium, panel_name, text_pos, label_size, 0, text_color)
 
       # Store button rect for click detection
       panel_info.button_rect = button_rect
 
-      y += NAV_BTN_HEIGHT
+      y += btn_height
 
   def _draw_current_panel(self, rect: rl.Rectangle):
     rl.draw_rectangle_rounded(

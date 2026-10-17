@@ -40,7 +40,7 @@ class DriverPreview(CameraView):
 
   def draw_onroad(self, parent: rl.Rectangle, alert_visible: bool) -> bool:
     sm = ui_state.sm
-    visible = ui_state.started and (sm['selfdriveState'].enabled or ui_state.always_on_dm) and not alert_visible
+    visible = ui_state.started and (sm['selfdriveState'].enabled or ui_state.always_on_dm) and not alert_visible and ui_state.params.get_bool("DriverMonitoringEnabled")
     if not visible:
       if self._was_visible:
         self._reset_stream()

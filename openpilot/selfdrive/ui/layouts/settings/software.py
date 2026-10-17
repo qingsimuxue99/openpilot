@@ -1,18 +1,43 @@
 import os
 import time
 import datetime
+from collections.abc import Callable
+
+import pyray as rl
+
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.system.ui.lib.application import gui_app
+from openpilot.system.ui.lib.application import gui_app, MousePos
 from openpilot.system.ui.lib.multilang import tr, trn
+from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget, DialogResult
 from openpilot.system.ui.widgets.confirm_dialog import ConfirmDialog
-from openpilot.system.ui.widgets.list_view import button_item, text_item, ListItem
+from openpilot.system.ui.widgets.list_view import (ITEM_PADDING, ITEM_TEXT_FONT_SIZE, ITEM_TEXT_VALUE_COLOR,
+                                                   ListItem, TextAction, button_item, toggle_item)
 from openpilot.system.ui.widgets.option_dialog import MultiOptionDialog
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 
 # TODO: remove this. updater fails to respond on startup if time is not correct
 UPDATED_TIMEOUT = 10  # seconds to wait for updated to respond
+
+# 快速启动：预编译标记文件。launch_chffrplus.sh 见标即跳过一次开机编译（[ ! -f $DIR/prebuilt ]）
+PREBUILT_MARKER = "/data/openpilot/prebuilt"
+# 禁止更新：updated 进程总闸参数（等价命令 echo -en "1" > /data/params/d/DisableUpdates）
+DISABLE_UPDATES_PARAM = "/data/params/d/DisableUpdates"
+
+
+def quick_start_enabled() -> bool:
+  """预编译标记是否存在（存在 = 开机跳过编译）"""
+  return os.path.exists(PREBUILT_MARKER)
+
+
+def disable_updates_enabled() -> bool:
+  """DisableUpdates 参数是否为 1"""
+  try:
+    with open(DISABLE_UPDATES_PARAM, "rb") as f:
+      return f.read().strip() == b"1"
+  except OSError:
+    return False
 
 # Mapping updater internal states to translated display strings
 STATE_TO_DISPLAY_TEXT = {
@@ -48,12 +73,76 @@ def time_ago(date: datetime.datetime | None) -> str:
   return date.strftime("%a %b %d %Y")
 
 
+class VersionTapItem(ListItem):
+  """「当前版本」行：连点标题 6 次才显示卸载按钮（防止误卸载）"""
+
+  TAPS_TO_REVEAL = 6
+
+  def __init__(self, *args, on_reveal: Callable[[], None] | None = None, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._tap_count = 0
+    self._on_reveal = on_reveal
+
+  def reset_taps(self) -> None:
+    """连点计数清零（切换出软件菜单时调用，下次进入需重新连点）"""
+    self._tap_count = 0
+
+  def _handle_mouse_release(self, mouse_pos: MousePos) -> None:
+    if not self.is_visible:
+      return
+
+    # 右侧控件区（版本值文本）不计数
+    if self.action_item:
+      action_rect = self.get_right_item_rect(self._rect)
+      if rl.check_collision_point_rec(mouse_pos, action_rect):
+        return
+
+    # 仅「当前版本」标题区域内的点击计入连点
+    title_width = measure_text_cached(self._font, self.title, ITEM_TEXT_FONT_SIZE).x
+    title_rect = rl.Rectangle(self._rect.x + ITEM_PADDING, self._rect.y, title_width, self._rect.height)
+    if rl.check_collision_point_rec(mouse_pos, title_rect):
+      self._tap_count += 1
+      if self._tap_count >= self.TAPS_TO_REVEAL:
+        self._tap_count = 0
+        if self._on_reveal is not None:
+          self._on_reveal()
+      return
+
+    # 标题以外区域：维持原有行为（展开/收起版本说明）
+    self._set_description_visible(not self.description_visible)
+
+
 class SoftwareLayout(Widget):
   def __init__(self):
     super().__init__()
 
     self._onroad_label = ListItem(lambda: tr("Updates are only downloaded while the car is off."))
-    self._version_item = text_item(lambda: tr("Current Version"), ui_state.params.get("UpdaterCurrentDescription") or "")
+
+    # 卸载按钮默认隐藏：连点「当前版本」标题 6 次才显示（防止误卸载）
+    self._uninstall_btn = button_item(lambda: tr("Uninstall"), lambda: tr("UNINSTALL"), callback=self._on_uninstall)
+    self._uninstall_btn.set_visible(False)
+
+    # 「当前版本」行：标题连点 6 次才显示卸载按钮
+    self._version_item = VersionTapItem(
+      title=lambda: tr("Current Version"),
+      action_item=TextAction(ui_state.params.get("UpdaterCurrentDescription") or "", color=ITEM_TEXT_VALUE_COLOR),
+      on_reveal=self._reveal_uninstall,
+    )
+
+    # 快速启动 / 禁止更新：显示状态分别取自预编译标记文件与 DisableUpdates 参数文件
+    self._quick_start_toggle = toggle_item(
+      "快速启动",
+      "开启后创建预编译标记，开机跳过编译立即启动，并立即重启生效；关闭后删除标记，恢复开机编译。",
+      initial_state=quick_start_enabled(),
+      callback=self._on_quick_start_toggle,
+    )
+    self._disable_updates_toggle = toggle_item(
+      "禁止更新",
+      "开启后设备不再自动更新（写入 DisableUpdates 参数），重启后生效。",
+      initial_state=disable_updates_enabled(),
+      callback=self._on_disable_updates_toggle,
+    )
+
     self._download_btn = button_item(lambda: tr("Download"), lambda: tr("CHECK"), callback=self._on_download_update)
 
     # Install button is initially hidden
@@ -70,18 +159,35 @@ class SoftwareLayout(Widget):
     self._branch_btn.action_item.set_value(ui_state.params.get("UpdaterTargetBranch") or "")
     self._branch_dialog: MultiOptionDialog | None = None
 
+    # ---- 萝卜 UI 自定义参数：在「软件」菜单内分类放置 -------------------
+    # 这 6 个参数已写入 params_keys.h 白名单（params_pyx.so 已重编）并落盘，
+    # 此处仅在「软件」面板提供可视化调节控件，使它们从「萝卜」面板移出。
+    # 说明：原先放在这里的三个颜色参数（盲区监控护栏颜色 / 雷达前车框颜色 /
+    # 视觉前车框颜色）已移至「萝卜 → 显示 → 路径显示」，避免与萝卜菜单重复，
+    # 此处不再定义任何颜色控件，也不再需要 ParamStore/StepperAction。
+    # 停车状态三参数同样已移到「萝卜 → 显示 → 路径显示」。
+
     self._scroller = Scroller([
       self._onroad_label,
       self._version_item,
+      self._quick_start_toggle,
+      self._disable_updates_toggle,
       self._download_btn,
       self._install_btn,
       self._branch_btn,
-      button_item(lambda: tr("Uninstall"), lambda: tr("UNINSTALL"), callback=self._on_uninstall),
+      self._uninstall_btn,
     ], line_separator=True, spacing=0)
 
   def show_event(self):
     super().show_event()
     self._scroller.show_event()
+
+  def hide_event(self):
+    super().hide_event()
+    self._scroller.hide_event()
+    # 切换出软件菜单（或关闭设置）：卸载按钮恢复默认隐藏，连点计数清零
+    self._uninstall_btn.set_visible(False)
+    self._version_item.reset_taps()
 
   def _render(self, rect):
     self._scroller.render(rect)
@@ -89,6 +195,10 @@ class SoftwareLayout(Widget):
   def _update_state(self):
     # Show/hide onroad warning
     self._onroad_label.set_visible(ui_state.is_onroad())
+
+    # 同步两个开关的显示状态（标记/参数文件可能被外部改动）
+    self._quick_start_toggle.action_item.set_state(quick_start_enabled())
+    self._disable_updates_toggle.action_item.set_state(disable_updates_enabled())
 
     # Update current version and release notes
     current_desc = ui_state.params.get("UpdaterCurrentDescription") or ""
@@ -164,6 +274,36 @@ class SoftwareLayout(Widget):
       self._waiting_for_updater = True
       self._waiting_start_ts = time.monotonic()
       os.system("pkill -SIGHUP -f system.updated.updated")
+
+  def _reveal_uninstall(self):
+    # 连点「当前版本」标题达标：显示卸载按钮
+    self._uninstall_btn.set_visible(True)
+
+  def _on_quick_start_toggle(self, state: bool):
+    if state:
+      # 创建预编译标记：launch_chffrplus.sh 见到它且无需强制重建时跳过 build.py
+      try:
+        with open(PREBUILT_MARKER, "wb") as f:
+          f.write(b"")
+      except OSError:
+        pass
+      # 行车中不立即重启（避免行驶中失控风险）：标记已生效，下次开机即跳过编译
+      if not ui_state.is_onroad():
+        os.system("sudo -n reboot")
+    else:
+      # 删除标记，恢复开机编译
+      try:
+        os.remove(PREBUILT_MARKER)
+      except OSError:
+        pass
+
+  def _on_disable_updates_toggle(self, state: bool):
+    # 与 echo -en "1" > /data/params/d/DisableUpdates 等价（关闭时写 "0"），重启后生效
+    try:
+      with open(DISABLE_UPDATES_PARAM, "wb") as f:
+        f.write(b"1" if state else b"0")
+    except OSError:
+      pass
 
   def _on_uninstall(self):
     def handle_uninstall_confirmation(result: DialogResult):

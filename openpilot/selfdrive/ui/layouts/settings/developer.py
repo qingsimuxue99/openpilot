@@ -87,10 +87,13 @@ class DeveloperLayout(Widget):
       self._adb_toggle,
       self._ssh_toggle,
       self._ssh_keys,
-      self._joystick_toggle,
-      self._long_maneuver_toggle,
+      # 已隐藏：摇杆调试模式（Joystick Debug Mode）——下方 self._joystick_toggle 定义与回调保留，仅从列表移除
+      # self._joystick_toggle,
+      # 已隐藏：纵向操作模式（Longitudinal Maneuver Mode）
+      # self._long_maneuver_toggle,
       self._alpha_long_toggle,
-      self._ui_debug_toggle,
+      # 已隐藏：界面调试模式（UI Debug Mode）
+      # self._ui_debug_toggle,
     ], line_separator=True, spacing=0)
 
     # Toggles should be not available to change in onroad state

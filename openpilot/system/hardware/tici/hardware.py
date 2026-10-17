@@ -66,9 +66,14 @@ def get_default_route_iface():
 class Tici(HardwareBase):
   @cached_property
   def amplifier(self):
-    # C3X Lite has no audio output hardware. Avoid probing the missing
-    # amplifier, since the normal I2C retry backoff delays startup.
-    if self.get_device_type() == "mici" or is_c3x_lite():
+    # 跳过无扬声器硬件设备的功放（Amplifier）探测，避免 I2C 重试退避拖慢开机：
+    # - "mici": Comma Mic，无扬声器；
+    # - "tici": 早期 Comma Three，多数无扬声器（本设备即此类型）；
+    # - 型号含 "XL"：如 "three XL"（C3XL），无扬声器；
+    # - C3X Lite：无音频输出硬件（按 Params 的 HardwareC3xLite 硬件开关判定）。
+    # 有扬声器的设备（如 tizi）不受影响，仍正常初始化功放。
+    device = self.get_device_type()
+    if device == "mici" or device == "tici" or "XL" in device or is_c3x_lite():
       return None
     return Amplifier()
 

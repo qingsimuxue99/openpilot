@@ -1,5 +1,7 @@
 import math
 import colorsys
+import json
+import os
 import time
 import numpy as np
 
@@ -112,6 +114,10 @@ class ModelRenderer(Widget):
     self._font_display: rl.Font = gui_app.font(FontWeight.DISPLAY)
     self._init_carrot()
 
+    # 停车状态计数 (移植自旧版 0.9.9 FrogPilot/Carrot 的 drawStoppedTimer)
+    self._standstill_elapsed = 0.0    # 已停车累计秒数
+    self._standstill_last_t = None    # 上一帧时间戳 (time.monotonic)
+
   def set_transform(self, transform: np.ndarray):
     self._car_space_transform = transform.astype(np.float32)
     self._transform_dirty = True
@@ -166,6 +172,9 @@ class ModelRenderer(Widget):
     timing.call('lanes', self._draw_lane_lines_carrot, sm)
     timing.call('blindspot', self._draw_blind_spot_carrot, sm)
     timing.call('radar', self._draw_radar_info_carrot, sm)
+    # 停车状态计数 + 驾驶数据面板（移植自旧版 0.9.9 / Qt DriveStatsPanel）
+    self._draw_stopped_timer_carrot()
+    self._draw_drive_stats_panel_carrot()
     timing.finish()
 
   def _update_raw_points(self, model):
@@ -465,6 +474,92 @@ class ModelRenderer(Widget):
       rl.Color(0, 0, 0, 120),
     ]
 
+    # ===== 38 色板（移植自旧版 Qt carrot.cc::ui_box_colors，色号语义完全一致）=====
+    # 老版 0~35 是「前车框颜色」已上线的色号，36 为 2026-09-23 追加的「冰蓝」
+    # （冷色低刺激，夜间/隧道里比红金更耐看），37 为 2026-10-17 追加的「少女粉」。
+    # ⚠️ 色号只能「末尾追加」，绝不能插入/重排 —— 插入会让用户已设置的颜色整体错位。
+    # 本板供盲区护栏 + 雷达前车框 + 视觉前车框 三个颜色参数共用；取色一律 % 38。
+    # 本板仅供盲区护栏颜色参数使用；取色一律 % 37。
+    self._carrot_colors37 = [
+      rl.Color(255, 255, 255, 255),   #  0 白
+      rl.Color(255, 0, 0, 255),       #  1 红       ← 老版盲区默认(有车)
+      rl.Color(255, 175, 3, 255),     #  2 橙       ← 老版雷达前车框默认
+      rl.Color(218, 202, 37, 255),    #  3 黄
+      rl.Color(0, 203, 0, 255),       #  4 绿
+      rl.Color(0, 255, 255, 255),     #  5 青
+      rl.Color(0, 0, 255, 255),       #  6 蓝       ← 老版视觉前车框默认
+      rl.Color(128, 0, 128, 255),     #  7 紫
+      rl.Color(139, 0, 0, 255),       #  8 深红
+      rl.Color(255, 80, 80, 255),     #  9 亮红
+      rl.Color(255, 105, 180, 255),   # 10 粉红
+      rl.Color(255, 20, 147, 255),    # 11 玫红
+      rl.Color(255, 127, 80, 255),    # 12 珊瑚
+      rl.Color(255, 140, 0, 255),     # 13 深橙
+      rl.Color(255, 215, 0, 255),     # 14 金       ← 老版盲区变道预警默认
+      rl.Color(255, 255, 102, 255),   # 15 浅黄
+      rl.Color(245, 245, 220, 255),   # 16 米色
+      rl.Color(189, 183, 107, 255),   # 17 卡其
+      rl.Color(107, 142, 35, 255),    # 18 橄榄
+      rl.Color(154, 205, 50, 255),    # 19 黄绿
+      rl.Color(124, 252, 0, 255),     # 20 草绿
+      rl.Color(0, 100, 0, 255),       # 21 深绿
+      rl.Color(152, 255, 152, 255),   # 22 薄荷
+      rl.Color(0, 250, 154, 255),     # 23 春绿
+      rl.Color(127, 255, 212, 255),   # 24 碧绿
+      rl.Color(0, 206, 209, 255),     # 25 青绿
+      rl.Color(135, 206, 235, 255),   # 26 天蓝
+      rl.Color(0, 191, 255, 255),     # 27 亮天蓝
+      rl.Color(70, 130, 180, 255),    # 28 钢蓝
+      rl.Color(25, 25, 112, 255),     # 29 藏青
+      rl.Color(75, 0, 130, 255),      # 30 靛蓝
+      rl.Color(238, 130, 238, 255),   # 31 紫罗兰
+      rl.Color(255, 0, 255, 255),     # 32 洋红
+      rl.Color(230, 230, 250, 255),   # 33 薰衣草
+      rl.Color(192, 192, 192, 255),   # 34 银灰
+      rl.Color(105, 105, 105, 255),   # 35 深灰
+      rl.Color(165, 242, 243, 255),   # 36 冰蓝 ★ 盲区护栏默认
+      rl.Color(255, 182, 193, 255),   # 37 少女粉 ★ 追加(2026-10-17): 柔和粉红
+    ]
+
+    # 与 _carrot_colors37 一一对应的中文名（UI 提示与本表必须一致）
+    self._carrot_colors37_names = [
+      "白", "红", "橙", "黄", "绿", "青", "蓝", "紫", "深红", "亮红",
+      "粉红", "玫红", "珊瑚", "深橙", "金", "浅黄", "米色", "卡其", "橄榄", "黄绿",
+      "草绿", "深绿", "薄荷", "春绿", "碧绿", "青绿", "天蓝", "亮天蓝", "钢蓝", "藏青",
+      "靛蓝", "紫罗兰", "洋红", "薰衣草", "银灰", "深灰", "冰蓝", "少女粉",
+    ]
+
+    # 默认颜色（与旧版 Qt carrot.cc 原始默认值一致）：
+    #   盲区护栏 = 36 冰蓝（老版 UIBsdColor 默认 1 红；2026-10-17 按要求改冰蓝）
+    #   雷达前车框 = 2 橙（老版 UIRadarLeadBoxColor 默认 2）
+    #   视觉前车框 = 6 蓝（老版 UIVisionLeadBoxColor 默认 6）
+    self._carrot_blind_spot_barrier_color = 36
+    self._carrot_radar_lead_color = 2
+    self._carrot_visual_lead_color = 6
+    self._carrot_stopped_bg_alpha = 140
+    self._carrot_stopped_icon_pos_x = 0
+    self._carrot_stopped_icon_pos_y = 0
+
+    # ===== 驾驶数据面板 =====
+    self._carrot_drive_total_distance = 0.0   # 行驶里程 (m)
+    self._carrot_drive_op_distance = 0.0      # OP 控制里程 (m)
+    self._carrot_drive_max_speed = 0.0        # 最高车速 (m/s)
+    self._carrot_drive_takeover_count = 0      # 手动接管次数
+    self._carrot_drive_lane_change_count = 0   # 车道变更次数
+    self._carrot_drive_hard_brake_count = 0    # 急刹次数
+    self._carrot_drive_start_time = 0.0        # 本次行程开始时刻 (time.monotonic)
+    self._carrot_drive_op_start_time = 0.0     # OP 控制段开始时刻
+    self._carrot_drive_op_total_time = 0.0     # OP 累计控制时长 (s)
+    self._carrot_drive_moving_time = 0.0       # 行驶时长（车速>0.1 累计, s）
+    self._carrot_drive_was_engaged = False     # 上一帧是否 engaged
+    self._carrot_drive_was_override = False    # 上一帧是否 override（防重复计接管）
+    self._carrot_drive_blinker_active = False  # 上一帧转向灯状态（车道变更计数）
+    self._carrot_drive_hard_braking = False    # 当前是否处于急刹滞回区间
+    self._carrot_drive_last_update = 0.0       # 上一帧采集时刻（算真实 dt）
+    self._carrot_stats_data = None             # 面板数据缓存（json 解析结果）
+    self._carrot_stats_mtime = 0.0             # 上次读 json 的 mtime（避免每帧读盘）
+    self._carrot_stats_sys = {}                # 系统状态缓存（CPU/内存/存储/运行时间）
+    self._carrot_stats_sys_time = 0.0          # 上次刷系统状态的时刻
 
     self._carrot_lane_barrier_vertices = [
       np.empty((0, 2), dtype=np.float32),
@@ -486,6 +581,14 @@ class ModelRenderer(Widget):
     self._carrot_show_path_color_lane = ui_state.params.get_int("ShowPathColorLane")
     self._carrot_show_path_color_cruise_off = ui_state.params.get_int("ShowPathColorCruiseOff")
     self._carrot_tire_trajectory = ui_state.params.get_int("CarrotTireTrajectory")
+    # 三个颜色参数共用 38 色板（% 38）：
+    #   盲区护栏默认 36 冰蓝 / 雷达前车框默认 2 橙 / 视觉前车框默认 6 蓝
+    self._carrot_blind_spot_barrier_color = int(ui_state.params.get_int("BlindSpotBarrierColor") or 36)
+    self._carrot_radar_lead_color = int(ui_state.params.get_int("RadarLeadColor") or 2)
+    self._carrot_visual_lead_color = int(ui_state.params.get_int("VisualLeadColor") or 6)
+    self._carrot_stopped_bg_alpha = ui_state.params.get_int("StoppedBgAlpha")
+    self._carrot_stopped_icon_pos_x = ui_state.params.get_int("StoppedIconPosX")
+    self._carrot_stopped_icon_pos_y = ui_state.params.get_int("StoppedIconPosY")
     self._carrot_params_next_refresh_time = now + CARROT_PARAM_REFRESH_INTERVAL
 
 
@@ -788,25 +891,309 @@ class ModelRenderer(Widget):
       self._carrot_lead_two_status = 0
 
 
+  def _read_drive_stats_json(self):
+    """读取 /data/drive_stats/drive_stats.json（按 mtime 缓存，避免每帧读盘）"""
+    path = "/data/drive_stats/drive_stats.json"
+    try:
+      mtime = os.path.getmtime(path)
+    except OSError:
+      return None
+    if mtime != self._carrot_stats_mtime:
+      try:
+        with open(path, encoding="utf-8") as f:
+          self._carrot_stats_data = json.load(f)
+        self._carrot_stats_mtime = mtime
+      except Exception:
+        return None
+    return self._carrot_stats_data
+
+  def _read_system_stats(self):
+    """系统状态：CPU 温度 / 内存可用 / 存储剩余 / 运行时间（5 秒刷新一次）"""
+    now = time.monotonic()
+    if now - self._carrot_stats_sys_time < 5.0 and self._carrot_stats_sys:
+      return self._carrot_stats_sys
+    self._carrot_stats_sys_time = now
+    out = {}
+
+    def _read(p):
+      try:
+        with open(p) as f:
+          return f.read().strip()
+      except OSError:
+        return ""
+
+    # CPU 温度
+    t = _read("/sys/class/thermal/thermal_zone0/temp")
+    if t:
+      try:
+        out["cpu"] = f"{int(t) / 1000:.0f} °C"
+      except ValueError:
+        pass
+
+    # 内存可用
+    mem = _read("/proc/meminfo")
+    mt = ma = 0.0
+    for line in mem.split("\n"):
+      parts = line.split()
+      if len(parts) >= 2:
+        if line.startswith("MemTotal:"):
+          mt = float(parts[1])
+        elif line.startswith("MemAvailable:"):
+          ma = float(parts[1])
+    if mt > 0:
+      out["mem"] = f"{int(ma / mt * 100)} %"
+
+    # 存储剩余（/data 分区）
+    try:
+      st = os.statvfs("/data")
+      gb = st.f_bavail * st.f_frsize / 1024.0 / 1024.0 / 1024.0
+      out["store"] = f"{gb:.1f} GB"
+    except OSError:
+      pass
+
+    # 运行时间
+    up = _read("/proc/uptime")
+    if up:
+      try:
+        secs = float(up.split()[0])
+        d = int(secs // 86400)
+        secs -= d * 86400
+        h = int(secs // 3600)
+        secs -= h * 3600
+        m = int(secs // 60)
+        out["uptime"] = f"{d}天{h}时{m}分"
+      except (ValueError, IndexError):
+        pass
+
+    if out:
+      self._carrot_stats_sys = out
+    return out
+
+  def _draw_drive_stats_panel_carrot(self):
+    """驾驶数据面板（移植自旧版 Qt DriveStatsPanel）
+
+    布局（与旧版一致）：
+      · 标题「驾驶数据」
+      · 上排三张里程大卡：今日 / 本周 / 累计（km + 行程次数·时长）
+      · 下排：左侧「最近 7 天里程 (km)」柱状图，右侧「系统状态」四宫格
+    数据源：/data/drive_stats/drive_stats.json（由 selfdrive/carrot/drive_stats.py 采集）
+    """
+    data = self._read_drive_stats_json()
+    if data is None:
+      return
+
+    W = self._rect.width
+    H = self._rect.height
+
+    # ---------- 布局常量（按 2160x1080 基准等比缩放） ----------
+    panel_w = int(W * 0.46)
+    panel_x = W - panel_w - int(W * 0.012)
+    panel_y = int(H * 0.06)
+    panel_h = int(H * 0.72)
+    pad = int(panel_w * 0.028)
+    gap = int(panel_h * 0.024)
+
+    ORANGE = rl.Color(255, 154, 0, 255)
+    WHITE = rl.Color(255, 255, 255, 255)
+    GRAY = rl.Color(170, 170, 170, 255)
+    LGRAY = rl.Color(204, 204, 204, 255)
+    CARD = rl.Color(30, 30, 30, 235)
+    HERO = rl.Color(22, 22, 22, 240)
+    TILE = rl.Color(26, 26, 26, 240)
+    PLOT_BG = rl.Color(42, 42, 42, 255)
+
+    # 整体底板
+    rl.draw_rectangle_rounded(
+      rl.Rectangle(panel_x, panel_y, panel_w, panel_h), 0.03, 24, rl.Color(12, 12, 12, 210))
+    rl.draw_rectangle_rounded_lines_ex(
+      rl.Rectangle(panel_x, panel_y, panel_w, panel_h), 0.03, 24, 2, rl.Color(255, 255, 255, 40))
+
+    fs_title = int(panel_w * 0.050)
+    fs_card_title = int(panel_w * 0.026)
+    fs_hero_name = int(panel_w * 0.030)
+    fs_hero_km = int(panel_w * 0.070)
+    fs_hero_unit = int(panel_w * 0.026)
+    fs_hero_sub = int(panel_w * 0.021)
+    fs_tile_k = int(panel_w * 0.023)
+    fs_tile_v = int(panel_w * 0.034)
+    fs_bar_v = int(panel_w * 0.019)
+    fs_bar_d = int(panel_w * 0.019)
+
+    # ---------- 标题：驾驶数据 ----------
+    title_y = panel_y + pad + fs_title * 0.6
+    draw_text_ui_style("驾驶数据", panel_x + pad, title_y, fs_title, WHITE, align="left", y_offset=0.0)
+
+    top_y = title_y + fs_title * 0.7
+
+    # ---------- 上排三张大卡 ----------
+    hero_h = int(panel_h * 0.30)
+    hero_gap = int(panel_w * 0.020)
+    hero_w = (panel_w - pad * 2 - hero_gap * 2) // 3
+
+    def _bucket(key):
+      b = data.get(key) or {}
+      km = float(b.get("km", 0.0) or 0.0)
+      trips = int(b.get("trips", 0) or 0)
+      mins = float(b.get("min", 0.0) or 0.0)
+      return km, trips, mins
+
+    metric = ui_state.is_metric
+    for i, (name, key) in enumerate((("今日", "today"), ("本周", "week"), ("累计", "total"))):
+      hx = panel_x + pad + i * (hero_w + hero_gap)
+      rl.draw_rectangle_rounded(
+        rl.Rectangle(hx, top_y, hero_w, hero_h), 0.06, 14, HERO)
+
+      km, trips, mins = _bucket(key)
+      km_disp = km if metric else km * 0.621371
+      unit = "km" if metric else "mi"
+
+      cy = top_y + int(hero_h * 0.18)
+      draw_text_ui_style(name, hx + hero_w // 2, cy, fs_hero_name, GRAY, align="center", y_offset=0.0)
+      cy += int(fs_hero_km * 0.92)
+      draw_text_ui_style(f"{km_disp:.1f}", hx + hero_w // 2, cy, fs_hero_km, ORANGE, align="center", y_offset=0.0)
+      cy += int(fs_hero_km * 0.62)
+      draw_text_ui_style(unit, hx + hero_w // 2, cy, fs_hero_unit, ORANGE, align="center", y_offset=0.0)
+      cy += int(fs_hero_unit * 1.5)
+      draw_text_ui_style(
+        f"行程 {trips} 次 · 时长 {mins:.0f} 分", hx + hero_w // 2, cy, fs_hero_sub, LGRAY,
+        align="center", y_offset=0.0)
+
+    # ---------- 下排：柱状图 + 系统状态 ----------
+    bot_y = top_y + hero_h + gap
+    bot_h = panel_y + panel_h - pad - bot_y
+    sys_ratio = 0.40
+    sys_w = int((panel_w - pad * 2 - int(panel_w * 0.020)) * sys_ratio)
+    chart_w = panel_w - pad * 2 - int(panel_w * 0.020) - sys_w
+    chart_x = panel_x + pad
+    sys_x = chart_x + chart_w + int(panel_w * 0.020)
+
+    # --- 卡片外框 ---
+    rl.draw_rectangle_rounded(
+      rl.Rectangle(chart_x, bot_y, chart_w, bot_h), 0.05, 16, CARD)
+    rl.draw_rectangle_rounded(
+      rl.Rectangle(sys_x, bot_y, sys_w, bot_h), 0.05, 16, CARD)
+
+    card_title_y = bot_y + int(bot_h * 0.11)
+    draw_text_ui_style("最近 7 天里程 (km)", chart_x + pad, card_title_y, fs_card_title, WHITE,
+                       align="left", y_offset=0.0)
+    draw_text_ui_style("系统状态", sys_x + pad, card_title_y, fs_card_title, WHITE,
+                       align="left", y_offset=0.0)
+
+    # --- 柱状图 ---
+    daily = data.get("daily") or {}
+    days = sorted(daily.keys())[-7:]
+    plot_top = bot_y + int(bot_h * 0.26)
+    plot_bot = bot_y + bot_h - int(bot_h * 0.16)
+    plot_h = plot_bot - plot_top
+
+    if not days:
+      draw_text_ui_style("暂无数据", chart_x + chart_w // 2, (plot_top + plot_bot) // 2,
+                         fs_bar_v, GRAY, align="center", y_offset=0.0)
+    else:
+      maxv = max([float(daily[d]) for d in days] + [0.0001])
+      n = len(days)
+      bgap = int(chart_w * 0.030)
+      bw = max(6, (chart_w - pad * 2 - bgap * (n + 1)) // n)
+      for i, d in enumerate(days):
+        v = float(daily[d])
+        bx = chart_x + pad + bgap + i * (bw + bgap)
+        h = int(v / maxv * plot_h)
+        if h < 3:
+          h = 3
+        # 背景柱
+        rl.draw_rectangle_rounded(
+          rl.Rectangle(bx, plot_top, bw, plot_h), 0.10, 6, PLOT_BG)
+        # 数值柱
+        rl.draw_rectangle_rounded(
+          rl.Rectangle(bx, plot_bot - h, bw, h), 0.20, 6, ORANGE)
+        # 数值
+        draw_text_ui_style(f"{v:.1f}", bx + bw // 2, plot_bot - h - int(fs_bar_v * 0.7),
+                           fs_bar_v, WHITE, align="center", y_offset=0.0)
+        # 日期 MM/DD
+        draw_text_ui_style(d[5:].replace("-", "/"), bx + bw // 2,
+                           plot_bot + int(fs_bar_d * 0.8), fs_bar_d, GRAY,
+                           align="center", y_offset=0.0)
+
+    # --- 系统状态四宫格 ---
+    sysd = self._read_system_stats()
+    tile_gap = int(sys_w * 0.06)
+    tile_pad = int(sys_w * 0.05)
+    tw = (sys_w - pad - tile_gap) // 2
+    th = (bot_h - int(bot_h * 0.26) - tile_pad * 2) // 2
+    ty0 = bot_y + int(bot_h * 0.26)
+    for i, (k, label) in enumerate((("cpu", "CPU 温度"), ("mem", "内存可用"),
+                                    ("store", "存储剩余"), ("uptime", "运行时间"))):
+      tx = sys_x + tile_pad + (i % 2) * (tw + tile_gap)
+      ty = ty0 + (i // 2) * (th + tile_pad)
+      rl.draw_rectangle_rounded(
+        rl.Rectangle(tx, ty, tw, th), 0.09, 10, TILE)
+      draw_text_ui_style(label, tx + tw // 2, ty + int(th * 0.30), fs_tile_k, GRAY,
+                         align="center", y_offset=0.0)
+      draw_text_ui_style(sysd.get(k, "--"), tx + tw // 2, ty + int(th * 0.68), fs_tile_v, ORANGE,
+                         align="center", y_offset=0.0)
+
+  def _draw_stopped_timer_carrot(self):
+    # 移植自旧版 0.9.9 FrogPilot/Carrot 的 drawStoppedTimer (停车状态计数)
+    # 旧逻辑: standstill_timer_enabled_ 默认 true; is_standstill_ = carState.standstill;
+    #   停车时每帧 += 1/UI_FREQ, 非停车清零; 圈内显示橙色 STOPPED + 白色 mm:ss。
+    if not ui_state.sm.alive("carState"):
+      return
+    is_standstill = bool(ui_state.sm["carState"].standstill)
+    now = time.monotonic()
+    if is_standstill:
+      if self._standstill_last_t is None:
+        self._standstill_last_t = now
+      else:
+        self._standstill_elapsed += now - self._standstill_last_t
+        self._standstill_last_t = now
+    else:
+      self._standstill_elapsed = 0.0
+      self._standstill_last_t = None
+
+    if not is_standstill or self._standstill_elapsed <= 0.0:
+      return
+
+    # 右侧居中大圆 (白边 + 深色半透背景)
+    radius = min(self._rect.width, self._rect.height) * 0.15
+    border = 3.0
+    cx = self._rect.x + self._rect.width - radius - border * 3.0 + self._carrot_stopped_icon_pos_x
+    cy = self._rect.y + self._rect.height * 0.5 + 20.0 + self._carrot_stopped_icon_pos_y
+
+    # 外圈白边 (先画大一圈白圆, 再叠深色圆形成环)
+    rl.draw_circle(int(cx), int(cy), radius + 6.0, rl.Color(255, 255, 255, 100))
+    # 深色半透明背景
+    rl.draw_circle(int(cx), int(cy), radius, rl.Color(40, 40, 40, int(self._carrot_stopped_bg_alpha)))
+
+    # 格式化 mm:ss
+    total = int(self._standstill_elapsed)
+    minute = total // 60
+    second = total % 60
+    time_text = f"{minute}:{second:02d}"
+
+    # STOPPED 标题 (上方) - 橙色
+    draw_text_ui_style("STOPPED", cx, cy - radius * 0.40, radius * 0.42, rl.Color(255, 140, 0, 255), align="center", y_offset=0.0)
+    # 计时时间 (下方) - 白色
+    draw_text_ui_style(time_text, cx, cy + radius * 0.15, radius * 0.55, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
+
   def _draw_path_end_overlay_carrot(self):
     x = self._carrot_path_x
     y = self._carrot_path_y - 135
     disp_y = y + 195
 
     if self._carrot_soft_hold_active or self._carrot_brake_hold_active or self._carrot_carrot_cruise:
-      text = "AUTOHOLD" if self._carrot_brake_hold_active else ("SOFTHOLD" if self._carrot_soft_hold_active else "CARROT")
+      text = "自动驻车已激活" if self._carrot_brake_hold_active else ("轻刹" if self._carrot_soft_hold_active else "胡萝卜巡航")
       draw_text_ui_style(text, x, disp_y, 50, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
     else:
       draw_dist = False
       if self._carrot_long_active:
         if self._carrot_x_state in (3, 5):
           if self._carrot_v_ego < 1.0:
-            text = "Signal Error" if self._carrot_traffic_state >= 1000 else "Signal Ready"
+            text = "起飞失败" if self._carrot_traffic_state >= 1000 else "准备起飞"
             draw_text_ui_style(text, x, disp_y, 50, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
           else:
-            draw_text_ui_style("Signal slowing", x, disp_y, 50, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
+            draw_text_ui_style("车辆减速中", x, disp_y, 50, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
         elif self._carrot_x_state == 4:
-          draw_text_ui_style("E2E주행중", x, disp_y, 50, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
+          draw_text_ui_style("E2E驾驶中", x, disp_y, 50, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
         elif self._carrot_x_state in (0, 1, 2):
           draw_dist = True
       else:
@@ -1030,9 +1417,11 @@ class ModelRenderer(Widget):
     if not (left_blindspot or right_blindspot or left_assist or right_assist):
       return
 
-    oem_color = rl.Color(255, 215, 0, 150)
-    vision_color = rl.Color(64, 156, 255, 165)
-    combined_color = rl.Color(255, 128, 128, 190)
+    # 盲区监控护栏：37 色板（% 37），默认冰蓝(36)
+    barrier_color = self._carrot_colors37[self._carrot_blind_spot_barrier_color % 37]
+    oem_color = barrier_color
+    vision_color = barrier_color
+    combined_color = barrier_color
     assist_color = rl.Color(0, 204, 0, 150)
     source_packet = blindspot_source_packet(sm, time.monotonic_ns())
     self._update_blind_spot_barriers_carrot(
@@ -1108,14 +1497,15 @@ class ModelRenderer(Widget):
 
           speed_text = f"{(v_sum * 3.6):.0f}" if ui_state.is_metric else f"{(v_sum * 2.2369363):.0f}"
 
+          # 前车框颜色：38 色板（% 38）
+          #   视觉框默认 6 蓝（老版 UIVisionLeadBoxColor 默认值）
+          #   雷达框默认 2 橙（老版 UIRadarLeadBoxColor 默认值）
           if not radar:
-            box_color = rl.Color(0, 0, 255, 255)
-          elif model_prob == 0.01:
-            box_color = rl.Color(0, 203, 0, 255)
-          elif v_sum > 0.0:
-            box_color = rl.Color(255, 175, 3, 255)
+            vc = self._carrot_colors37[self._carrot_visual_lead_color % 38]
+            box_color = rl.Color(vc.r, vc.g, vc.b, 255)
           else:
-            box_color = rl.Color(255, 0, 0, 255)
+            rc = self._carrot_colors37[self._carrot_radar_lead_color % 38]
+            box_color = rl.Color(rc.r, rc.g, rc.b, 255)
 
           self._draw_text_box_carrot(int(x), int(y), speed_text, 40, box_color)
 
@@ -1490,6 +1880,7 @@ class ModelRenderer(Widget):
 
     self._render_diagnostics.call('path_labels', self._draw_path_end_overlay_carrot)
     self._render_diagnostics.call('tire', self._draw_tire_trajectory_carrot, sm)
+
 
   @staticmethod
   def _tire_grad_color(d: float, a: int) -> rl.Color:
