@@ -51,8 +51,18 @@ function install_runtime_python_package {
     python3 -m pip install --disable-pip-version-check --no-input --timeout 15 --retries 2 \
       --target "$PYDEPS" --upgrade "$@"
   elif command -v uv > /dev/null 2>&1; then
-    UV_HTTP_TIMEOUT=15 UV_HTTP_RETRIES=2 uv pip install --python "$(command -v python3)" --no-python-downloads \
-      --target "$PYDEPS" --upgrade "$@"
+    # uv 默认把缓存写到 $HOME/.cache/uv，但设备上 /home 是仅 100MB 的 overlay
+    # 分区且长期接近写满，解压阶段会报 "No space left on device" 而安装失败。
+    # 把缓存重定向到 /data（同一分区上空间充足），失败时再退回无缓存模式。
+    UV_CACHE_DIR="$DIR/.uv_cache"
+    export UV_CACHE_DIR
+    if ! UV_HTTP_TIMEOUT=15 UV_HTTP_RETRIES=2 uv pip install --python "$(command -v python3)" --no-python-downloads \
+      --target "$PYDEPS" --upgrade "$@"; then
+      echo "uv install failed with cache; retrying without cache."
+      UV_CACHE_DIR="$DIR/.uv_cache" UV_NO_CACHE=1 UV_HTTP_TIMEOUT=15 UV_HTTP_RETRIES=2 \
+        uv pip install --python "$(command -v python3)" --no-python-downloads --no-cache \
+        --target "$PYDEPS" --upgrade "$@"
+    fi
   else
     echo "pip is missing; attempting to bootstrap it with ensurepip."
     if python3 -m ensurepip --upgrade && python3 -m pip --version > /dev/null 2>&1; then
@@ -210,7 +220,10 @@ function agnos_init {
       echo "jeepney already installed."
     else
       echo "Installing the AGNOS updater UI dependency."
-      if ! python3 -m pip install --target "$PYDEPS" --upgrade --timeout 15 --retries 2 jeepney; then
+      # jeepney 是纯 Python 包，已随仓库分发在 third_party/wheels 中，
+      # 优先离线安装（设备可能没有外网）；离线失败再回落到包索引。
+      if ! install_runtime_python_package --no-index --find-links "$DIR/third_party/wheels" jeepney && \
+         ! install_runtime_python_package --timeout 15 --retries 2 jeepney; then
         show_agnos_update_failure "The updater UI dependency could not be installed. Check the network, then retry."
         return 1
       fi

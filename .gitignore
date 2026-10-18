@@ -146,3 +146,6 @@ openpilot/system/ui/lib/_draw_native.cpp
 openpilot/selfdrive/carrot/radar_motion/_motion_native.cpp
 opendbc_repo/opendbc/can/_can_native.cpp
 *_native.cpp
+
+# uv 包安装缓存（约 150MB，/home 只有 100MB 故必须放 /data）
+.uv_cache/
