@@ -169,7 +169,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
 
-  const state = { models: [], selected: null, active: null, busy: false, remote: false, source: null, sources: [], delivery: null, sourceState: null, transferBusy: false };
+  const state = { models: [], selected: null, active: null, busy: false, remote: false, source: null, sources: [], delivery: null, sourceState: null, transferBusy: false, usbgpu: {} };
 
   // Which artifact the pinned delivery still has to produce for a model. Choosing a model
   // starts that transfer on the device right away, so the page has to know - per card -
@@ -264,7 +264,12 @@
         actions.appendChild(again);
       } else {
         const use = document.createElement("button");
-        use.textContent = model.selected ? "重启以启用" : "使用此模型";
+        // While modeld loads this very model the switch is already happening, so the button
+        // must not tell the driver that a restart is still needed.
+        const runtimeLoading = !!state.usbgpu.loading && !model.active;
+        use.textContent = runtimeLoading ? "正在加载…"
+          : (model.selected ? "重启以启用" : "使用此模型");
+        use.disabled = runtimeLoading;
         use.className = "primary mini";
         use.addEventListener("click", () => selectModel(model, use));
         actions.appendChild(use);
@@ -290,7 +295,12 @@
     };
     if (model.active) add("当前使用中", "on");
     if (model.selected && !model.active) {
-      add(ready ? "已选择 · 待重启" : "已选择 · 等待" + deliveryLabel(model), ready ? "sel" : "miss");
+      // Same rule as the button: a model that modeld is loading is not "waiting for a
+      // reboot", and saying so next to a running load reads as a failure.
+      const loadingNow = !!state.usbgpu.loading && !model.active;
+      add(loadingNow ? "已选择 · 加载中"
+                     : (ready ? "已选择 · 待重启" : "已选择 · 等待" + deliveryLabel(model)),
+          loadingNow || ready ? "sel" : "miss");
     }
     add(model.downloaded ? "已下载" : "未下载", model.downloaded ? "ok" : "miss");
     // The model file can be on disk while the pinned artifact is not (ONNX present but the
@@ -434,13 +444,23 @@
     const ready = deliveryReady(model);
     const phase = (status || {}).state || "";
     const detail = (status || {}).detail || "";
-    const sig = [model.sha256, ready, phase, detail].join("|");
+    const sig = [model.sha256, ready, phase, detail, state.usbgpu.loading].join("|");
     if (host.dataset.sig === sig) return;
     host.dataset.sig = sig;
     host.innerHTML = "";
 
     const wrap = document.createElement("div");
-    const action = document.createElement("button");
+      // modeld is already bringing this model up: say what is happening instead of offering
+      // "立即重启", which read as "your switch did not work" while the load was still running.
+      if (state.usbgpu.loading) {
+        const loadingWrap = document.createElement("div");
+        loadingWrap.className = "banner";
+        loadingWrap.textContent = `“${model.label}”正在加载到 eGPU，完成后自动生效…`;
+        host.appendChild(loadingWrap);
+        return;
+      }
+
+      const action = document.createElement("button");
     action.className = "mini";
     action.style.marginLeft = "10px";
 
@@ -635,6 +655,9 @@
     state.sources = data.sources || [];
     state.delivery = data.delivery || null;
     state.sourceState = data.source_state || null;
+      // Runtime flags: is the eGPU already loading a model? Without them a card can only say
+      // "not running", which is how a loading model ended up labelled "重启以启用".
+      state.usbgpu = data.usbgpu || {};
     renderSource();
     updateDelivery();
 

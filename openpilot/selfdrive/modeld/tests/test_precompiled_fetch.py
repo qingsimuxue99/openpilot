@@ -68,6 +68,8 @@ def calls(monkeypatch, tmp_path):
   monkeypatch.setattr(precompiled_model, "ensure_precompiled", ensure_precompiled)
   monkeypatch.setattr(precompiled_fetch, "patch_runtime_firmware_paths", lambda *_a, **_k: None)
   monkeypatch.setattr(precompiled_fetch, "REBOOT_FLAG", tmp_path / "reboot")
+  # Nothing installed yet, so every delivery below counts as one that lands in this run.
+  monkeypatch.setattr(precompiled_fetch, "_precompiled_installed", lambda _m: False)
   monkeypatch.setattr(precompiled_fetch, "_precompiled_rejected", lambda _m: False)
   monkeypatch.setattr(precompiled_fetch, "_wait_for_host", wait_for_host)
   return recorded
@@ -107,6 +109,31 @@ def test_auto_delivery_installs_precompiled_only_model(calls):
   assert calls["chunked"] == 1  # tried first, as upstream's auto ordering does
   assert calls["precompiled"] == 1
   assert calls["cleared"] == 1
+
+
+def test_a_delivery_that_lands_asks_for_the_reboot(calls):
+  """Something landed in this run, so modeld has to pick it up - the HUD says REBOOT."""
+  reporter = Reporter()
+
+  precompiled_fetch.fetch_after_onnx(manifest(), reporter)
+
+  assert calls["precompiled"] == 1
+  assert precompiled_fetch.REBOOT_FLAG.exists()
+
+
+def test_an_already_installed_artifact_leaves_no_reboot_prompt(calls, monkeypatch):
+  """This runs on every boot, so a fetch that changes nothing must not ask for a reboot.
+
+  Touching the flag unconditionally left the prompt on the HUD for the whole boot, and
+  after an ignition-on wiped the runtime params it stayed there until the next power cycle.
+  """
+  monkeypatch.setattr(precompiled_fetch, "_precompiled_installed", lambda _m: True)
+  reporter = Reporter()
+
+  precompiled_fetch.fetch_after_onnx(manifest(), reporter)
+
+  assert calls["precompiled"] == 1  # still verified against the catalog
+  assert not precompiled_fetch.REBOOT_FLAG.exists()
 
 
 def test_rejected_precompiled_only_model_is_reported_not_refetched(calls, monkeypatch):

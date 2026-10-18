@@ -211,6 +211,20 @@ def precompiled_required(manifest) -> bool:
     return False
 
 
+def _precompiled_installed(manifest) -> bool:
+  """Is the precompiled artifact for `manifest` already on disk?
+
+  Snapshot taken before the fetch below, so the caller can tell a delivery that actually
+  landed in this run from one that was already installed by an earlier boot.
+  """
+  try:
+    from openpilot.selfdrive.modeld.precompiled_model import installed
+
+    return installed(manifest) is not None
+  except Exception:
+    return False
+
+
 def _ensure_precompiled_with_retry(manifest, progress):
   """ensure_precompiled() with a host wait and bounded retries; raises on failure."""
   from urllib.parse import urljoin
@@ -332,6 +346,7 @@ def fetch_after_onnx(manifest, reporter) -> None:
     # Upstream's ensure_precompiled used to fetch it; this fork keeps the call in
     # this fork-only module so precompiled_model.py stays upstream's file.
     ensure_firmware(manifest)
+    was_installed = _precompiled_installed(manifest)
     installed = _ensure_precompiled_with_retry(manifest, precompiled_progress)
     if installed is None and precompiled_required(manifest):
       # ensure_precompiled() declines while the artifact being served is the very one this
@@ -339,10 +354,16 @@ def fetch_after_onnx(manifest, reporter) -> None:
       raise OSError('precompiled artifact is rejected on this device')
     # The runtime is extracted by now; teach it where the firmware lives.
     patch_runtime_firmware_paths(manifest)
-    try:
-      REBOOT_FLAG.touch()
-    except Exception:
-      pass  # purely cosmetic; never fail over a flag file
+    # A reboot is only needed when something actually landed in this run: this code runs on
+    # every boot, and touching the flag unconditionally left the "REBOOT" prompt on screen
+    # until the next power cycle even though this boot installed nothing. The chunked path
+    # above already guards on the same condition, which is why only the precompiled delivery
+    # showed the prompt on healthy boots.
+    if installed is not None and not was_installed:
+      try:
+        REBOOT_FLAG.touch()
+      except Exception:
+        pass  # purely cosmetic; never fail over a flag file
   except Exception as exc:
     # The launcher retries this downloader only while status.json says "error"
     # (launch_chffrplus.sh: big_model_update_failed), and the HUD/web pages take the reason

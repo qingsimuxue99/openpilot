@@ -34,13 +34,51 @@ def _stub_helpers():
   return module
 
 
-def test_env_default_sets_the_chestnut_power_cap(monkeypatch):
-  assert egpu_patches.apply_env_defaults() is True
-  assert os.environ["AM_POWER_LIMIT"] == egpu_patches.AM_POWER_LIMIT
-  # Already set: a later call must not change it back.
+def test_the_chunked_model_runs_uncapped_by_default(monkeypatch):
+  # The chunked path runs through this repo's tinygrad, which retries USB transfers and has
+  # run uncapped for hours, so no cap is injected for it.
+  assert egpu_patches.AM_POWER_LIMIT == ""
+  assert egpu_patches.apply_env_defaults() is False
+  assert "AM_POWER_LIMIT" not in os.environ
+  # Already set by the environment: a later call must not change it back.
   monkeypatch.setenv("AM_POWER_LIMIT", "90")
   assert egpu_patches.apply_env_defaults() is False
   assert os.environ["AM_POWER_LIMIT"] == "90"
+
+
+def test_power_limit_file_governs_only_the_precompiled_worker(monkeypatch, tmp_path):
+  ctl = tmp_path / "egpu_power_limit"
+  monkeypatch.setattr(egpu_patches, "EGPU_POWER_LIMIT_FILE", str(ctl))
+  monkeypatch.delenv("AM_POWER_LIMIT_PRECOMPILED", raising=False)
+  monkeypatch.setattr(sys, "argv", ["/data/openpilot/openpilot/selfdrive/modeld/precompiled_worker.py", "model.pkl"])
+
+  # No file: the built-in chestnut wall.
+  assert egpu_patches.file_power_limit() is None
+  assert egpu_patches.apply_env_defaults() is True
+  assert os.environ["AM_POWER_LIMIT"] == egpu_patches.AM_POWER_LIMIT_PRECOMPILED == "120"
+
+  # Empty file: uncapped on purpose.
+  ctl.write_text("")
+  assert egpu_patches.file_power_limit() == ""
+  assert egpu_patches.apply_env_defaults() is True
+  assert "AM_POWER_LIMIT" not in os.environ
+
+  # A number: that many watts, however it is written.
+  for text, expected in (("150", "150"), ("150W\n", "150"), ("150.0", "150"), (" 90 w ", "90")):
+    ctl.write_text(text)
+    assert egpu_patches.file_power_limit() == expected
+    assert egpu_patches.apply_env_defaults() is True
+    assert os.environ["AM_POWER_LIMIT"] == expected
+
+  # Unparsable content keeps the default instead of uncapping the GPU by accident.
+  ctl.write_text("as fast as possible")
+  assert egpu_patches.file_power_limit() is None
+
+  # The same file must never cap the chunked model.
+  monkeypatch.setattr(sys, "argv", ["/data/openpilot/openpilot/selfdrive/modeld/modeld.py"])
+  monkeypatch.delenv("AM_POWER_LIMIT", raising=False)
+  assert egpu_patches.apply_env_defaults() is False
+  assert "AM_POWER_LIMIT" not in os.environ
 
 
 def test_fetch_fw_searches_local_dirs_before_the_original(monkeypatch, tmp_path):

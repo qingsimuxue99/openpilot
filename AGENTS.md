@@ -1,5 +1,19 @@
 # Repository memory
 
+- On 2026-10-16, the user reported the HUD "REBOOT" badge (drawn under the eGPU badge)
+  showing while the model was loading, and asked that it appear only after a model download
+  actually finished. Two causes, both in fork-only files: `precompiled_fetch` touched
+  `/tmp/carrot-big-model-needs-reboot` on every boot (the chunked path already guarded on
+  "something actually landed"), and `_needs_reboot` trusted UsbGpuLoading/UsbGpuActive,
+  which manager clears on every ignition-on while modeld only writes them at its own
+  startup. The flag is now written only for a delivery that landed, a delivery still in
+  flight draws nothing, and the flag is cleared once UsbGpuActive is true - so the prompt
+  cannot reappear later in the same boot. No upstream file and no rebuild were touched;
+  9 focused tests (7 badge, 2 delivery) with stubbed pyray/Params/REBOOT_FLAG, plus the 15
+  other delivery tests, pass on 1.10. Device validation on 1.10: a healthy boot leaves no
+  /tmp flag, and clearing UsbGpuLoading/UsbGpuActive (what an ignition-on does) draws
+  nothing. See docs/egpu_reboot_badge_20261016.md.
+
 - On 2026-10-10, RAV4 route 0d segments 5-9 on e7987ed confirmed an
   onroadEvents cadence regression: healthy event-change bursts exceed the 1 Hz
   tracker's upper bound and the continuous readiness gate interrupts steering.

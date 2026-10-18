@@ -33,6 +33,43 @@ def select(monkeypatch, tmp_path):
   return module
 
 
+WEB_PAGE = Path(__file__).parents[2] / "web/models.html"
+
+
+def test_payload_exposes_the_egpu_runtime_flags(select, monkeypatch):
+  """The picker has to tell "modeld is loading this" from "this needs a reboot"."""
+  class FakeParams:
+    values = {"UsbGpuPresent": True, "UsbGpuLoading": True, "UsbGpuActive": False}
+
+    def get_bool(self, key):
+      return bool(self.values.get(key, False))
+
+  monkeypatch.setattr(select, "HAS_PARAMS", True)
+  monkeypatch.setattr(select, "Params", FakeParams)
+
+  assert select.build_models_payload()["usbgpu"] == {"present": True, "loading": True,
+                                                     "active": False, "startup_failed": False}
+
+
+def test_payload_omits_the_runtime_flags_without_params(select):
+  assert select.build_models_payload()["usbgpu"] == {}
+
+
+def test_the_picker_asks_the_runtime_before_offering_a_restart():
+  """models.html must not say "重启以启用" while modeld is loading that very model.
+
+  There is no node on the device and no dedicated test for this page, so the contract is
+  checked on the source: the loading flag has to be consulted before the reboot prompt is
+  built, and before the button claims a restart is needed.
+  """
+  page = WEB_PAGE.read_text(encoding="utf-8")
+  assert "state.usbgpu.loading" in page
+  hint = page[page.index("function renderSelectedHint"):page.index("async function removeModel")]
+  assert hint.index("state.usbgpu.loading") < hint.index("立即重启")
+  assert "use.disabled = runtimeLoading" in page
+  assert "已选择 · 加载中" in page
+
+
 def entry(sha: str, filename: str) -> dict:
   return {"model_id": filename, "sha256": sha, "size": 10, "url": f"http://mirror/{filename}",
           "filename": filename, "downloaded": False, "selected": False}

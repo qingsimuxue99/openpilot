@@ -10,6 +10,10 @@ status.json). Loading the model onto the GPU has no numeric progress anywhere in
 openpilot - modeld only exposes UsbGpuLoading / UsbGpuActive booleans - so nothing
 is drawn for that phase rather than inventing a fake percentage.
 
+The "REBOOT" line is stricter still: it appears only once a delivery has actually landed
+and stopped moving, and disappears for good the moment the artifact is running. Anything
+else shows nothing rather than telling the driver to restart for no reason.
+
 The label comes from status.json's "detail" field: big_model reports the ONNX
 download itself and leaves detail unset, precompiled_fetch reports the
 precompiled model with detail="pkl", and firmware.py reports the firmware blobs
@@ -60,6 +64,13 @@ _FINAL_STATES = {"compiled", "ready"}
 # belongs there too. Without it the badge went blank for the ~1 minute the load check
 # takes, right after the download reached 100%.
 _PROMPT_STATES = _FINAL_STATES | {"verifying"}
+
+# States that mean a delivery is still moving or still being checked, i.e. nothing has
+# finished yet. The prompt is about a download that is already done, so while one of these
+# is live - and something is demonstrably still working on it - nothing is drawn either:
+# a "REBOOT" sitting next to a running transfer reads as "this failed, start over".
+_IN_FLIGHT_STATES = {"checking", "downloading", "verifying", "installing",
+                     "waiting_for_network", "waiting_for_ignition"}
 
 # status.json's "detail" field -> first-line label. An unset or unknown detail
 # means the ONNX download, which big_model reports without any detail field.
@@ -129,12 +140,24 @@ def _downloader_running() -> bool:
   return running
 
 
-def _needs_reboot() -> bool:
+def _delivery_in_flight(status: dict | None) -> bool:
+  """Is a delivery still transferring or still being checked right now?
+
+  Only a live signal counts. A status file left on "verifying" by a reboot, or on
+  "downloading" with nothing transferring, describes history rather than activity, and the
+  prompt is allowed to stand in for that.
+  """
+  if (status or {}).get("state") not in _IN_FLIGHT_STATES:
+    return False
+  return _downloader_running() or _recently_updated(status or {})
+
+
+def _needs_reboot(status: dict | None = None) -> bool:
   """A download finished but the big model still is not running.
 
-  precompiled_fetch touches REBOOT_FLAG in /tmp (a tmpfs) once the download
-  completes, so the flag cannot survive a reboot or a power cycle - which is
-  exactly how the prompt stops showing afterwards.
+  precompiled_fetch touches REBOOT_FLAG in /tmp (a tmpfs) once a delivery actually lands,
+  so the flag cannot survive a reboot or a power cycle - which is exactly how the prompt
+  stops showing afterwards.
   """
   try:
     from openpilot.selfdrive.modeld.precompiled_fetch import REBOOT_FLAG
@@ -145,12 +168,24 @@ def _needs_reboot() -> bool:
   try:
     from openpilot.common.params import Params
     params = Params()
+    # The runtime is up on the delivered artifact: nothing is pending any more, and the flag
+    # would otherwise keep the prompt alive until the next power cycle. This can never hide a
+    # reboot that is actually needed, because the prompt is only drawn while active is false.
+    if params.get_bool("UsbGpuActive"):
+      try:
+        REBOOT_FLAG.unlink(missing_ok=True)
+      except Exception:
+        pass
+      return False
     # Still loading counts as fine: modeld is already bringing the model up, so no
     # reboot is needed. Without this the prompt would flash on every boot for the
     # tens of seconds it takes to load, telling the user to reboot for nothing.
     if params.get_bool("UsbGpuLoading"):
       return False
-    return not params.get_bool("UsbGpuActive")
+    # A delivery that has not finished is not a finished download.
+    if _delivery_in_flight(status if status is not None else read_status()):
+      return False
+    return True
   except Exception:
     return False
 
@@ -158,8 +193,9 @@ def _needs_reboot() -> bool:
 def badge_style(status: dict, frac: float) -> tuple[list[str], rl.Color] | None:
   """Return (lines, color) to draw, or None to draw nothing.
 
-  Two lines (artifact + percentage) while downloading; a single "REBOOT" line
-  once the download is done but the model has not started yet.
+  Two lines (artifact + percentage) while downloading; a single "REBOOT" line only once a
+  download has finished, nothing is being delivered any more and the model is not running.
+  Everything else draws nothing.
   """
   state = status.get("state") or ""
   if state in _DOWNLOAD_STATES:
@@ -167,7 +203,7 @@ def badge_style(status: dict, frac: float) -> tuple[list[str], rl.Color] | None:
     # writes detail="pkl" and firmware.py writes detail="firmware".
     label = _LABELS.get(status.get("detail") or "", "ONNX")
     return [label, f"{int(max(0.0, min(1.0, frac)) * 100)}%"], _YELLOW
-  if state in _PROMPT_STATES and _needs_reboot():
+  if state in _PROMPT_STATES and _needs_reboot(status):
     return ["REBOOT"], _YELLOW
   return None
 

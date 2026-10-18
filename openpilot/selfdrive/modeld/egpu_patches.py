@@ -12,6 +12,9 @@ What is patched, and why the patches are needed at all:
 * ``AM_POWER_LIMIT``: the chestnut (ASM24) board defaults to the GPU's SMU PPT limit
   (~182W). 120W lowers the peak current and cuts USB/PCIe link flapping under load,
   which showed up as ``bulk IN`` I/O errors mid-inference. tinygrad's amdev reads it.
+  Only the precompiled delivery is capped: the chunked model runs through this repo's own
+  tinygrad, which retries those transfers, and has run uncapped for hours. The cap can be
+  changed at runtime with a file, see ``file_power_limit()`` - no upstream file involved.
 * ``tinygrad.helpers.fetch_fw``: tinygrad only looks for AMD firmware in
   ``/lib/firmware`` and otherwise downloads it from gitlab. That directory holds a
   different linux-firmware build than the one tinygrad pins, the download is blocked
@@ -53,6 +56,16 @@ AM_POWER_LIMIT = ""  # the chunked model runs uncapped; see AM_POWER_LIMIT_PRECO
 # the same artifact is stable for hours with a power wall. The chunked model runs through this
 # repo's own tinygrad, which retries those transfers, and has run uncapped for hours.
 AM_POWER_LIMIT_PRECOMPILED = "120"
+
+# Runtime control for that cap, read at interpreter start by the precompiled worker from
+# /data/egpu_power_limit:
+#   file missing -> AM_POWER_LIMIT_PRECOMPILED (the 120W wall above)
+#   empty file   -> no cap at all (the GPU runs at its own SMU PPT limit)
+#   a number     -> that many watts ("150", "150W", "150.0" all mean 150W)
+# A file instead of an env override so the choice survives a stack restart and is made on
+# the device, without editing launch_env.sh, this file or anything upstream.
+# EGPU_POWER_LIMIT_FILE only exists so tests can point at a temp path.
+EGPU_POWER_LIMIT_FILE = os.environ.get("EGPU_POWER_LIMIT_FILE", "/data/egpu_power_limit")
 
 # Firmware search order for fetch_fw: the read-only system dir AGNOS ships, then the
 # persistent dir the model server fills. The in-tree blobs (see firmware_bases()) are
@@ -146,16 +159,39 @@ def _is_precompiled_worker() -> bool:
   return any("precompiled_worker.py" in str(arg) for arg in sys.argv[:2])
 
 
+def file_power_limit(path: str | pathlib.Path | None = None) -> str | None:
+  """Watts for AM_POWER_LIMIT from the control file, or None when there is no usable file.
+
+  "" means "no cap on purpose", None means "no opinion", so the caller keeps its default.
+  Unparsable content returns None on purpose: a typo must not silently uncap the GPU.
+  Never raises - this runs at interpreter start in every process on the device.
+  """
+  try:
+    raw = pathlib.Path(EGPU_POWER_LIMIT_FILE if path is None else path).read_text(errors="ignore")
+  except OSError:
+    return None  # missing or unreadable file: keep the built-in default
+  head = raw.strip().splitlines()[0].strip() if raw.strip() else ""
+  if not head:
+    return ""    # blank file: uncapped, explicitly
+  try:
+    watts = float(head.lower().rstrip("w").strip())
+  except ValueError:
+    return None
+  return "" if watts <= 0 else f"{watts:g}"
+
+
 def apply_env_defaults() -> bool:
   """Inject AM_POWER_LIMIT for the delivery that is actually about to use the eGPU.
 
-  Precompiled worker -> AM_POWER_LIMIT_PRECOMPILED (override with the same env var, e.g.
-  AM_POWER_LIMIT_PRECOMPILED="" for a full-speed A/B). Anything else (the chunked model in
-  modeld) -> no cap unless AM_POWER_LIMIT is set by the environment.
+  Precompiled worker -> the control file (see file_power_limit()), then
+  AM_POWER_LIMIT_PRECOMPILED from the environment, then the 120W constant. Anything else
+  (the chunked model in modeld) -> no cap unless AM_POWER_LIMIT is set by the environment.
   """
   changed = False
   if _is_precompiled_worker():
-    want = os.environ.get("AM_POWER_LIMIT_PRECOMPILED", AM_POWER_LIMIT_PRECOMPILED)
+    want = file_power_limit()
+    if want is None:
+      want = os.environ.get("AM_POWER_LIMIT_PRECOMPILED", AM_POWER_LIMIT_PRECOMPILED)
     if want and os.environ.get("AM_POWER_LIMIT") != want:
       os.environ["AM_POWER_LIMIT"] = want
       changed = True
@@ -166,6 +202,8 @@ def apply_env_defaults() -> bool:
     os.environ["AM_POWER_LIMIT"] = AM_POWER_LIMIT
     changed = True
   return changed
+
+
 def patch_fetch_fw(helpers) -> bool:
   """Wrap tinygrad's fetch_fw so the local firmware dirs are searched first."""
   if getattr(helpers, "_fork_fw_bases", None) is not None:

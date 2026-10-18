@@ -285,6 +285,26 @@ def _cached_model_files(root: Path, sha: str) -> list[Path]:
   return [root / name for name in sorted(names)]
 
 
+def usbgpu_runtime() -> dict[str, Any]:
+  """Runtime flags so the picker can tell "loading" from "needs a reboot".
+
+  A selected model whose artifact is on disk is not necessarily waiting for a restart: right
+  after a switch - and on every onroad start - modeld is already bringing it up, and
+  UsbGpuLoading says so. Without those two flags the page could only see "not running", which
+  is why it told the driver to reboot while the model was loading.
+  """
+  if not (HAS_PARAMS and Params is not None):
+    return {}
+  try:
+    params = Params()
+    return {'present': bool(params.get_bool('UsbGpuPresent')),
+            'loading': bool(params.get_bool('UsbGpuLoading')),
+            'active': bool(params.get_bool('UsbGpuActive')),
+            'startup_failed': bool(params.get_bool('UsbGpuStartupFailed'))}
+  except Exception:
+    return {}
+
+
 def build_models_payload() -> dict[str, Any]:
   local = model_catalog.list_models()
   by_sha = {item['sha256']: item for item in local}
@@ -342,6 +362,9 @@ def build_models_payload() -> dict[str, Any]:
     # Why the pinned delivery is not the one in use, so the page can say it out loud.
     'source_state': _source_state(source, delivery, active),
     'remote_catalog': remote is not None,
+    # Is the eGPU already bringing a model up? The picker needs this to avoid calling a
+    # loading model "ready - reboot to enable".
+    'usbgpu': usbgpu_runtime(),
     'models': models,
   }
 

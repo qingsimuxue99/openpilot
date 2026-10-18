@@ -9,7 +9,7 @@ from pathlib import Path
 from openpilot.common.basedir import BASEDIR
 
 
-USBGPU_FW_VERSION = "ed4e39b7"
+USBGPU_FW_VERSION = "8516b768"
 USBGPU_USB_IDS = ((0xADD1, 0x0001), (0x3801, 0x0001))
 USB_DEVICES_PATH = Path("/sys/bus/usb/devices")
 USBGPU_CHECK_ATTEMPTS = 2
