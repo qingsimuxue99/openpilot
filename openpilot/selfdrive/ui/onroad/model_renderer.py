@@ -174,7 +174,10 @@ class ModelRenderer(Widget):
     timing.call('radar', self._draw_radar_info_carrot, sm)
     # 停车状态计数 + 驾驶数据面板（移植自旧版 0.9.9 / Qt DriveStatsPanel）
     self._draw_stopped_timer_carrot()
-    self._draw_drive_stats_panel_carrot()
+    # 驾驶数据面板不在行驶界面绘制：
+    # 正相的驾驶数据面板在待机主页 home.py 中，
+    # 行驶界面再绘制会遮挤视野。
+    # self._draw_drive_stats_panel_carrot()
     timing.finish()
 
   def _update_raw_points(self, model):
@@ -1136,7 +1139,7 @@ class ModelRenderer(Widget):
     # 移植自旧版 0.9.9 FrogPilot/Carrot 的 drawStoppedTimer (停车状态计数)
     # 旧逻辑: standstill_timer_enabled_ 默认 true; is_standstill_ = carState.standstill;
     #   停车时每帧 += 1/UI_FREQ, 非停车清零; 圈内显示橙色 STOPPED + 白色 mm:ss。
-    if not ui_state.sm.alive("carState"):
+    if not ui_state.sm.alive["carState"]:
       return
     is_standstill = bool(ui_state.sm["carState"].standstill)
     now = time.monotonic()
@@ -1160,9 +1163,9 @@ class ModelRenderer(Widget):
     cy = self._rect.y + self._rect.height * 0.5 + 20.0 + self._carrot_stopped_icon_pos_y
 
     # 外圈白边 (先画大一圈白圆, 再叠深色圆形成环)
-    rl.draw_circle(int(cx), int(cy), radius + 6.0, rl.Color(255, 255, 255, 100))
+    rl.draw_circle(int(cx), int(cy), radius + 3.0, rl.Color(255, 255, 255, 170))
     # 深色半透明背景
-    rl.draw_circle(int(cx), int(cy), radius, rl.Color(40, 40, 40, int(self._carrot_stopped_bg_alpha)))
+    rl.draw_circle(int(cx), int(cy), radius, rl.Color(0, 0, 0, 95))
 
     # 格式化 mm:ss
     total = int(self._standstill_elapsed)
@@ -1171,9 +1174,9 @@ class ModelRenderer(Widget):
     time_text = f"{minute}:{second:02d}"
 
     # STOPPED 标题 (上方) - 橙色
-    draw_text_ui_style("STOPPED", cx, cy - radius * 0.40, radius * 0.42, rl.Color(255, 140, 0, 255), align="center", y_offset=0.0)
+    draw_text_ui_style("STOPPED", cx, cy - radius * 0.24, radius * 0.22, rl.Color(255, 140, 0, 255), align="center", y_offset=0.0)
     # 计时时间 (下方) - 白色
-    draw_text_ui_style(time_text, cx, cy + radius * 0.15, radius * 0.55, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
+    draw_text_ui_style(time_text, cx, cy + radius * 0.10, radius * 0.28, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
 
   def _draw_path_end_overlay_carrot(self):
     x = self._carrot_path_x
