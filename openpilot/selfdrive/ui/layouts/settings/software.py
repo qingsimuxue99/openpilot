@@ -7,7 +7,7 @@ import pyray as rl
 
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.system.ui.lib.application import gui_app, MousePos
+from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.multilang import tr, trn
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget, DialogResult
@@ -226,9 +226,9 @@ class SoftwareLayout(Widget):
     self._impact_threshold_action = ImpactThresholdAction()
     self._impact_threshold_item = ListItem(
       title="撞击检测阈值",
-      description="过减速带 / 颠簸时触发「疑似撞击 → 设备即将重启」提示的加速度阈值（单位 g）。"
-                 "默认 1.5g（≈14.7 m/s²）：调大更不容易误触发，调小更容易触发。"
-                 "范围 0.5~5.0g，超出自动夹取；也可直接写 /data/params/d/ImpactThreshold 覆盖，重启或约 2 秒后生效。",
+      description="冲击或抖动过大时触发「撞击报警」提示的加速度阈值（单位 g）。"
+                 "默认 1.5g，范围 0.5~5.0g，超出自动夹取；数值调大更不容易误触发，调小更容易触发。"
+                 "也可直接写 /data/params/d/ImpactThreshold 覆盖，约 2 秒后生效。",
       action_item=self._impact_threshold_action,
     )
 
