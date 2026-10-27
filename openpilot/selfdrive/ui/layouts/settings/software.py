@@ -13,7 +13,7 @@ from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget, DialogResult
 from openpilot.system.ui.widgets.confirm_dialog import ConfirmDialog
 from openpilot.system.ui.widgets.list_view import (ITEM_PADDING, ITEM_TEXT_FONT_SIZE, ITEM_TEXT_VALUE_COLOR,
-                                                   ListItem, TextAction, button_item, toggle_item)
+                                                   ListItem, TextAction, ItemAction, button_item, toggle_item)
 from openpilot.system.ui.widgets.option_dialog import MultiOptionDialog
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 
@@ -38,6 +38,85 @@ def disable_updates_enabled() -> bool:
       return f.read().strip() == b"1"
   except OSError:
     return False
+
+
+# ---- 撞击检测阈值：数值步进控件（单位 g，步长 0.1，范围 0.5~5.0）----
+# 直写原始文件 /data/params/d/ImpactThreshold（绕过 params 白名单，与 DisableUpdates 同机制）
+# 后端 selfdrived.py 读取该文件并 ×9.81 换算成 m/s² 作为阈值
+IMPACT_THRESHOLD_FILE = "/data/params/d/ImpactThreshold"
+IMPACT_THRESHOLD_DEFAULT_G = 1.5
+IMPACT_THRESHOLD_MIN_G = 0.5
+IMPACT_THRESHOLD_MAX_G = 5.0
+IMPACT_THRESHOLD_STEP_G = 0.1
+
+_STEP_BTN_W = 80
+_STEP_BTN_H = 100
+_VALUE_FONT = 50
+
+
+class ImpactThresholdAction(ItemAction):
+  """「-  1.5g  +」步进器：点击 ± 调整撞击检测阈值（单位 g），写原始参数文件。"""
+
+  def __init__(self):
+    super().__init__(width=_STEP_BTN_W * 2 + 160)
+    self._font = gui_app.font(FontWeight.MEDIUM)
+
+  @staticmethod
+  def _read_value() -> float:
+    try:
+      with open(IMPACT_THRESHOLD_FILE, "rb") as f:
+        return max(IMPACT_THRESHOLD_MIN_G, min(IMPACT_THRESHOLD_MAX_G, float(f.read().strip())))
+    except (OSError, ValueError):
+      return IMPACT_THRESHOLD_DEFAULT_G
+
+  @staticmethod
+  def _write_value(value: float) -> None:
+    try:
+      with open(IMPACT_THRESHOLD_FILE, "wb") as f:
+        f.write(f"{value:.1f}".encode())
+    except OSError:
+      pass
+
+  def _btn_rects(self):
+    y = self._rect.y + (self._rect.height - _STEP_BTN_H) / 2
+    minus = rl.Rectangle(self._rect.x, y, _STEP_BTN_W, _STEP_BTN_H)
+    plus = rl.Rectangle(self._rect.x + self._rect.width - _STEP_BTN_W, y, _STEP_BTN_W, _STEP_BTN_H)
+    return minus, plus
+
+  def _render(self, rect):
+    minus_rect, plus_rect = self._btn_rects()
+    value = self._read_value()
+    mouse = rl.get_mouse_position()
+    for btn_rect, label, enabled in (
+      (minus_rect, "-", value > IMPACT_THRESHOLD_MIN_G),
+      (plus_rect, "+", value < IMPACT_THRESHOLD_MAX_G),
+    ):
+      hovered = enabled and rl.check_collision_point_rec(mouse, btn_rect)
+      bg = (rl.Color(74, 74, 74, 255) if hovered else rl.Color(57, 57, 57, 255)) if enabled else rl.Color(57, 57, 57, 150)
+      rl.draw_rectangle_rounded(btn_rect, 0.9, 20, bg)
+      size = measure_text_cached(self._font, label, _VALUE_FONT)
+      rl.draw_text_ex(self._font, label, rl.Vector2(btn_rect.x + (btn_rect.width - size.x) / 2,
+                                                   btn_rect.y + (btn_rect.height - size.y) / 2),
+                      _VALUE_FONT, 0, rl.WHITE if enabled else rl.Color(150, 150, 150, 255))
+    # 当前阈值数值（单位 g）
+    text = f"{value:.1f}g"
+    size = measure_text_cached(self._font, text, _VALUE_FONT)
+    rl.draw_text_ex(self._font, text, rl.Vector2(minus_rect.x + _STEP_BTN_W + 8,
+                                                rect.y + (rect.height - size.y) / 2),
+                    _VALUE_FONT, 0, ITEM_TEXT_VALUE_COLOR)
+    return False
+
+  def _handle_mouse_release(self, mouse_pos):
+    if not self.enabled:
+      return
+    minus_rect, plus_rect = self._btn_rects()
+    value = self._read_value()
+    if rl.check_collision_point_rec(mouse_pos, minus_rect):
+      new = max(IMPACT_THRESHOLD_MIN_G, round((value - IMPACT_THRESHOLD_STEP_G) / IMPACT_THRESHOLD_STEP_G) * IMPACT_THRESHOLD_STEP_G)
+      self._write_value(round(new, 1))
+    elif rl.check_collision_point_rec(mouse_pos, plus_rect):
+      new = min(IMPACT_THRESHOLD_MAX_G, round((value + IMPACT_THRESHOLD_STEP_G) / IMPACT_THRESHOLD_STEP_G) * IMPACT_THRESHOLD_STEP_G)
+      self._write_value(round(new, 1))
 
 # Mapping updater internal states to translated display strings
 STATE_TO_DISPLAY_TEXT = {
@@ -143,6 +222,16 @@ class SoftwareLayout(Widget):
       callback=self._on_disable_updates_toggle,
     )
 
+    # 撞击检测阈值（单位 g）：默认 1.5g，范围 0.5~5.0g，步进 0.1g。直写原始参数文件 /data/params/d/ImpactThreshold。
+    self._impact_threshold_action = ImpactThresholdAction()
+    self._impact_threshold_item = ListItem(
+      title="撞击检测阈值",
+      description="过减速带 / 颠簸时触发「疑似撞击 → 设备即将重启」提示的加速度阈值（单位 g）。"
+                 "默认 1.5g（≈14.7 m/s²）：调大更不容易误触发，调小更容易触发。"
+                 "范围 0.5~5.0g，超出自动夹取；也可直接写 /data/params/d/ImpactThreshold 覆盖，重启或约 2 秒后生效。",
+      action_item=self._impact_threshold_action,
+    )
+
     self._download_btn = button_item(lambda: tr("Download"), lambda: tr("CHECK"), callback=self._on_download_update)
 
     # Install button is initially hidden
@@ -172,6 +261,7 @@ class SoftwareLayout(Widget):
       self._version_item,
       self._quick_start_toggle,
       self._disable_updates_toggle,
+      self._impact_threshold_item,
       self._download_btn,
       self._install_btn,
       self._branch_btn,

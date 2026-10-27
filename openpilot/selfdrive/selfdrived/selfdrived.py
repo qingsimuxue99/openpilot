@@ -33,6 +33,13 @@ from openpilot.selfdrive.controls.lib.cutin_alert import (
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.version import get_build_metadata
 
+# 撞击检测阈值参数：单位 g，默认 1.5g（≈14.7 m/s²）。减速带/颠簸误报「疑似撞击」时调大。
+# 与设置-软件面板的「撞击检测阈值」控件共用同一文件；超出 0.5~5.0g 自动夹取。
+IMPACT_THRESHOLD_PARAM = "/data/params/d/ImpactThreshold"
+IMPACT_THRESHOLD_DEFAULT_G = 1.5
+IMPACT_THRESHOLD_MIN_G = 0.5
+IMPACT_THRESHOLD_MAX_G = 5.0
+
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
 TESTING_CLOSET = "TESTING_CLOSET" in os.environ
@@ -58,6 +65,8 @@ class SelfdriveD:
     self.params = Params()
     self.impact_dashcam = ImpactDashcam(self.params, Params("/dev/shm/params"))
     self.impact_detector = ImpactDetector()
+    # 撞击阈值从参数读取（g→m/s²），缺省 1.5g；params_thread 会周期性刷新
+    self.impact_detector.threshold = self._read_impact_threshold() * 9.81
 
     # Ensure the current branch is cached, otherwise the first cycle lags
     get_build_metadata()
@@ -753,11 +762,21 @@ class SelfdriveD:
     except (ValueError, TypeError):
       return log.LongitudinalPersonality.standard
 
+  def _read_impact_threshold(self) -> float:
+    """读取撞击检测阈值（单位 g）。缺省 1.5g；超出 0.5~5.0g 自动夹取。"""
+    try:
+      with open(IMPACT_THRESHOLD_PARAM, "rb") as f:
+        return max(IMPACT_THRESHOLD_MIN_G, min(IMPACT_THRESHOLD_MAX_G, float(f.read().strip())))
+    except (OSError, ValueError):
+      return IMPACT_THRESHOLD_DEFAULT_G
+
   def params_thread(self, evt):
     while not evt.is_set():
       self.is_metric = self.params.get_bool("IsMetric")
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
       self.personality = self.read_personality_param()
+      # 撞击阈值（g→m/s²）随参数实时刷新，无需重启
+      self.impact_detector.threshold = self._read_impact_threshold() * 9.81
       time.sleep(0.1)
 
   def run(self):

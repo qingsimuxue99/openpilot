@@ -6,7 +6,7 @@ import numpy as np
 from openpilot.common.transformations.orientation import rot_from_euler
 
 
-IMPACT_ACCEL = 1.5 * 9.81  # m/s^2, user-selected experimental threshold
+IMPACT_ACCEL = 1.5 * 9.81  # m/s^2，默认撞击阈值（1.5g）。可被 /data/params/d/ImpactThreshold（单位 g）覆盖，缺省即此值。
 REARM_ACCEL = 10.0
 MAX_SAMPLE_AGE = 0.1
 MAX_SAMPLE_GAP = 0.03
@@ -16,6 +16,8 @@ class ImpactDetector:
   def __init__(self):
     self.last_timestamp = 0.0
     self.above = False
+    # 阈值（m/s²）；缺省 IMPACT_ACCEL，可由 selfdrived 从 ImpactThreshold 参数（g）注入
+    self.threshold = IMPACT_ACCEL
 
   def update(self, *, now, timestamp, sensor, orientation, calibration, valid):
     """Return (trigger, quiet, calibrated acceleration); duplicates never count twice."""
@@ -38,7 +40,7 @@ class ImpactDetector:
     gravity_device = rot_from_euler(values[1]).T @ np.array([0.0, 0.0, -9.81])
     accel = rot_from_euler(values[2]).T @ (device_accel - gravity_device)
     horizontal = math.hypot(accel[0], accel[1])
-    above = horizontal >= IMPACT_ACCEL
+    above = horizontal >= self.threshold
     trigger = above and self.above and timestamp - self.last_timestamp <= MAX_SAMPLE_GAP
     self.above = above
     self.last_timestamp = timestamp
