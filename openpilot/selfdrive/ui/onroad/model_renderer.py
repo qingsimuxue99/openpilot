@@ -115,8 +115,6 @@ class ModelRenderer(Widget):
     self._init_carrot()
 
     # 停车状态计数 (移植自旧版 0.9.9 FrogPilot/Carrot 的 drawStoppedTimer)
-    self._standstill_elapsed = 0.0    # 已停车累计秒数
-    self._standstill_last_t = None    # 上一帧时间戳 (time.monotonic)
 
   def set_transform(self, transform: np.ndarray):
     self._car_space_transform = transform.astype(np.float32)
@@ -173,7 +171,6 @@ class ModelRenderer(Widget):
     timing.call('blindspot', self._draw_blind_spot_carrot, sm)
     timing.call('radar', self._draw_radar_info_carrot, sm)
     # 停车状态计数 + 驾驶数据面板（移植自旧版 0.9.9 / Qt DriveStatsPanel）
-    self._draw_stopped_timer_carrot()
     # 驾驶数据面板不在行驶界面绘制：
     # 正相的驾驶数据面板在待机主页 home.py 中，
     # 行驶界面再绘制会遮挤视野。
@@ -538,10 +535,7 @@ class ModelRenderer(Widget):
     #   视觉前车框 = 6 蓝（老版 UIVisionLeadBoxColor 默认 6）
     self._carrot_blind_spot_barrier_color = 36
     self._carrot_radar_lead_color = 2
-    self._carrot_visual_lead_color = 6
-    self._carrot_stopped_bg_alpha = 140
-    self._carrot_stopped_icon_pos_x = 0
-    self._carrot_stopped_icon_pos_y = 0
+    self._carrot_visual_lead_color = 37
 
     # ===== 驾驶数据面板 =====
     self._carrot_drive_total_distance = 0.0   # 行驶里程 (m)
@@ -584,14 +578,10 @@ class ModelRenderer(Widget):
     self._carrot_show_path_color_lane = ui_state.params.get_int("ShowPathColorLane")
     self._carrot_show_path_color_cruise_off = ui_state.params.get_int("ShowPathColorCruiseOff")
     self._carrot_tire_trajectory = ui_state.params.get_int("CarrotTireTrajectory")
-    # 三个颜色参数共用 38 色板（% 38）：
-    #   盲区护栏默认 36 冰蓝 / 雷达前车框默认 2 橙 / 视觉前车框默认 6 蓝
+    # 盲区护栏颜色仍走38 色板 (默认 36 冰蓝)
     self._carrot_blind_spot_barrier_color = int(ui_state.params.get_int("BlindSpotBarrierColor") or 36)
     self._carrot_radar_lead_color = int(ui_state.params.get_int("RadarLeadColor") or 2)
-    self._carrot_visual_lead_color = int(ui_state.params.get_int("VisualLeadColor") or 6)
-    self._carrot_stopped_bg_alpha = ui_state.params.get_int("StoppedBgAlpha")
-    self._carrot_stopped_icon_pos_x = ui_state.params.get_int("StoppedIconPosX")
-    self._carrot_stopped_icon_pos_y = ui_state.params.get_int("StoppedIconPosY")
+    self._carrot_visual_lead_color = 37  # hardcoded VISION_LEAD_PINK=37, no UI param
     self._carrot_params_next_refresh_time = now + CARROT_PARAM_REFRESH_INTERVAL
 
 
@@ -1135,49 +1125,6 @@ class ModelRenderer(Widget):
       draw_text_ui_style(sysd.get(k, "--"), tx + tw // 2, ty + int(th * 0.68), fs_tile_v, ORANGE,
                          align="center", y_offset=0.0)
 
-  def _draw_stopped_timer_carrot(self):
-    # 移植自旧版 0.9.9 FrogPilot/Carrot 的 drawStoppedTimer (停车状态计数)
-    # 旧逻辑: standstill_timer_enabled_ 默认 true; is_standstill_ = carState.standstill;
-    #   停车时每帧 += 1/UI_FREQ, 非停车清零; 圈内显示橙色 STOPPED + 白色 mm:ss。
-    if not ui_state.sm.alive["carState"]:
-      return
-    is_standstill = bool(ui_state.sm["carState"].standstill)
-    now = time.monotonic()
-    if is_standstill:
-      if self._standstill_last_t is None:
-        self._standstill_last_t = now
-      else:
-        self._standstill_elapsed += now - self._standstill_last_t
-        self._standstill_last_t = now
-    else:
-      self._standstill_elapsed = 0.0
-      self._standstill_last_t = None
-
-    if not is_standstill or self._standstill_elapsed <= 0.0:
-      return
-
-    # 右侧居中大圆 (白边 + 深色半透背景)
-    radius = min(self._rect.width, self._rect.height) * 0.15
-    border = 3.0
-    cx = self._rect.x + self._rect.width - radius - border * 3.0 + self._carrot_stopped_icon_pos_x
-    cy = self._rect.y + self._rect.height * 0.5 + 20.0 + self._carrot_stopped_icon_pos_y
-
-    # 外圈白边 (先画大一圈白圆, 再叠深色圆形成环)
-    rl.draw_circle(int(cx), int(cy), radius + 3.0, rl.Color(255, 255, 255, 170))
-    # 深色半透明背景
-    rl.draw_circle(int(cx), int(cy), radius, rl.Color(0, 0, 0, 95))
-
-    # 格式化 mm:ss
-    total = int(self._standstill_elapsed)
-    minute = total // 60
-    second = total % 60
-    time_text = f"{minute}:{second:02d}"
-
-    # STOPPED 标题 (上方) - 橙色
-    draw_text_ui_style("STOPPED", cx, cy - radius * 0.24, radius * 0.22, rl.Color(255, 140, 0, 255), align="center", y_offset=0.0)
-    # 计时时间 (下方) - 白色
-    draw_text_ui_style(time_text, cx, cy + radius * 0.10, radius * 0.28, rl.Color(255, 255, 255, 255), align="center", y_offset=0.0)
-
   def _draw_path_end_overlay_carrot(self):
     x = self._carrot_path_x
     y = self._carrot_path_y - 135
@@ -1212,7 +1159,7 @@ class ModelRenderer(Widget):
           draw_text_ui_style(dist_text, x - w, disp_y, 40, text_color, align="center", y_offset=0.0)
         if self._carrot_vision_dist > 0.0:
           dist_text = f"{self._carrot_vision_dist:.1f}"
-          self._draw_text_box_carrot(x + w, disp_y, dist_text, 40, rl.Color(0, 0, 255, 255))
+          self._draw_text_box_carrot(x + w, disp_y, dist_text, 40, self._carrot_colors37[self._carrot_visual_lead_color % 38])
           draw_text_ui_style(dist_text, x + w, disp_y, 40, text_color, align="center", y_offset=0.0)
 
     self._draw_tf_marker_carrot()
@@ -1233,7 +1180,7 @@ class ModelRenderer(Widget):
           3.0,
         )
 
-      radar_stroke = rcolor if self._carrot_radar_track_id >= 0 else rl.Color(0, 0, 255, 255)
+      radar_stroke = rcolor if self._carrot_radar_track_id >= 0 else self._carrot_colors37[self._carrot_visual_lead_color % 38]
       self._draw_rect_fill_outline_carrot(
         self._carrot_path_x - self._carrot_path_width_px / 2 - 10,
         self._carrot_path_y - self._carrot_path_width_px * 0.8,
@@ -1500,15 +1447,12 @@ class ModelRenderer(Widget):
 
           speed_text = f"{(v_sum * 3.6):.0f}" if ui_state.is_metric else f"{(v_sum * 2.2369363):.0f}"
 
-          # 前车框颜色：38 色板（% 38）
-          #   视觉框默认 6 蓝（老版 UIVisionLeadBoxColor 默认值）
-          #   雷达框默认 2 橙（老版 UIRadarLeadBoxColor 默认值）
-          if not radar:
-            vc = self._carrot_colors37[self._carrot_visual_lead_color % 38]
-            box_color = rl.Color(vc.r, vc.g, vc.b, 255)
-          else:
-            rc = self._carrot_colors37[self._carrot_radar_lead_color % 38]
-            box_color = rl.Color(rc.r, rc.g, rc.b, 255)
+          # 前车框颜色: 老版 carrot.cc 的 SCC 车型恒为红色
+          #   (isLeadSCC() && radarColIdx == 2) ? COLOR_RED_ALPHA(200) : ...
+          # 本机是雷达 SCC, 故不再区分视觉/雷达两路, 也移除了对应参数。
+          idx = self._carrot_radar_lead_color if radar else self._carrot_visual_lead_color
+          c = self._carrot_colors37[idx % 38]
+          box_color = rl.Color(c.r, c.g, c.b, 255)
 
           self._draw_text_box_carrot(int(x), int(y), speed_text, 40, box_color)
 

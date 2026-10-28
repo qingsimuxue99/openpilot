@@ -23,6 +23,13 @@ from openpilot.selfdrive.selfdrived.events import Events, ET, EmptyAlert
 from openpilot.selfdrive.selfdrived.helpers import ExcessiveActuationCheck
 from openpilot.selfdrive.selfdrived.state import StateMachine
 from openpilot.selfdrive.selfdrived.impact_detector import ImpactDetector
+
+# 撞击检测阈值参数：单位 g，默认 1.5g（≈14.7 m/s²）。减速带/颠簸误报「疑似撞击」时调大。
+# 与设置-软件面板的「撞击检测阈值」控件共用同一文件；超出 0.5~5.0g 自动夹取。
+IMPACT_THRESHOLD_PARAM = "/data/params/d/ImpactThreshold"
+IMPACT_THRESHOLD_DEFAULT_G = 1.5
+IMPACT_THRESHOLD_MIN_G = 0.5
+IMPACT_THRESHOLD_MAX_G = 5.0
 from openpilot.selfdrive.selfdrived.alertmanager import AlertManager, set_offroad_alert
 from openpilot.selfdrive.controls.lib.cutin_alert import (
   CutinAlertCandidate,
@@ -32,13 +39,6 @@ from openpilot.selfdrive.controls.lib.cutin_alert import (
 
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.version import get_build_metadata
-
-# 撞击检测阈值参数：单位 g，默认 1.5g（≈14.7 m/s²）。减速带/颠簸误报「疑似撞击」时调大。
-# 与设置-软件面板的「撞击检测阈值」控件共用同一文件；超出 0.5~5.0g 自动夹取。
-IMPACT_THRESHOLD_PARAM = "/data/params/d/ImpactThreshold"
-IMPACT_THRESHOLD_DEFAULT_G = 1.5
-IMPACT_THRESHOLD_MIN_G = 0.5
-IMPACT_THRESHOLD_MAX_G = 5.0
 
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
@@ -65,7 +65,6 @@ class SelfdriveD:
     self.params = Params()
     self.impact_dashcam = ImpactDashcam(self.params, Params("/dev/shm/params"))
     self.impact_detector = ImpactDetector()
-    # 撞击阈值从参数读取（g→m/s²），缺省 1.5g；params_thread 会周期性刷新
     self.impact_detector.threshold = self._read_impact_threshold() * 9.81
 
     # Ensure the current branch is cached, otherwise the first cycle lags

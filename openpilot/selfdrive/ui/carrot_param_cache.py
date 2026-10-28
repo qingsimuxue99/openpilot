@@ -100,7 +100,7 @@ def read_border_params(params, params_memory) -> BorderParamSnapshot:
     top_left=top_left,
     top_left_op_long=top_left_op_long,
     custom_sr=custom_sr,
-    bottom_left="晚風V261017",
+    bottom_left="[晚風]V261020",
     bottom_right=network_address,
   )
 

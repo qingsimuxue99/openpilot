@@ -422,7 +422,7 @@ WEB_SETTINGS_SPEC: List[_Field] = [
   # page schema; the drive sound dialog is the UI for it.
   _Field("web_sound_enabled", "bool", False, hidden=True),
   _Field("web_sound_volume", "str", "1.00", normalize=_normalize_web_sound_volume, hidden=True),
-  _Field("web_language", "str", "", normalize=_normalize_language),
+  _Field("web_language", "str", "zh", normalize=_normalize_language),
   _Field("web_lab_enabled", "bool", False),
   _Field("vision_fullscreen_default", "bool", False),
   _Field("carrot_navi_fullscreen_on_tap", "bool", False),

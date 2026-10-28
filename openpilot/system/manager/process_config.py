@@ -25,8 +25,15 @@ def iscar(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started and not CP.notCar
 
 def logging(started: bool, params: Params, CP: car.CarParams) -> bool:
-  run = (not CP.notCar) or not params.get_bool("DisableLogging")
-  return started and run
+  # Default OFF: dashcam (loggerd -> /data/media/0/realdata/*.zst) only runs
+  # when the user explicitly enables it. The old expression
+  #   (not CP.notCar) or not params.get_bool("DisableLogging")
+  # was always True on a real car (CP.notCar is False), so DisableLogging
+  # could never stop recording.
+  # notCar (non-car devices) keeps logging unless explicitly disabled.
+  if CP.notCar:
+    return started and not params.get_bool("DisableLogging")
+  return started and params.get_bool("EnableDashcam")
 
 def ublox_available() -> bool:
   return os.path.exists('/dev/ttyHS0') and not os.path.exists('/persist/comma/use-quectel-gps')

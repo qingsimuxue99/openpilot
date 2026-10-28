@@ -86,7 +86,7 @@ msgstr "同意"
 
 #: openpilot/selfdrive/selfdrived/events.py
 msgid "Always keep hands on wheel and eyes on road"
-msgstr "小鸽温馨提醒：请始终握住方向盘并注视前方道路"
+msgstr "请始终握住方向盘并注视前方道路。"
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "Always-On Driver Monitoring"
@@ -123,7 +123,7 @@ msgstr "返回"
 
 #: openpilot/selfdrive/selfdrived/events.py
 msgid "Be ready to take over at any time"
-msgstr "随时准备接管"
+msgstr "北京交通委提醒您:道路千万条，安全第一条"
 
 #: openpilot/selfdrive/ui/widgets/prime.py
 msgid "Become a comma prime member at connect.comma.ai"

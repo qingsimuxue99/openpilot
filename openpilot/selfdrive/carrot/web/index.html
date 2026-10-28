@@ -1,3 +1,4 @@
+<!-- 标记_中文化: tools page zh 20261018 -->
 <!doctype html>
 <html class="notranslate" translate="no">
 <head>
@@ -287,7 +288,7 @@
     <!-- ════════════ TOOLS ════════════ -->
     <div id="pageTools" class="page page--full page--split page--tools" hidden style="display:none;">
       <div class="page-header page-header--hidden" aria-hidden="true">
-        <h2 id="toolsTitle" class="page-title">Tools</h2>
+        <h2 id="toolsTitle" class="page-title">工具</h2>
       </div>
 
       <div class="muted mb-md" id="toolsMeta">-</div>
@@ -300,8 +301,8 @@
           <div class="egpu-model-card__icon" aria-hidden="true">HB</div>
           <div class="egpu-model-card__body">
             <div class="egpu-model-card__heading">
-              <strong id="egpuModelTitle">eGPU big model</strong>
-              <span id="egpuModelState" class="egpu-model-card__state">Checking</span>
+              <strong id="egpuModelTitle">eGPU 大模型</strong>
+              <span id="egpuModelState" class="egpu-model-card__state">检查中</span>
             </div>
             <p id="egpuModelDetail" class="egpu-model-card__detail"></p>
             <p id="egpuModelRecovery" class="egpu-model-card__detail" hidden></p>
@@ -310,39 +311,39 @@
             </div>
             <div class="egpu-model-card__footer">
               <span id="egpuModelAmount" class="egpu-model-card__amount"></span>
-              <button id="btnEgpuCompileRestart" class="btn egpu-model-card__action" type="button" hidden>Restart &amp; compile</button>
+              <button id="btnEgpuCompileRestart" class="btn egpu-model-card__action" type="button" hidden>重启并编译</button>
             </div>
           </div>
         </section>
 
-        <div id="toolsModelPages" class="tools-primary-actions ui-action-grid ui-action-grid--quick mb-md" role="group" aria-label="Model pages">
-          <a id="btnToolsModelsPage" class="btn" href="models.html">eGPU Models</a>
+        <div id="toolsModelPages" class="tools-primary-actions ui-action-grid ui-action-grid--quick mb-md" role="group" aria-label="模型页面">
+          <a id="btnToolsModelsPage" class="btn" href="models.html">eGPU 模型</a>
         </div>
 
-        <div id="toolsPrimaryActions" class="tools-primary-actions ui-action-grid ui-action-grid--quick mb-md" role="group" aria-label="Tools shortcuts">
-          <button id="btnToolsCarSelect" class="btn" type="button">Car Select</button>
-          <button id="btnToolsLanguage" class="btn" type="button" aria-haspopup="dialog">Language</button>
-          <button id="btnToolsWebSettings" class="btn" type="button">Web Settings</button>
-          <button id="btnDeviceInfo" class="btn" type="button">Info</button>
-          <button id="btnToolsBluetooth" class="btn" type="button" aria-haspopup="dialog">Bluetooth</button>
+        <div id="toolsPrimaryActions" class="tools-primary-actions ui-action-grid ui-action-grid--quick mb-md" role="group" aria-label="工具快捷键">
+          <button id="btnToolsCarSelect" class="btn" type="button">选择车辆</button>
+          <button id="btnToolsLanguage" class="btn" type="button" aria-haspopup="dialog">语言</button>
+          <button id="btnToolsWebSettings" class="btn" type="button">网页设置</button>
+          <button id="btnDeviceInfo" class="btn" type="button">设备信息</button>
+          <button id="btnToolsBluetooth" class="btn" type="button" aria-haspopup="dialog">蓝牙</button>
         </div>
 
         <div class="section tools-group is-open" data-tools-group="git">
           <button class="tools-group__toggle" type="button" aria-expanded="true" aria-controls="toolsGroupBodyGit">
-            <span id="gitCommandsTitle" class="section-title tools-group__title">Git Commands</span>
+            <span id="gitCommandsTitle" class="section-title tools-group__title">Git 命令</span>
             <span class="tools-group__chevron" aria-hidden="true"></span>
           </button>
           <div id="toolsGroupBodyGit" class="tools-group__body">
             <div class="tools-group__bodyInner ui-action-grid">
               <button id="btnGitPull" class="btn git-pull-btn" type="button">
-                <span>git pull</span>
-                <span id="gitPullBadge" class="git-pull-btn__badge" hidden aria-label="pending commits">0</span>
+                <span>拉取代码</span>
+                <span id="gitPullBadge" class="git-pull-btn__badge" hidden aria-label="待处理提交">0</span>
               </button>
-              <button id="btnGitSync" class="btn">git sync</button>
-              <button id="btnGitReset" class="btn">git reset</button>
-              <button id="btnGitLog" class="btn">git log</button>
-              <button id="btnGitBranch" class="btn">change branch</button>
-              <button id="btnGitResetRepo" class="btn btn--danger">reset repo</button>
+              <button id="btnGitSync" class="btn">同步代码</button>
+              <button id="btnGitReset" class="btn">重置当前</button>
+              <button id="btnGitLog" class="btn">提交记录</button>
+              <button id="btnGitBranch" class="btn">切换分支</button>
+              <button id="btnGitResetRepo" class="btn btn--danger">重置仓库</button>
             </div>
           </div>
         </div>
@@ -351,20 +352,20 @@
 
         <div class="section tools-group" data-tools-group="system">
           <button class="tools-group__toggle" type="button" aria-expanded="false" aria-controls="toolsGroupBodySystem">
-            <span id="userSystemTitle" class="section-title tools-group__title">User / System</span>
+            <span id="userSystemTitle" class="section-title tools-group__title">用户/系统</span>
             <span class="tools-group__chevron" aria-hidden="true"></span>
           </button>
           <div id="toolsGroupBodySystem" class="tools-group__body">
             <div class="tools-group__bodyInner ui-action-grid">
-              <button id="btnRecordToggle" class="btn" type="button" aria-label="Record">Record</button>
-              <button id="btnDeviceLang" class="btn" hidden style="display:none;">Device Lang</button>
-              <button id="btnResetCalib" class="btn btn--danger">Reset Calib</button>
-              <button id="btnSendTmuxLog" class="btn">capture tmux</button>
-              <button id="btnSendTmuxServerLog" class="btn">send tmux</button>
-              <button id="btnDeleteVideos" class="btn btn--danger">delete all videos</button>
-              <button id="btnDeleteLogs" class="btn btn--danger">delete all logs</button>
-              <button id="btnRebuildAll" class="smallBtn btn--danger">Rebuild All</button>
-              <button id="btnReboot" class="btn">reboot</button>
+              <button id="btnRecordToggle" class="btn" type="button" aria-label="Record">录屏</button>
+              <button id="btnDeviceLang" class="btn" hidden style="display:none;">设备语言</button>
+              <button id="btnResetCalib" class="btn btn--danger">重置标定</button>
+              <button id="btnSendTmuxLog" class="btn">抓取 tmux</button>
+              <button id="btnSendTmuxServerLog" class="btn">发送 tmux</button>
+              <button id="btnDeleteVideos" class="btn btn--danger">删除全部视频</button>
+              <button id="btnDeleteLogs" class="btn btn--danger">删除全部日志</button>
+              <button id="btnRebuildAll" class="smallBtn btn--danger">全部重编</button>
+              <button id="btnReboot" class="btn">重启设备</button>
             </div>
           </div>
         </div>
@@ -373,17 +374,17 @@
 
         <div class="section tools-group" data-tools-group="settings">
           <button class="tools-group__toggle" type="button" aria-expanded="false" aria-controls="toolsGroupBodySettings">
-            <span id="userSettingsTitle" class="section-title tools-group__title">Settings</span>
+            <span id="userSettingsTitle" class="section-title tools-group__title">设置</span>
             <span class="tools-group__chevron" aria-hidden="true"></span>
           </button>
           <div id="toolsGroupBodySettings" class="tools-group__body">
             <div class="tools-group__bodyInner ui-action-grid">
-              <button id="btnBackupSettings" class="btn">Backup</button>
-              <button id="btnRestoreSettings" class="btn">Restore</button>
-              <button id="btnQrBackupSettings" class="btn">QR Backup</button>
-              <button id="btnQrRestoreSettings" class="btn">QR Restore</button>
-              <button id="btnCopySettings" class="btn">Copy</button>
-              <button id="btnViewSettings" class="btn">View</button>
+              <button id="btnBackupSettings" class="btn">备份</button>
+              <button id="btnRestoreSettings" class="btn">恢复</button>
+              <button id="btnQrBackupSettings" class="btn">二维码备份</button>
+              <button id="btnQrRestoreSettings" class="btn">二维码恢复</button>
+              <button id="btnCopySettings" class="btn">复制</button>
+              <button id="btnViewSettings" class="btn">查看</button>
             </div>
           </div>
         </div>
@@ -394,13 +395,13 @@
       <div class="tools-console-dock">
         <div class="tools-console-shell">
           <div class="tools-console-meta hidden" aria-hidden="true">
-            <span id="sysCmdTitle">System Command</span>
-            <span id="outputTitle">Output</span>
+            <span id="sysCmdTitle">系统命令</span>
+            <span id="outputTitle">输出</span>
           </div>
           <form id="sysCmdForm" class="tools-console-form">
             <span class="tools-console-prompt" aria-hidden="true">&gt;_</span>
             <input id="sysCmdInput" type="text" class="input-text" placeholder="" />
-            <button id="btnSysCmdInfo" class="tools-console-iconBtn" type="button" aria-expanded="false" aria-controls="sysCmdHelpPanel" aria-label="Allowed commands">
+            <button id="btnSysCmdInfo" class="tools-console-iconBtn" type="button" aria-expanded="false" aria-controls="sysCmdHelpPanel" aria-label="允许的命令">
               <svg class="tools-console-iconBtn__svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path fill="currentColor" d="M11 17h2v-6h-2zm0-8h2V7h-2zm1 13C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10m0-18a8 8 0 1 0 0 16 8 8 0 0 0 0-16"/>
               </svg>

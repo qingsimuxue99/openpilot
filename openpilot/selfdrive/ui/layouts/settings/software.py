@@ -39,7 +39,6 @@ def disable_updates_enabled() -> bool:
   except OSError:
     return False
 
-
 # ---- 撞击检测阈值：数值步进控件（单位 g，步长 0.1，范围 0.5~5.0）----
 # 直写原始文件 /data/params/d/ImpactThreshold（绕过 params 白名单，与 DisableUpdates 同机制）
 # 后端 selfdrived.py 读取该文件并 ×9.81 换算成 m/s² 作为阈值
@@ -98,7 +97,6 @@ class ImpactThresholdAction(ItemAction):
       rl.draw_text_ex(self._font, label, rl.Vector2(btn_rect.x + (btn_rect.width - size.x) / 2,
                                                    btn_rect.y + (btn_rect.height - size.y) / 2),
                       _VALUE_FONT, 0, rl.WHITE if enabled else rl.Color(150, 150, 150, 255))
-    # 当前阈值数值（单位 g）
     text = f"{value:.1f}g"
     size = measure_text_cached(self._font, text, _VALUE_FONT)
     rl.draw_text_ex(self._font, text, rl.Vector2(minus_rect.x + _STEP_BTN_W + 8,
@@ -117,6 +115,7 @@ class ImpactThresholdAction(ItemAction):
     elif rl.check_collision_point_rec(mouse_pos, plus_rect):
       new = min(IMPACT_THRESHOLD_MAX_G, round((value + IMPACT_THRESHOLD_STEP_G) / IMPACT_THRESHOLD_STEP_G) * IMPACT_THRESHOLD_STEP_G)
       self._write_value(round(new, 1))
+
 
 # Mapping updater internal states to translated display strings
 STATE_TO_DISPLAY_TEXT = {
@@ -222,14 +221,12 @@ class SoftwareLayout(Widget):
       callback=self._on_disable_updates_toggle,
     )
 
-    # 撞击检测阈值（单位 g）：默认 1.5g，范围 0.5~5.0g，步进 0.1g。直写原始参数文件 /data/params/d/ImpactThreshold。
-    self._impact_threshold_action = ImpactThresholdAction()
     self._impact_threshold_item = ListItem(
       title="撞击检测阈值",
       description="冲击或抖动过大时触发「撞击报警」提示的加速度阈值（单位 g）。"
                  "默认 1.5g，范围 0.5~5.0g，超出自动夹取；数值调大更不容易误触发，调小更容易触发。"
                  "也可直接写 /data/params/d/ImpactThreshold 覆盖，约 2 秒后生效。",
-      action_item=self._impact_threshold_action,
+      action_item=ImpactThresholdAction(),
     )
 
     self._download_btn = button_item(lambda: tr("Download"), lambda: tr("CHECK"), callback=self._on_download_update)

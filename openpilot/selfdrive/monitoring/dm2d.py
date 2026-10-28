@@ -177,7 +177,7 @@ def run_dm2(params, experimental, initial_car_params=None):
   allow_speed_buttons = False
   demo_mode = params.get_bool("IsDriverViewEnabled")
   rhd_saved = params.get_bool("IsRhdDetected")
-  monitoring_enabled = params.get_bool("DriverMonitoringEnabled") and not params.get_bool(SESSION_DISABLED_PARAM)
+  monitoring_enabled = False  # [永久关闭] 驾驶员监控已在代码层关闭，不受 DriverMonitoringEnabled 参数控制
   disable_write_pending = False
   last_fresh_car_state = -math.inf
   next_mode_check = time.monotonic() + 0.5
@@ -191,7 +191,7 @@ def run_dm2(params, experimental, initial_car_params=None):
     if disable_write_pending or rk.frame % 40 == 0:
       setting_enabled = params.get_bool("DriverMonitoringEnabled")
       session_disabled = params.get_bool(SESSION_DISABLED_PARAM)
-      requested_enabled = setting_enabled and not session_disabled
+      requested_enabled = False  # [永久关闭] 驾驶员监控已在代码层关闭，不受 DriverMonitoringEnabled 参数控制
       if disable_write_pending:
         # Keep the local gate closed until the asynchronous session marker is
         # observable, retrying at the ordinary two-second settings cadence.

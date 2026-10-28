@@ -1,3 +1,4 @@
+import os
 from openpilot.cereal import log
 from openpilot.common.params import Params, UnknownKeyName
 from openpilot.system.ui.widgets import Widget
@@ -36,6 +37,12 @@ DESCRIPTIONS = {
   "IsLdwEnabled": tr_noop(
     "车道偏离预警。<br>"
     "车速超过 50 km/h 且未打转向灯时，若车辆越过识别到的车道线，将提醒你回正方向盘。"
+  ),
+  "ForceCenter": tr_noop(
+    "车道线强制居中。<br>"
+    "开启后，在能同时识别到左右两侧车道线时，强制将车辆保持在两条车道线的几何正中央，"
+    "忽略单侧标线更清晰带来的偏移，解决持续偏向某一侧的问题。<br>"
+    "仅在两侧车道线均可见时生效；无车道线的乡村道路自动退回原逻辑，不影响正常行驶。"
   ),
   "AlwaysOnDM": tr_noop(
     "驾驶员监控常开。<br>"
@@ -88,6 +95,12 @@ class TogglesLayout(Widget):
         "warning.png",
         False,
       ),
+      "ForceCenter": (
+        lambda: tr("车道线强制居中"),
+        DESCRIPTIONS["ForceCenter"],
+        "warning.png",
+        False,
+      ),
       "AlwaysOnDM": (
         lambda: tr("驾驶员监控常开"),
         DESCRIPTIONS["AlwaysOnDM"],
@@ -130,7 +143,7 @@ class TogglesLayout(Widget):
       toggle = toggle_item(
         title,
         desc,
-        self._params.get_bool(param),
+        self._get_toggle_state(param),
         callback=lambda state, p=param: self._toggle_callback(state, p),
         icon=icon,
       )
@@ -218,7 +231,7 @@ class TogglesLayout(Widget):
     # TODO: make a param control list item so we don't need to manage internal state as much here
     # refresh toggles from params to mirror external changes
     for param in self._toggle_defs:
-      self._toggles[param].action_item.set_state(self._params.get_bool(param))
+      self._toggles[param].action_item.set_state(self._get_toggle_state(param))
 
     # these toggles need restart, block while engaged
     for toggle_def in self._toggle_defs:
@@ -252,7 +265,31 @@ class TogglesLayout(Widget):
       self._update_experimental_mode_icon()
       self._params.put_bool("ExperimentalMode", state)
 
+  # [车道线强制居中] 状态绕过参数白名单，直接读写 /data/params/d/ForceCenter 文件
+  def _force_center_state(self) -> bool:
+    try:
+      with open("/data/params/d/ForceCenter", "rb") as f:
+        return f.read().strip() not in (b"0", b"", b"false", b"False")
+    except OSError:
+      return False
+
+  def _set_force_center_state(self, state: bool):
+    os.makedirs("/data/params/d", exist_ok=True)
+    with open("/data/params/d/ForceCenter", "wb") as f:
+      f.write(b"1" if state else b"0")
+
+  def _get_toggle_state(self, param: str) -> bool:
+    if param == "ForceCenter":
+      return self._force_center_state()
+    try:
+      return self._params.get_bool(param)
+    except UnknownKeyName:
+      return False
+
   def _toggle_callback(self, state: bool, param: str):
+    if param == "ForceCenter":
+      self._set_force_center_state(state)
+      return
     if param == "ExperimentalMode":
       self._handle_experimental_mode_toggle(state)
       return

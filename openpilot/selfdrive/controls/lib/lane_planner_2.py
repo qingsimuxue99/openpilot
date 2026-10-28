@@ -1,4 +1,5 @@
 import math
+import os
 import numpy as np
 from openpilot.cereal import log
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -6,6 +7,9 @@ from openpilot.common.realtime import DT_MDL
 # from openpilot.common.swaglog import cloudlog
 # from openpilot.common.logger import sLogger
 from openpilot.common.params import Params
+
+# [车道线强制居中] 状态存放于 /data/params/d/ForceCenter（绕过参数白名单，与 ImpactThreshold 同机制）
+FORCE_CENTER_PARAM = "/data/params/d/ForceCenter"
 
 TRAJECTORY_SIZE = 33
 # positive numbers go right
@@ -102,6 +106,14 @@ class LanePlanner:
       self.l_lane_change_prob = desire_state[log.Desire.laneChangeLeft]
       self.r_lane_change_prob = desire_state[log.Desire.laneChangeRight]
 
+  def _read_force_center(self) -> bool:
+    """[车道线强制居中] 读取开关状态（直接读 param 文件，绕过白名单）。"""
+    try:
+      with open(FORCE_CENTER_PARAM, "rb") as f:
+        return f.read().strip() not in (b"0", b"", b"false", b"False")
+    except OSError:
+      return False
+
   def get_d_path(self, CS, v_ego, path_t, path_xyz, curve_speed):
     #if v_ego > 0.1:
     #  self.lane_width_updated_count = max(0, self.lane_width_updated_count - 1)
@@ -125,6 +137,9 @@ class LanePlanner:
     r_prob *= r_std_mod
 
     self.l_prob, self.r_prob = l_prob, r_prob
+
+    # [车道线强制居中] 每帧读取一次开关状态（直接读文件，绕过白名单）
+    force_center = self._read_force_center()
 
     # Find current lanewidth
     current_lane_width = abs(self.rll_y[0] - self.lll_y[0])
@@ -195,6 +210,10 @@ class LanePlanner:
     else:
       lane_path_y = (l_prob * path_from_left_lane + r_prob * path_from_right_lane) / (l_prob + r_prob + 0.0001)
 
+    # [车道线强制居中] 两侧车道线均可见时强制取几何中点（忽略单侧置信度加权，避免持续偏一侧）
+    if force_center and both_lane_available:
+      lane_path_y = (path_from_left_lane + path_from_right_lane) / 2.
+
     use_laneless_center_adjust = False
     if use_laneless_center_adjust:
       ## 0.5초 앞의 중심을 보도록함.
@@ -207,6 +226,12 @@ class LanePlanner:
       diff_center = 0.0
     #print("center = {:.2f}={:.2f}-{:.2f}, lanefull={}".format(diff_center, lane_path_y_center, path_xyz_y_center, self.lanefull_mode))
     #diff_center = lane_path_y[5] - path_xyz[:,1][5] if not self.lanefull_mode else 0.0
+    # [车道线强制居中] 开启时清零手动/入弯偏移，纯居中（偏移仍经 lane_offset_filtered 平滑过渡，不跳变）
+    if force_center and both_lane_available:
+      offset_curve = 0.0
+      offset_lane = 0.0
+      diff_center = 0.0
+
     if offset_curve * offset_lane < 0:
       offset_total = np.clip(offset_curve + offset_lane + diff_center, - ADJUST_OFFSET_LIMIT, ADJUST_OFFSET_LIMIT)
     else:
@@ -245,6 +270,13 @@ class LanePlanner:
           lane_path_y_interp = np.interp(path_t * (1.0 + adjustLaneTime), self.ll_t[safe_idxs], lane_path_y[safe_idxs])
           path_xyz[:,1] = self.d_prob * lane_path_y_interp + (1.0 - self.d_prob) * path_xyz[:,1]
 
+    # [车道线强制居中] 两侧车道线均可见时强制把路径拉到车道几何中点（不依赖 UseLaneLineSpeed / lanefull_mode 开关，默认配置也生效）
+    if force_center and both_lane_available and not self.lanefull_mode:
+      safe_idxs = np.isfinite(self.ll_t)
+      if safe_idxs[0]:
+        lane_path_y_interp = np.interp(path_t * (1.0 + adjustLaneTime), self.ll_t[safe_idxs], lane_path_y[safe_idxs])
+        path_xyz[:,1] = self.d_prob * lane_path_y_interp + (1.0 - self.d_prob) * path_xyz[:,1]
+      laneline_active = True
 
     path_xyz[:, 1] += (CAMERA_OFFSET + self.lane_offset_filtered.x)
 

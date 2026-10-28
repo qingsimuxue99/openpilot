@@ -38,6 +38,8 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"DoUninstall", {CLEAR_ON_MANAGER_START, BOOL}},
     {"DriverTooDistracted", {CLEAR_ON_MANAGER_START | CLEAR_ON_IGNITION_ON, BOOL}},
     {"AlphaLongitudinalEnabled", {PERSISTENT | DEVELOPMENT_ONLY, BOOL}},
+
+    {"EnableDashcam", {PERSISTENT, BOOL, "0"}},
     {"ExperimentalMode", {PERSISTENT, BOOL}},
     {"ExperimentalModeConfirmed", {PERSISTENT, BOOL}},
     {"FirmwareQueryDone", {CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION, BOOL}},
@@ -188,14 +190,11 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"ShowPathModeLane", {PERSISTENT, INT, "14"}},
     {"ShowPathColorLane", {PERSISTENT, INT, "13"}},
     {"BlindSpotBarrierColor", {PERSISTENT, INT, "36"}},
+    {"RadarLeadColor", {PERSISTENT, INT, "2"}},
+    {"VisualLeadColor", {PERSISTENT, INT, "6"}},
     {"CarrotFanFullSpeed", {PERSISTENT, BOOL, "0"}},
     {"ShowRouteInfo", {PERSISTENT, BOOL, "1"}},
     {"ShowPathEnd", {PERSISTENT, BOOL, "1"}},
-    {"RadarLeadColor", {PERSISTENT, INT, "2"}},
-    {"VisualLeadColor", {PERSISTENT, INT, "6"}},
-    {"StoppedBgAlpha", {PERSISTENT, INT, "140"}},
-    {"StoppedIconPosX", {PERSISTENT, INT, "0"}},
-    {"StoppedIconPosY", {PERSISTENT, INT, "0"}},
     {"ShowPlotMode", {PERSISTENT, INT, "0"}},
     {"TimezoneName", {PERSISTENT, STRING, ""}},                // 로컬 타임존 IANA 이름 (예: "Asia/Seoul"), 앱/WiFi/GPS로 해석되면 기록
     {"TimezoneSource", {PERSISTENT, STRING, ""}},              // 타임존 출처 우선순위 추적 ("app" > "wifi" > "gps")
