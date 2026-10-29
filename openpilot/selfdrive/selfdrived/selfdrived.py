@@ -25,8 +25,11 @@ from openpilot.selfdrive.selfdrived.state import StateMachine
 from openpilot.selfdrive.selfdrived.impact_detector import ImpactDetector
 
 # 撞击检测阈值参数：单位 g，默认 1.5g（≈14.7 m/s²）。减速带/颠簸误报「疑似撞击」时调大。
-# 与设置-软件面板的「撞击检测阈值」控件共用同一文件；超出 0.5~5.0g 自动夹取。
-IMPACT_THRESHOLD_PARAM = "/data/params/d/ImpactThreshold"
+# 与设置-功能面板的「撞击检测阈值」控件共用同一文件；超出 0.5~5.0g 自动夹取。
+# 注意：必须放在 /data/params/d 之外。manager 每次开机调 Params.clearAll()，
+# 而 common/params.cc 会 unlink 掉所有不在 params_keys.h 白名单里的文件，
+# 放 params 目录里会导致重启后设置回默认（与 selfdrive/carrot/drive_stats.py 同源坑）。
+IMPACT_THRESHOLD_PARAM = "/data/carrot_state/ImpactThreshold"
 IMPACT_THRESHOLD_DEFAULT_G = 1.5
 IMPACT_THRESHOLD_MIN_G = 0.5
 IMPACT_THRESHOLD_MAX_G = 5.0

@@ -68,10 +68,19 @@ DESCRIPTIONS = {
 }
 
 
+# ---- 本功能的状态文件统一放在 /data/carrot_state/（params 目录之外）----
+# 为什么不能放 /data/params/d/：system/manager/manager.py 每次开机都会调用
+# Params.clearAll()，而 common/params.cc 的 clearAll() 会把参数目录里所有
+# 「不在 common/params_keys.h 白名单里」的文件直接 unlink 掉 —— 未登记的自建
+# 参数文件因此每重启必被清空、设置回默认值。放在 params 目录之外即可持久化，
+# 与 selfdrive/carrot/drive_stats.py 采用同一做法。
+CARROT_STATE_DIR = "/data/carrot_state"
+
 # ---- 撞击检测阈值：数值步进控件（单位 g，步长 0.1，范围 0.5~5.0）----
-# 直写原始文件 /data/params/d/ImpactThreshold（绕过 params 白名单，与 DisableUpdates 同机制）
-# 后端 selfdrived.py 读取该文件并 ×9.81 换算成 m/s² 作为阈值
-IMPACT_THRESHOLD_FILE = "/data/params/d/ImpactThreshold"
+# 后端 selfdrived.py 读取同一文件并 ×9.81 换算成 m/s² 作为阈值
+IMPACT_THRESHOLD_FILE = CARROT_STATE_DIR + "/ImpactThreshold"
+# 车道线强制居中开关状态
+FORCE_CENTER_FILE = CARROT_STATE_DIR + "/ForceCenter"
 IMPACT_THRESHOLD_DEFAULT_G = 1.5
 IMPACT_THRESHOLD_MIN_G = 0.5
 IMPACT_THRESHOLD_MAX_G = 5.0
@@ -100,6 +109,7 @@ class ImpactThresholdAction(ItemAction):
   @staticmethod
   def _write_value(value: float) -> None:
     try:
+      os.makedirs(CARROT_STATE_DIR, exist_ok=True)
       with open(IMPACT_THRESHOLD_FILE, "wb") as f:
         f.write(f"{value:.1f}".encode())
     except OSError:
@@ -225,7 +235,7 @@ class TogglesLayout(Widget):
       title="撞击检测阈值",
       description="冲击或抖动过大时触发「撞击报警」提示的加速度阈值（单位 g）。"
                  "默认 1.5g，范围 0.5~5.0g，超出自动夹取；数值调大更不容易误触发，调小更容易触发。"
-                 "也可直接写 /data/params/d/ImpactThreshold 覆盖，约 2 秒后生效。",
+                 "设置后立即生效；数值保存在 /data/carrot_state/ImpactThreshold，重启后不会恢复默认。",
       icon="warning.png",
       action_item=ImpactThresholdAction(),
     )
@@ -362,17 +372,17 @@ class TogglesLayout(Widget):
       self._update_experimental_mode_icon()
       self._params.put_bool("ExperimentalMode", state)
 
-  # [车道线强制居中] 状态绕过参数白名单，直接读写 /data/params/d/ForceCenter 文件
+  # [车道线强制居中] 状态存放于 /data/carrot_state/ForceCenter（params 目录之外，避免开机被 clearAll 清掉）
   def _force_center_state(self) -> bool:
     try:
-      with open("/data/params/d/ForceCenter", "rb") as f:
+      with open(FORCE_CENTER_FILE, "rb") as f:
         return f.read().strip() not in (b"0", b"", b"false", b"False")
     except OSError:
       return False
 
   def _set_force_center_state(self, state: bool):
-    os.makedirs("/data/params/d", exist_ok=True)
-    with open("/data/params/d/ForceCenter", "wb") as f:
+    os.makedirs(CARROT_STATE_DIR, exist_ok=True)
+    with open(FORCE_CENTER_FILE, "wb") as f:
       f.write(b"1" if state else b"0")
 
   def _get_toggle_state(self, param: str) -> bool:

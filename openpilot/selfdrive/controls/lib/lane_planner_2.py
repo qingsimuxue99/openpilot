@@ -8,8 +8,10 @@ from openpilot.common.realtime import DT_MDL
 # from openpilot.common.logger import sLogger
 from openpilot.common.params import Params
 
-# [车道线强制居中] 状态存放于 /data/params/d/ForceCenter（绕过参数白名单，与 ImpactThreshold 同机制）
-FORCE_CENTER_PARAM = "/data/params/d/ForceCenter"
+# [车道线强制居中] 状态存放于 /data/carrot_state/ForceCenter
+# 不能放 /data/params/d/：manager 开机调 Params.clearAll()，common/params.cc 会把
+# 所有不在 params_keys.h 白名单里的文件 unlink 掉 -> 重启后开关状态必回默认。
+FORCE_CENTER_PARAM = "/data/carrot_state/ForceCenter"
 
 TRAJECTORY_SIZE = 33
 # positive numbers go right
