@@ -77,14 +77,43 @@ if GetOption('extras') and arch == "larch64":
     ("openpilot_internal", "nightly-dev"),
   ]
 
-  cont = raylib_env.Command("installer/continue_openpilot.o", "installer/continue_openpilot.sh",
-                            "ld -r -b binary -o $TARGET $SOURCE")
-  inter = raylib_env.Command("installer/inter_ttf.o", "installer/inter-ascii.ttf",
-                             "ld -r -b binary -o $TARGET $SOURCE")
-  inter_bold = raylib_env.Command("installer/inter_bold.o", "../assets/fonts/Inter-Bold.ttf",
-                              "ld -r -b binary -o $TARGET $SOURCE")
-  inter_light = raylib_env.Command("installer/inter_light.o", "../assets/fonts/Inter-Light.ttf",
-                              "ld -r -b binary -o $TARGET $SOURCE")
+  # fork 把仓库放在 openpilot/ 子目录，ld -b binary 生成的符号会带 openpilot_ 前缀
+  # (例如 _binary_openpilot_selfdrive_ui_installer_inter_ascii_ttf_start)，
+  # 而 installer.cc 沿用上游无前缀的 extern 声明
+  # (_binary_selfdrive_ui_installer_inter_ascii_ttf_start)。这里用 objcopy 把前缀去掉，
+  # 使其与 installer.cc 对齐，避免 AGNOS 安装器链接失败。
+  # 仅影响 AGNOS 重装用的 installer 程序，不影响行车运行时与 eGPU。
+  def _strip_openpilot_binary_prefix(target, source, env):
+    import subprocess
+    obj = str(target[0])
+    try:
+      out = subprocess.check_output(["aarch64-linux-gnu-nm", obj]).decode()
+    except Exception:
+      out = subprocess.check_output(["nm", obj]).decode()
+    renames = []
+    for ln in out.splitlines():
+      cols = ln.split()
+      if len(cols) >= 3 and cols[2].startswith("_binary_openpilot_selfdrive_"):
+        old = cols[2]
+        new = old.replace("_binary_openpilot_selfdrive_", "_binary_selfdrive_", 1)
+        renames.append("--redefine-sym")
+        renames.append(old + "=" + new)
+    if renames:
+      try:
+        subprocess.check_call(["aarch64-linux-gnu-objcopy"] + renames + [obj])
+      except Exception:
+        subprocess.check_call(["objcopy"] + renames + [obj])
+    return 0
+
+  def _ld_binary(env, target, source):
+    t = env.Command(target, source, "ld -r -b binary -o $TARGET $SOURCE")
+    env.AddPostAction(t, _strip_openpilot_binary_prefix)
+    return t
+
+  cont = _ld_binary(raylib_env, "installer/continue_openpilot.o", "installer/continue_openpilot.sh")
+  inter = _ld_binary(raylib_env, "installer/inter_ttf.o", "installer/inter-ascii.ttf")
+  inter_bold = _ld_binary(raylib_env, "installer/inter_bold.o", "../assets/fonts/Inter-Bold.ttf")
+  inter_light = _ld_binary(raylib_env, "installer/inter_light.o", "../assets/fonts/Inter-Light.ttf")
   for name, branch in installers:
     d = {'BRANCH': f"'\"{branch}\"'"}
     if "internal" in name:
