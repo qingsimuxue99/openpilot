@@ -1,0 +1,106 @@
+{
+  "n16": {
+    "name": "N16 Nav",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/n16/manifest.json",
+    "egpu": {
+      "model_id": "comma-nav-n16-afbf2e54-52205044",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 822465506,
+      "sha256": "52205044e136efb64a6a841c9b016cf35b1db81186dd0f941b62eee5ebdcde24",
+      "url": "http://op.gitop.vip:82/egpu/models/n16/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "n16.json",
+    "jetson_release": "../jetlink/host_release.json"
+  },
+  "md-v3": {
+    "name": "MD v3",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/md-v3/manifest.json",
+    "egpu": {
+      "model_id": "comma-pr39087-md-v3-e86b58dc-d4c7a3fc",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 799941965,
+      "sha256": "d4c7a3fcfc95813826ca871a80bea18df833aacb2eb6f5333e25a01e65b1a422",
+      "url": "http://op.gitop.vip:82/egpu/models/md-v3/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "md-v3.json",
+    "jetson_release": "md-v3-release.json"
+  },
+  "flip-flop": {
+    "name": "Flip Flop",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/flip-flop/manifest.json",
+    "egpu": {
+      "model_id": "comma-ffm-9fba666f-f0667cf6",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 775663355,
+      "sha256": "f0667cf6cf7827db467f7a5212620b876477cfea172257dcd97e26132344a3a4",
+      "url": "http://op.gitop.vip:82/egpu/models/flip-flop/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "md-v3.json",
+    "jetson_release": "md-v3-release.json"
+  },
+  "light-speed": {
+    "name": "Light speed",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/light-speed/manifest.json",
+    "egpu": {
+      "model_id": "comma-light-speed-c7cbe5de-33ba0928",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 790445184,
+      "sha256": "33ba092837e85c20ead465050673d11fbac1dd17dbaebc6c9fd77e64186019a3",
+      "url": "http://op.gitop.vip:82/egpu/models/light-speed/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "light-speed.json",
+    "jetson_release": "light-speed-release.json"
+  },
+  "train-track": {
+    "name": "Train Track",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/train-track/manifest.json",
+    "egpu": {
+      "model_id": "comma-ttm-e46b35b0-965bc2f7",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 799941965,
+      "sha256": "965bc2f7af1b47bdbc007bca553cc79073d1c1fe41ba8b18e55c653b780b7aa8",
+      "url": "http://op.gitop.vip:82/egpu/models/train-track/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "train-track.json",
+    "jetson_release": "md-v3-release.json"
+  },
+  "mdm-v1": {
+    "name": "MDM v1",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/mdm-v1/manifest.json",
+    "egpu": {
+      "model_id": "comma-pr39047-mdm-v1-4bfb5340-e20cde17",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 799992777,
+      "sha256": "e20cde17a9b0a397524c5f0745c5ac47393fd9db40d10f3ea928e6c1fafef4b7",
+      "url": "http://op.gitop.vip:82/egpu/models/mdm-v1/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "mdm-v1.json",
+    "jetson_release": "md-v3-release.json"
+  },
+  "resaction": {
+    "name": "ResAction",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/resaction/manifest.json",
+    "egpu": {
+      "model_id": "comma-pr39037-resaction-4bfb5340-cc75858d",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 799992286,
+      "sha256": "cc75858d5e007b725b6264e194da4321d7874a212dc631b8f40a215dfd172cd2",
+      "url": "http://op.gitop.vip:82/egpu/models/resaction/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "resaction.json",
+    "jetson_release": "md-v3-release.json"
+  },
+  "cinque-v3": {
+    "name": "CTM V3",
+    "manifest_url": "http://op.gitop.vip:82/egpu/models/cinque-v3/manifest.json",
+    "egpu": {
+      "model_id": "comma-pr38932-cinque-v3-892fc3a1-e758b96d",
+      "filename": "big_driving_tinygrad.pkl",
+      "size": 776634338,
+      "sha256": "e758b96df27858ea97122d18554930d04f9f8bda417417074edfb3a72b008d0b",
+      "url": "http://op.gitop.vip:82/egpu/models/cinque-v3/big_driving_tinygrad.pkl"
+    },
+    "jetson_spec": "cinque-v3.json",
+    "jetson_release": "md-v3-release.json"
+  }
+}

@@ -1,0 +1,3 @@
+# The eGPU needs these blobs offline: the root .gitignore ignores *.zst, but these
+# must be tracked so a device can start the GPU without reaching the network.
+!*.zst

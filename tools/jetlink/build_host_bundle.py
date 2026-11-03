@@ -1,0 +1,84 @@
+"""Export only committed renderer/server sources; never export vehicle captures or credentials."""
+import argparse
+import hashlib
+import io
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tarfile
+
+ROOT = Path(__file__).resolve().parents[2]
+PATHS = ['LICENSE', 'opendbc_repo/LICENSE', 'openpilot/__init__.py', 'openpilot/common', 'openpilot/cereal',
+         'openpilot/selfdrive/carrot/cluster', 'openpilot/selfdrive/carrot/carrot_navi.py',
+         'openpilot/selfdrive/carrot/carrot_navi_cereal.py', 'openpilot/selfdrive/carrot/deceleration_source.py',
+         'openpilot/selfdrive/carrot/signal_display.py', 'openpilot/selfdrive/carrot/signal_mode.py',
+         'openpilot/selfdrive/carrot/lead_brake_lights.py',
+         'openpilot/selfdrive/navigation/preview.py',
+         'openpilot/selfdrive/controls/lib', 'openpilot/selfdrive/modeld/constants.py',
+         'openpilot/selfdrive/modeld/model_catalog', 'openpilot/selfdrive/modeld/jetlink/cinque_v2.json',
+         'openpilot/selfdrive/modeld/jetlink/jetson_model.json', 'openpilot/selfdrive/assets',
+         'openpilot/system/hardware', 'openpilot/system/version.py',
+         'opendbc_repo/opendbc/car/car.capnp', 'opendbc_repo/opendbc/car/include',
+         'third_party/jetlink', 'tools/jetlink']
+
+
+def export_members(source, target, model_spec=None):
+  # Installed bootstrap revisions read this legacy filename before running
+  # any candidate code. Give them the selected pin too; the checkout keeps
+  # the historical Cinque spec for Mac/phone compatibility and regression tests.
+  legacy = 'openpilot/selfdrive/modeld/jetlink/cinque_v2.json'
+  selected = 'openpilot/selfdrive/modeld/jetlink/jetson_model.json'
+  if model_spec is not None:
+    if (not model_spec.startswith('openpilot/selfdrive/modeld/model_catalog/') or
+        '..' in model_spec.split('/') or not model_spec.endswith('.json')):
+      raise ValueError('Select a committed catalog model spec')
+    # Read only the git archive, never an uncommitted local model pin.
+    sys.path.insert(0, str(ROOT / 'third_party/jetlink'))
+    from jetlink.spec import ModelSpec
+    ModelSpec.from_dict(json.load(source.extractfile(model_spec)))
+  for member in source:
+    if ((model_spec is not None and member.name in (legacy, selected)) or
+        (member.name == legacy and selected in source.getnames())):
+      data = source.extractfile(model_spec or selected).read()
+      member.size = len(data)
+      target.addfile(member, io.BytesIO(data))
+    else:
+      target.addfile(member, source.extractfile(member) if member.isfile() else None)
+
+
+def main():
+  parser = argparse.ArgumentParser(description=__doc__)
+  parser.add_argument('output', type=Path)
+  parser.add_argument('--model-spec', help='Committed model_catalog spec to pin in this bundle only')
+  args = parser.parse_args()
+  git = ['git', '-c', f'safe.directory={ROOT.as_posix()}', '-C', str(ROOT)]
+  subprocess.run([*git, 'diff', '--quiet', 'HEAD', '--', *PATHS], check=True)
+  untracked = subprocess.check_output([*git, 'ls-files', '--others', '--exclude-standard', '--', *PATHS])
+  if untracked.strip():
+    raise RuntimeError('Commit or remove untracked host source files before exporting')
+  commit = subprocess.check_output([*git, 'rev-parse', 'HEAD'])
+  # Inspect cleanliness using the checkout's own CRLF policy; only the Linux
+  # export forces LF. Changing that policy for diff misclassifies Windows files.
+  archive = subprocess.check_output([*git, '-c', 'core.autocrlf=false', '-c', 'core.eol=lf',
+                                     'archive', 'HEAD', *PATHS])
+  with tarfile.open(fileobj=io.BytesIO(archive), mode='r:') as source, tarfile.open(args.output, 'w:gz') as target:
+    export_members(source, target, args.model_spec)
+    entry = tarfile.TarInfo('SOURCE_COMMIT')
+    entry.size = len(commit)
+    target.addfile(entry, io.BytesIO(commit))
+  sha = hashlib.sha256()
+  with args.output.open('rb') as bundle:
+    for block in iter(lambda: bundle.read(4 << 20), b''):
+      sha.update(block)
+  args.output.with_suffix(args.output.suffix + '.sha256').write_text(
+    f'{sha.hexdigest()}  {args.output.name}\n', encoding='utf-8', newline='\n')
+  args.output.with_suffix(args.output.suffix + '.json').write_text(json.dumps({
+    'source_commit': commit.decode().strip(), 'bundle': args.output.name,
+    'size': args.output.stat().st_size, 'sha256': sha.hexdigest(),
+  }, indent=2) + '\n', encoding='utf-8', newline='\n')
+  print(commit.decode().strip(), args.output)
+
+
+if __name__ == '__main__':
+  main()

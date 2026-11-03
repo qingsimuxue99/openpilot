@@ -1,0 +1,96 @@
+from pathlib import Path
+Import('env', 'arch', 'common')
+
+# ---------------------------------------------------------------------------
+# 字体图集 (.fnt / .png) 烘焙
+#
+# 背景（他人安装后中文全显示为问号的根因）：
+#   UI 运行时直接读取 BMFont 图集 (.fnt + .png 配对)，见
+#   system/ui/lib/application.py 的 DISPLAY = "KaiGenGothicKR-Bold.fnt"。
+#   之前这里无条件执行 process.py 重新烘焙并覆盖仓库中已入库的图集，
+#   而烘焙依赖 pyray（raylib 的 Python 绑定）：
+#     1. 新装设备上系统 python3 通常没有 pyray，process.py 直接抛
+#        ModuleNotFoundError，编译中断；
+#     2. 进程中途失败时，已经处理过的字体图集会被写成半成品，
+#        中文图集损坏，界面即整片问号。
+#
+# 现在的策略（保证他人安装后中文正常显示）：
+#   - 仓库已入库全部 28 个图集成品，视为可信产物；
+#   - 默认构建【不再覆盖】已存在的图集；
+#   - 仅当某个图集确实缺失时，才自动烘焙补齐（自愈）；
+#   - 需要重新生成时显式执行：scons --bake-fonts
+# ---------------------------------------------------------------------------
+
+generator = File("#openpilot/selfdrive/assets/fonts/process.py")
+source_files = Glob("#openpilot/selfdrive/assets/fonts/*.ttf") + Glob("#openpilot/selfdrive/assets/fonts/*.otf")
+output_files = [
+  (f"#{Path(f.path).with_suffix('.fnt')}", f"#{Path(f.path).with_suffix('.png')}")
+  for f in source_files
+  if "NotoColor" not in f.name
+]
+
+bake_fonts = GetOption('bake_fonts')
+
+if bake_fonts:
+  print("[fonts] --bake-fonts: 强制重新烘焙全部字体图集")
+  env.Command(
+    target=output_files,
+    source=[generator, source_files],
+    action=f"python3 {generator}",
+  )
+else:
+  # 只为"缺失"的图集安排烘焙任务；已入库的成品保持原样，绝不覆盖。
+  missing_targets = []
+  for target in output_files:
+    if not all(Path(env.File(t).abspath).exists() for t in target):
+      missing_targets.append(target)
+
+  if missing_targets:
+    names = ", ".join(Path(t[0]).name for t in missing_targets)
+    print(f"[fonts] 检测到缺失图集，将自动烘焙补齐: {names}")
+    env.Command(
+      target=missing_targets,
+      source=[generator, source_files],
+      action=f"python3 {generator}",
+    )
+  else:
+    print("[fonts] 字体图集已随仓库分发，跳过烘焙（如需重建请用 scons --bake-fonts）")
+
+
+if GetOption('extras') and arch == "larch64":
+  # build installers
+  raylib_env = env.Clone()
+  raylib_env['LIBPATH'] += [f'#third_party/raylib/{arch}/']
+  raylib_env['LINKFLAGS'].append('-Wl,-strip-debug')
+
+  raylib_libs = common + ["raylib"]
+  if arch == "larch64":
+    raylib_libs += ["GLESv2", "EGL", "gbm", "drm"]
+  else:
+    raylib_libs += ["GL"]
+
+  release = "release3"
+  installers = [
+    ("openpilot", release),
+    ("openpilot_test", f"{release}-staging"),
+    ("openpilot_nightly", "nightly"),
+    ("openpilot_internal", "nightly-dev"),
+  ]
+
+  cont = raylib_env.Command("installer/continue_openpilot.o", "installer/continue_openpilot.sh",
+                            "ld -r -b binary -o $TARGET $SOURCE")
+  inter = raylib_env.Command("installer/inter_ttf.o", "installer/inter-ascii.ttf",
+                             "ld -r -b binary -o $TARGET $SOURCE")
+  inter_bold = raylib_env.Command("installer/inter_bold.o", "../assets/fonts/Inter-Bold.ttf",
+                              "ld -r -b binary -o $TARGET $SOURCE")
+  inter_light = raylib_env.Command("installer/inter_light.o", "../assets/fonts/Inter-Light.ttf",
+                              "ld -r -b binary -o $TARGET $SOURCE")
+  for name, branch in installers:
+    d = {'BRANCH': f"'\"{branch}\"'"}
+    if "internal" in name:
+      d['INTERNAL'] = "1"
+
+    obj = raylib_env.Object(f"installer/installers/installer_{name}.o", ["installer/installer.cc"], CPPDEFINES=d)
+    f = raylib_env.Program(f"installer/installers/installer_{name}", [obj, cont, inter, inter_bold, inter_light], LIBS=raylib_libs)
+    # keep installers small
+    assert f[0].get_size() < 2500*1e3, f[0].get_size()
