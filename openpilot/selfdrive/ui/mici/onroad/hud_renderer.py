@@ -358,42 +358,10 @@ class HudRenderer(Widget):
       "ready": rl.Color(255, 255, 255, 210),
     }[state]
     # carrot card pinned to the bottom-right corner
-    margin = 10
-    card_w, card_h = 156, 54
-    card_x = rect.x + rect.width - card_w - margin
-    card_y = rect.y + rect.height - card_h - margin
-    card = rl.Rectangle(int(card_x), int(card_y), card_w, card_h)
-    rl.draw_rectangle_rounded(card, 0.35, 12, rl.Color(0, 0, 0, 160))
-    rl.draw_rectangle_rounded_lines_ex(card, 0.35, 12, 2, color)
-
+    # 副标题先算出来，卡片宽度才能按最长文字自适应，长文案不会被裁掉
     frac, lines, pcolor = progress_info()
     pct = next((ln for ln in lines if "%" in ln), None)
     reboot = lines == ["REBOOT"]
-
-    # carrot on the left side of the card
-    cx, cy = int(card_x + 30), int(card_y + card_h / 2 - 1)
-    r = 18
-    rl.draw_circle(cx, cy, r, rl.Color(31, 42, 31, 255))
-    rl.draw_circle_lines(cx, cy, r, rl.Color(76, 175, 80, 255))
-    if pct is not None and frac > 0:
-      ring_color = pcolor if pcolor is not None else rl.Color(255, 255, 0, 230)
-      rl.draw_ring(rl.Vector2(cx, cy), r - 4, r, -90.0, -90.0 + 360.0 * frac, 48, ring_color)
-    orange = rl.Color(239, 125, 35, 255)
-    dark_orange = rl.Color(200, 90, 18, 255)
-    top_y, bot_y = cy - 14, cy + 15
-    rl.draw_triangle(rl.Vector2(cx - 9, top_y), rl.Vector2(cx + 9, top_y), rl.Vector2(cx, bot_y), orange)
-    rl.draw_circle(cx, top_y, 9, orange)
-    rl.draw_circle(cx, bot_y, 2, orange)
-    leaf, leaf2 = rl.Color(76, 175, 80, 255), rl.Color(93, 196, 89, 255)
-    rl.draw_ellipse(cx - 6, top_y - 3, 3, 8, leaf)
-    rl.draw_ellipse(cx, top_y - 6, 3, 9, leaf2)
-    rl.draw_ellipse(cx + 6, top_y - 3, 3, 8, leaf)
-    rl.draw_line(cx - 6, cy - 2, cx + 6, cy - 2, dark_orange)
-    rl.draw_line(cx - 5, cy + 5, cx + 5, cy + 5, dark_orange)
-
-    # text on the right side of the card
-    tx = card_x + 54
-    rl.draw_text_ex(font, text, rl.Vector2(tx, card_y + 9), 16, 0, color)
     if pct is not None:
       sub = f"下载 {pct}"
     elif reboot:
@@ -403,7 +371,57 @@ class HudRenderer(Widget):
         "active": "已连接", "loading": "加载中", "error": "错误",
         "compile_pending": "待重启", "not_compiled": "待编译", "ready": "就绪",
       }.get(state, "")
-    rl.draw_text_ex(font, sub, rl.Vector2(tx, card_y + 33), 12, 0, color)
+
+    # 2 倍等比放大：原版 156x54 / 主字18 / 副字13 -> 312x108 / 36 / 26
+    # 造型、配色、右下角位置不变；宽度按最长文字自适应，长文案不裁字
+    main_size, sub_size = 36, 26
+    icon_box, pad_right = 108, 40
+    text_w = max(measure_text_cached(font, text, main_size).x,
+                 measure_text_cached(font, sub, sub_size).x)
+    card_w = max(312, icon_box + text_w + pad_right)
+    card_h = 108
+    margin = 20
+    card_x = rect.x + rect.width - card_w - margin
+    card_y = rect.y + rect.height - card_h - margin
+    card = rl.Rectangle(int(card_x), int(card_y), card_w, card_h)
+    rl.draw_rectangle_rounded(card, 0.35, 24, rl.Color(0, 0, 0, 160))
+    rl.draw_rectangle_rounded_lines_ex(card, 0.35, 24, 6, color)
+
+    # carrot on the left side of the card
+    cx, cy = int(card_x + 60), int(card_y + card_h / 2 - 2)
+    r = 36
+    rl.draw_circle(cx, cy, r, rl.Color(31, 42, 31, 255))
+    rl.draw_circle_lines(cx, cy, r, rl.Color(76, 175, 80, 255))
+    if pct is not None and frac > 0:
+      ring_color = pcolor if pcolor is not None else rl.Color(255, 255, 0, 230)
+      rl.draw_ring(rl.Vector2(cx, cy), r - 8, r, -90.0, -90.0 + 360.0 * frac, 48, ring_color)
+    orange = rl.Color(239, 125, 35, 255)
+    dark_orange = rl.Color(215, 105, 25, 255)
+    top_y = cy - 28
+    # ② 一体胖椭圆：一根竖椭圆当身体 + 顶圆，没有额外的底圆。
+    # 轮廓一笔到底，任何角度都不会读成「下面接了个球」；全是正面图元，
+    # 也彻底避开背面剔除的坑（amapnavi 箭头画完不会恢复剔除）。
+    try:
+      rl.rl_disable_backface_culling()
+    except Exception:
+      pass
+    rl.draw_ellipse(cx, cy + 1, 19, 30, orange)
+    rl.draw_circle(cx, top_y + 2, 19, orange)
+    leaf, leaf2 = rl.Color(76, 175, 80, 255), rl.Color(93, 196, 89, 255)
+    rl.draw_ellipse(cx - 12, top_y - 6, 6, 16, leaf)
+    rl.draw_ellipse(cx, top_y - 12, 6, 18, leaf2)
+    rl.draw_ellipse(cx + 12, top_y - 6, 6, 16, leaf)
+    rl.draw_rectangle_rounded(rl.Rectangle(cx - 12, cy - 8, 24, 4), 0.5, 8, dark_orange)
+    rl.draw_rectangle_rounded(rl.Rectangle(cx - 10, cy + 8, 20, 4), 0.5, 8, dark_orange)
+    try:
+      rl.rl_enable_backface_culling()
+    except Exception:
+      pass
+
+    # text on the right side of the card
+    tx = card_x + icon_box
+    rl.draw_text_ex(font, text, rl.Vector2(tx, card_y + 18), main_size, 0, color)
+    rl.draw_text_ex(font, sub, rl.Vector2(tx, card_y + 66), sub_size, 0, color)
 
   def _update_cruise_speed_animation(self, cruise_text: str) -> None:
     if self._cruise_speed_text_last == cruise_text:
