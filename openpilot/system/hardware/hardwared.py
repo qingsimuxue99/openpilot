@@ -170,7 +170,16 @@ class _CarParamsCache:
       self.is_tesla = False
 
 
+DEVICE_MODE_FILE = "/data/carrot_state/device_mode"
+
+
 def hardware_thread(end_event, hw_queue) -> None:
+  # 设置模式只在本次开机有效；进程启动即复位为「上线」，与旧版 device_go_off_road
+  # 的 CLEAR_ON_MANAGER_START 行为一致，避免开机后车控不启动。
+  try:
+    os.remove(DEVICE_MODE_FILE)
+  except OSError:
+    pass
   pm = messaging.PubMaster(['deviceState'])
   sm = messaging.SubMaster(["peripheralState", "gpsLocationExternal", "selfdriveState", "pandaStates"], poll="pandaStates")
 
@@ -342,7 +351,13 @@ def hardware_thread(end_event, hw_queue) -> None:
       startup_conditions["registered_device"] = True #PC or (params.get("DongleId") != UNREGISTERED_DONGLE_ID)
 
     # Handle offroad/onroad transition
-    should_start = all(onroad_conditions.values())
+    # 设置模式（UI 开关）临时断开与原车连通：不进入 onroad，隐藏的设置项随之显示
+    try:
+      with open(DEVICE_MODE_FILE, "r") as f:
+        device_setup_mode = f.read().strip() == "setup"
+    except OSError:
+      device_setup_mode = False
+    should_start = (not device_setup_mode) and all(onroad_conditions.values())
     if started_ts is None:
       should_start = should_start and all(startup_conditions.values())
 

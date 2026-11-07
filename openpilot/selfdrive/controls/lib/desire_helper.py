@@ -6,7 +6,10 @@ from openpilot.common.constants import CV
 from openpilot.common.realtime import DT_MDL
 from openpilot.common.params import Params
 from openpilot.selfdrive.carrot.bluetooth.model import CommandReader, RUNTIME, read_json
+from openpilot.selfdrive.carrot.bluetooth.physical import HOLD_PATH
 from openpilot.selfdrive.controls.lib.desire_lib.boundary_indicator import BoundaryIndicator
+from openpilot.selfdrive.controls.lib.desire_lib.indicator_observer import ModelIndicator
+from openpilot.selfdrive.controls.lib.desire_lib.assistant_lane import AssistantLane
 
 from openpilot.selfdrive.controls.lib.desire_lib.constants import (
   LaneChangeState, LaneChangeDirection, TurnDirection,
@@ -32,7 +35,12 @@ class DesireHelper:
     self.boundary_indicator_enabled = False
     self.boundary_indicator = BoundaryIndicator(
       read_json(RUNTIME/'boundary-indicator.json', {}) if boundary_indicator_supported else None)
+    self.model_indicator = ModelIndicator()
+    self.model_desire_indicator_enabled = False
+    self.model_path_indicator_enabled = False
+    self.indicator_journal_time = 0.
     self.bluetooth_commands = CommandReader('lane')
+    self.assistant_lane = AssistantLane()
     self.frame = 0
 
     # FSM core
@@ -124,6 +132,18 @@ class DesireHelper:
     if self.boundary_indicator_supported and (self.frame == 1 or self.frame % 20 == 0):
       self.boundary_indicator_enabled = (self.params.get_bool("ManualLaneChangeIndicator") and
         self.params.get_int("AutoBlinkerControl") in (1, 2) and not self.params.get_bool("CanfdBlinkerControl"))
+      lamp_mode = self.params.get_int("AutoBlinkerControl") in (1, 2) and not self.params.get_bool("CanfdBlinkerControl")
+      self.model_desire_indicator_enabled = lamp_mode and self.params.get_bool("ModelDesireIndicator")
+      self.model_path_indicator_enabled = lamp_mode and self.params.get_bool("ModelPathIndicator")
+      # Low-speed TBT source waits for this ownership acknowledgement BEFORE
+      # sending a lamp-only command. Also restores masks after process restart.
+      journal = read_json(RUNTIME/'boundary-indicator.json', {})
+      stamp, direction = journal.get('time'), journal.get('mask', journal.get('direction'))
+      now = time.monotonic()
+      if (type(stamp) in (int, float) and math.isfinite(stamp) and self.indicator_journal_time < stamp <= now and
+          now-stamp < 20 and type(direction) is int and direction in (1, 2, 3)):
+        self.boundary_indicator.own(now, direction)
+        self.indicator_journal_time = stamp
     if self.frame % 100 == 0:
       self.laneChangeNeedTorque = self.params.get_int("LaneChangeNeedTorque")
       self.laneChangeBsd = self.params.get_int("LaneChangeBsd")
@@ -358,15 +378,25 @@ class DesireHelper:
   # ─────────────────────────────────────────────
   # main update
   # ─────────────────────────────────────────────
-  def update(self, carstate, modeldata, lateral_active, lane_change_prob, carrotMan, radarState, *, indicator_valid=False):
+  def update(self, carstate, modeldata, lateral_active, lane_change_prob, carrotMan, radarState, *, indicator_valid=False, indicator_curvature=None,
+             assistant_valid=False):
     self.frame += 1
     self._update_params_periodic()
     if self.boundary_indicator_supported:
-      self.boundary_indicator.update(time.monotonic(), carstate, modeldata,
+      indicator_now = time.monotonic()
+      self.boundary_indicator.update(indicator_now, carstate, modeldata,
         enabled=self.boundary_indicator_enabled, valid=indicator_valid,
         # Navigation preparation is not driver intent. Reserve only an executing
         # lane-change maneuver; model desire probabilities also predict manual moves.
         busy=self.lane_change_state in (LaneChangeState.laneChangeStarting, LaneChangeState.laneChangeFinishing))
+      if self.model_indicator.active and self.model_indicator.active.source == 'manual' and not self.boundary_indicator_enabled:
+        self.model_indicator.active = None
+      self.model_indicator.update(indicator_now, carstate, modeldata,
+        valid=indicator_valid, lateral_active=lateral_active,
+        desire_enabled=self.model_desire_indicator_enabled, path_enabled=self.model_path_indicator_enabled,
+        busy=self.lane_change_state in (LaneChangeState.laneChangeStarting, LaneChangeState.laneChangeFinishing),
+        isolation=self.boundary_indicator, manual_edge=self.boundary_indicator.request_direction, command_curvature=indicator_curvature,
+        feedback=read_json(HOLD_PATH, {}) if self.model_indicator.active else None)
 
     # counts
     self.carrot_lane_change_count = max(0, self.carrot_lane_change_count - 1)
@@ -404,6 +434,42 @@ class DesireHelper:
       driver_enabled = driver_changed = False  # one-touch request timed out: ignore the lamp until it goes dark
     remote = self.bluetooth_commands.read(allowed=(lateral_active and carstate.canValid and
       not below_lane_change_speed and not trailer_maneuver_blocked))
+    # Separate authenticated voice intent; never synthesize physical remote events,
+    # steering torque or turn-signal acknowledgement. All normal FSM gates remain.
+    assistant_direction = None
+    try:
+      voice_side = self.assistant_lane.active.get('direction') if self.assistant_lane.active else None
+      opposite_torque = carstate.steeringPressed and ((voice_side == 'left' and carstate.steeringTorque < 0) or
+                                                     (voice_side == 'right' and carstate.steeringTorque > 0))
+      assistant_state = {
+        'valid': assistant_valid and carstate.canValid and not getattr(carstate, 'vehicleSensorsInvalid', True),
+        'lateral_active': lateral_active, 'drive': str(getattr(carstate, 'gearShifter', '')) == 'drive',
+        'trailer': trailer_maneuver_blocked, 'speed': v_ego,
+        'phase': {LaneChangeState.off: 'off', LaneChangeState.preLaneChange: 'preLaneChange',
+                  LaneChangeState.laneChangeStarting: 'laneChangeStarting', LaneChangeState.laneChangeFinishing: 'laneChangeFinishing'
+                  }.get(self.lane_change_state, 'unknown'),
+        'driver_busy': bool(driver_enabled or stalk_press or opposite_torque),
+        'driver_override': bool(stalk_press or opposite_torque),
+        'other_request': bool(remote or self.desire_disable_count or self.turn_desire_state or self.turn_direction != TurnDirection.none or
+                              carrotMan.atcType not in ('', 'none', 'none prepare', 'straight', 'straight prepare') or
+                              (carrotMan.carrotCmd == 'LANECHANGE' and carrotMan.carrotCmdIndex != self.carrot_cmd_index_last)),
+      }
+      for side_name, side_value in (('left', self.left), ('right', self.right)):
+        assistant_state[side_name] = {'available': side_value.lane_change_available and side_value.lane_change_available_geom,
+                                     'blindspot': bool(getattr(carstate, side_name + 'Blindspot', True) or side_value.bsd_hold_counter or
+                                                      side_value.side_object_detected)}
+      assistant_direction, cancel_voice = self.assistant_lane.before(assistant_state)
+      if cancel_voice:
+        self.carrot_lane_change_count = 0
+        self._auto_app_direction = BLINKER_NONE
+        if self.lane_change_state == LaneChangeState.preLaneChange:
+          self.lane_change_state = LaneChangeState.off
+          self.lane_change_direction = LaneChangeDirection.none
+      if assistant_direction:
+        remote = 'laneLeft' if assistant_direction == 'left' else 'laneRight'
+    except (OSError, ValueError, TypeError, KeyError):
+      # A failed intent/status channel cannot take down the model loop.
+      assistant_direction = None
     if self.tesla_auto_signals:
       self._update_auto_app_request(carstate, lateral_active, carrotMan, remote, driver_st, stalk_press)
     atc_st, atc_enabled = self._update_atc_blinker(carrotMan, driver_st, remote)
@@ -494,6 +560,15 @@ class DesireHelper:
         new_type = "none"
       if self.tesla_auto_signals and self._auto_app_direction:
         new_type = "lane_change"
+      if self.assistant_lane.active and not self.assistant_lane.active['began'] and new_type != 'lane_change':
+        try:
+          self.assistant_lane.publish('rejected', 'not_a_lane_change')
+        except OSError:
+          pass
+        self.carrot_lane_change_count = 0
+        self._auto_app_direction = BLINKER_NONE
+        desire_enabled = False
+        new_type = 'none'
 
       # BlinkerLatchedTurn: the driver's lever replaces the speed/lane-line guess (see lever_maneuver).
       lever_type, lever_undecided = (None, False)
@@ -698,6 +773,15 @@ class DesireHelper:
       self._update_auto_signal(carstate, modeldata, carrotMan, lateral_active, atc_enabled, atc_st, driver_st, prev_lane_change_state)
     if self.tesla_auto_signals and (self.lane_change_state == LaneChangeState.off or self._auto_lane_completed):
       self._auto_app_direction = BLINKER_NONE
+
+    try:
+      phase = {LaneChangeState.off: 'off', LaneChangeState.preLaneChange: 'preLaneChange',
+               LaneChangeState.laneChangeStarting: 'laneChangeStarting', LaneChangeState.laneChangeFinishing: 'laneChangeFinishing'
+               }.get(self.lane_change_state, 'unknown')
+      direction = {LaneChangeDirection.left: 'left', LaneChangeDirection.right: 'right'}.get(self.lane_change_direction, 'none')
+      self.assistant_lane.after(phase, direction, crossed=self.crossing.since >= 0)
+    except (OSError, ValueError, TypeError, KeyError):
+      pass  # Missing feedback is not completion; the caller must report unknown.
 
     # keep pulse
     if self.lane_change_state in (LaneChangeState.off, LaneChangeState.laneChangeStarting):

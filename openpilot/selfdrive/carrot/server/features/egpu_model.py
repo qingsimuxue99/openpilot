@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import suppress
 from typing import Any
 
@@ -11,6 +12,7 @@ from openpilot.common.egpu_recovery_status import read_status as read_egpu_recov
 from openpilot.selfdrive.modeld.big_model import active_manifest, active_model_compiled, active_model_path, model_cache_dir
 from openpilot.selfdrive.modeld.big_model_status import read_big_model_status, write_big_model_status
 from openpilot.selfdrive.modeld.egpu_worker_progress import current_failure, saved_failure
+from openpilot.selfdrive.modeld.egpu_rejection import rejection_status, request_retry
 
 from ..services.params import HAS_PARAMS, Params
 
@@ -22,6 +24,36 @@ def _params_bool(params: Any, key: str) -> bool:
     return False
 
 
+def _downloader_alive() -> bool:
+  """Is the background big-model downloader running?
+
+  Lets the picker tell "the device has not started the transfer yet" apart from
+  "status.json still describes the previously downloaded model".
+  """
+  try:
+    for entry in os.listdir('/proc'):
+      if not entry.isdigit():
+        continue
+      try:
+        with open(f'/proc/{entry}/cmdline', 'rb') as handle:
+          cmdline = handle.read().decode('utf-8', 'replace')
+      except OSError:
+        continue
+      if 'openpilot.selfdrive.modeld.big_model' in cmdline and '--ensure-if-egpu' in cmdline:
+        return True
+  except OSError:
+    pass
+  return False
+
+
+def _selected_sha_safe() -> str | None:
+  try:
+    from openpilot.selfdrive.modeld import model_catalog
+    return model_catalog.selected_sha()
+  except Exception:
+    return None
+
+
 def build_status_payload(params: Any | None = None) -> dict[str, Any]:
   params = params if params is not None else (Params() if HAS_PARAMS and Params is not None else None)
   hardware_seen = _params_bool(params, "UsbGpuHardwareSeen") if params is not None else False
@@ -31,7 +63,10 @@ def build_status_payload(params: Any | None = None) -> dict[str, Any]:
     # genuinely nothing to report. Any downloader activity (including a forced
     # web-UI download without the eGPU attached) makes the status visible so the
     # page can show transfer progress instead of a generic waiting hint.
-    return {"ok": True, "available": False}
+    from openpilot.selfdrive.modeld import model_catalog
+    return {"ok": True, "available": False,
+            "selected_sha": _selected_sha_safe(),
+            "downloader_running": _downloader_alive()}
 
   manifest = active_manifest()
   # Status describes the model being updated; active_manifest can still refer
@@ -59,6 +94,7 @@ def build_status_payload(params: Any | None = None) -> dict[str, Any]:
   active = (_params_bool(params, "UsbGpuActive") and not _params_bool(params, "UsbGpuLoading")) if params is not None else False
   error_code, detail = status.get('error_code'), status.get('detail')
   blocked = manifest is not None and (model_cache_dir() / 'precompiled' / manifest.sha256 / 'rejected').exists()
+  rejection = rejection_status(model_cache_dir() / 'precompiled' / manifest.sha256) if same_model else {'blocked': False}
   if params is not None and _params_bool(params, 'UsbGpuStartupFailed') and not active:
     failure = current_failure(model_cache_dir(), manifest.sha256) if manifest else {}
     state, error_code = 'error', failure.get('error_code', 'runtime')
@@ -73,12 +109,25 @@ def build_status_payload(params: Any | None = None) -> dict[str, Any]:
   elif recovery.get('state') == 'stopped':
     state, error_code, detail = 'recovery_stopped', None, None
 
+  if blocked and same_model and not active:
+    compiled = False
+    state, error_code = 'error', 'rejected'
+    detail = rejection.get('error')
+  rejection['can_request'] = bool(rejection.get('can_request') and same_model and not active and not engaged and
+                                 params is not None and _params_bool(params, 'IsOffroad') and
+                                 not _params_bool(params, 'IsOnroad') and not _params_bool(params, 'UsbGpuLoading') and
+                                 phase not in {'checking', 'downloading', 'verifying', 'compiling', 'installing', 'waiting_for_network'} and
+                                 recovery.get('state') not in {'waiting', 'recovering', 'ready'})
+
   from openpilot.common.big_model_catalog import catalog
+  picked_sha = _selected_sha_safe()
   displayed_sha = status.get('sha256') if status else (manifest.sha256 if manifest is not None else None)
   entry = next((row for row in catalog().values() if row['egpu']['sha256'] == displayed_sha), None)
   return {
     "ok": True,
     "available": True,
+    "selected_sha": picked_sha,
+    "downloader_running": _downloader_alive(),
     "display_name": entry['name'] if entry else None,
     "state": state,
     "model_id": status.get("model_id") if status else (manifest.model_id if manifest is not None else None),
@@ -92,6 +141,7 @@ def build_status_payload(params: Any | None = None) -> dict[str, Any]:
     "retry_in_seconds": status.get("retry_in_seconds", 0),
     "active": active,
     "recovery": recovery,
+    "rejection": rejection,
     "started_at": status.get("started_at"),
     "updated_at": status.get("updated_at"),
     "compiled": compiled,
@@ -116,6 +166,27 @@ async def api_diagnostics(_request: web.Request) -> web.Response:
   return web.json_response({'model_id': manifest.model_id, 'sha256': manifest.sha256, 'failure': failure},
                            headers={'Cache-Control': 'no-store',
                                     'Content-Disposition': 'attachment; filename="egpu-diagnostics.json"'})
+
+
+async def api_retry_verification(request: web.Request) -> web.Response:
+  """Queue verification after reboot; do not unblock a running session."""
+  if not HAS_PARAMS or Params is None:
+    return web.json_response({'ok': False, 'error': 'params unavailable'}, status=503)
+  try:
+    body = await request.json()
+    manifest = active_manifest()
+    if not isinstance(body, dict) or set(body) != {'sha256'} or manifest is None or body['sha256'] != manifest.sha256:
+      raise ValueError('model changed; refresh before requesting verification')
+    params = Params()
+    status = build_status_payload(params)
+    if not status.get('rejection', {}).get('can_request'):
+      raise ValueError('turn ignition off and wait for offroad; matching blocked-model diagnostics are required')
+    # No await between the fresh gate and the small request write. The actual
+    # rejection is retained even if ignition changes immediately afterwards.
+    request_retry(model_cache_dir() / 'precompiled' / manifest.sha256)
+    return web.json_response({'ok': True, 'reboot_required': True})
+  except (OSError, ValueError, KeyError, TypeError) as exc:
+    return web.json_response({'ok': False, 'error': str(exc)}, status=409)
 
 
 async def api_compile_restart(_request: web.Request) -> web.Response:
@@ -157,6 +228,16 @@ async def api_library(request: web.Request) -> web.Response:
     if action != 'select' or not isinstance(key, str) or key not in catalog.available():
       raise ValueError('unknown model action')
     await asyncio.to_thread(catalog.select, key)
+    # Keep the eGPU picker's index in step: its "selected" badge and its reboot
+    # banner read that field, so a pick made here otherwise left the other page
+    # claiming a different model was waiting for a restart.
+    try:
+      sha = catalog.catalog()[key]['egpu']['sha256']
+    except (KeyError, TypeError):
+      sha = None
+    if isinstance(sha, str):
+      from openpilot.selfdrive.modeld import model_catalog
+      await asyncio.to_thread(model_catalog.select, sha)
     return web.json_response({'ok': True, 'library': await asyncio.to_thread(library.status)})
   except (ValueError, OSError) as exc:
     return web.json_response({'ok': False, 'error': str(exc)}, status=409)
@@ -191,4 +272,5 @@ def register(app: web.Application) -> None:
   app.router.add_get("/api/egpu/model", api_status)
   app.router.add_post("/api/egpu/model/library", api_library)
   app.router.add_get("/api/egpu/model/diagnostics", api_diagnostics)
+  app.router.add_post("/api/egpu/model/retry-verification", api_retry_verification)
   app.router.add_post("/api/egpu/model/compile-restart", api_compile_restart)

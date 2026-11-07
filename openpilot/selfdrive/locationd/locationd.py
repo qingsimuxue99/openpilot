@@ -35,6 +35,10 @@ CAM_ODO_ROT_STD_MULT = 10
 CAM_ODO_TRANS_STD_MULT = 4
 INVALID_PRINT_INTERVAL = 1.0
 
+# eGPU 大模型偶发跳过单个相机帧时，modeld 会把该帧 cameraOdometry.valid 置 False，
+# 下一帧即恢复。仅凭这一瞬时标志就要求接管属于误报；只有持续无效才算真故障。
+TRANSIENT_INVALID_MAX_AGE = 0.5  # s
+
 
 def calculate_invalid_input_decay(invalid_limit, recovery_time, frequency):
   return (1 - 1 / (2 * invalid_limit)) ** (1 / (recovery_time * frequency))
@@ -342,6 +346,7 @@ def main():
   observation_input_invalid = defaultdict(int)
   last_input_invalid_reason = {}
   last_invalid_print_time = 0.0
+  invalid_since = {"cameraOdometry": None, "liveCalibration": None}
 
   input_invalid_limit = {s: round(INPUT_INVALID_LIMIT * (SERVICE_LIST[s].frequency / 20.)) for s in critcal_services}
   input_invalid_threshold = {s: input_invalid_limit[s] - 0.5 for s in critcal_services}
@@ -393,7 +398,17 @@ def main():
 
     if sm.updated["cameraOdometry"]:
       critical_service_inputs_valid = all(observation_input_invalid[s] < input_invalid_threshold[s] for s in critcal_services)
-      inputs_valid = sm.all_valid() and critical_service_inputs_valid
+      now = time.monotonic()
+      for s_ in ("cameraOdometry", "liveCalibration"):
+        if not sm.valid[s_]:
+          if invalid_since[s_] is None:
+            invalid_since[s_] = now
+        else:
+          invalid_since[s_] = None
+      transient_ok = all(invalid_since[s_] is None or
+                         (now - invalid_since[s_]) < TRANSIENT_INVALID_MAX_AGE
+                         for s_ in ("cameraOdometry", "liveCalibration"))
+      inputs_valid = sm.valid["carState"] and transient_ok and critical_service_inputs_valid
       sensors_valid = sensor_all_checks(acc_msgs, gyro_msgs, sensor_valid, sensor_recv_time, sensor_alive, SIMULATION)
       input_invalid_reasons = live_pose_inputs_invalid_reasons(sm, critcal_services, observation_input_invalid, input_invalid_threshold, last_input_invalid_reason)
       sensor_invalid_reasons = live_pose_sensors_invalid_reasons(sensor_alive, sensor_valid, sensor_recv_time, SIMULATION)

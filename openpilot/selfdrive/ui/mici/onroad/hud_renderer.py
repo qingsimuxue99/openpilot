@@ -306,6 +306,10 @@ class HudRenderer(Widget):
     self._overlay.draw(rect, self._paint, key, enabled=state is not None and state.enabled,
                        urgent=state is not None and state.urgent)
     self._draw_cruise_speed_animation(rect)
+    from openpilot.common.indicator_display import draw as draw_indicator
+    badge_width = min(500, rect.width * .62)
+    draw_indicator(rect.x + (rect.width-badge_width)/2, rect.y+rect.height*.16,
+                   badge_width, self._font_display, 26 if rect.width > 1200 else 19)
 
   def _paint(self, rect: rl.Rectangle) -> None:
 
@@ -493,7 +497,8 @@ class HudRenderer(Widget):
     pos_y = int(rect.y + margin_y + wheel_txt.height / 2 + self._wheel_y_filter.x)
 
     self._draw_steering_wheel_icon(wheel_txt, pos_x, pos_y)
-    self._draw_wheel_side_info(wheel_txt, pos_x, pos_y)
+    # Reserve the right status column (128px link badge plus an 8px gap).
+    self._draw_wheel_side_info(wheel_txt, pos_x, pos_y, info_right=rect.x + rect.width - 24 - 128 - 8)
 
 
   def _draw_steering_wheel_icon(self, wheel_txt, pos_x: int, pos_y: int) -> None:
@@ -559,7 +564,7 @@ class HudRenderer(Widget):
     return "CPU: --"
 
 
-  def _draw_wheel_side_info(self, wheel_txt, pos_x: int, pos_y: int) -> None:
+  def _draw_wheel_side_info(self, wheel_txt, pos_x: int, pos_y: int, info_right=None) -> None:
     now = datetime.now()
 
     try:
@@ -686,7 +691,7 @@ class HudRenderer(Widget):
     if show_debug_ui == 0:
       return
 
-    info_x = time_block_right + 25
+    info_x = time_block_right + 12
 
     cpu_text = self._get_cpu_temp_text()
 
@@ -703,9 +708,25 @@ class HudRenderer(Widget):
     except Exception:
       road_name = ""
 
-    cpu_size = measure_text_cached(self._font_medium, cpu_text, side_font)
-    sr_size = measure_text_cached(self._font_medium, sr_text, side_font)
-    road_size = measure_text_cached(self._font_medium, road_name, side_font) if road_name else rl.Vector2(0, 0)
+    if info_right is not None:
+      available = info_right - info_x
+      if available < 30:
+        return
+      while side_font > 12 and max(measure_text_cached(self._font_display, text, side_font).x for text in (cpu_text, sr_text)) > available:
+        side_font -= 1
+
+      def fit(text):
+        if measure_text_cached(self._font_display, text, side_font).x <= available:
+          return text
+        while text and measure_text_cached(self._font_display, text + '…', side_font).x > available:
+          text = text[:-1]
+        return text + '…' if text else ''
+
+      cpu_text, sr_text, road_name = (fit(text) for text in (cpu_text, sr_text, road_name))
+
+    cpu_size = measure_text_cached(self._font_display, cpu_text, side_font)
+    sr_size = measure_text_cached(self._font_display, sr_text, side_font)
+    road_size = measure_text_cached(self._font_display, road_name, side_font) if road_name else rl.Vector2(0, 0)
 
     line_gap = max(4, int(side_font * 0.15))
 

@@ -260,6 +260,16 @@ def fetch_after_onnx(manifest, reporter) -> None:
   must not sit on a multi-minute download, and the HUD/web pages get their progress from
   status.json either way.
   """
+  # Repair before any decision below: a power cut right after extracting runtime.tar.gz
+  # leaves a runtime directory that ensure_precompiled() reuses (it only checks existence),
+  # and the rejection that follows would short-circuit the download of a precompiled-only
+  # model on every later boot. The re-extract uses the local tarball, already hash checked.
+  try:
+    from openpilot.selfdrive.modeld.precompiled_repair import repair_installed
+    for action in repair_installed():
+      print(f"precompiled runtime self-heal: {action}", file=sys.stderr)
+  except Exception as exc:
+    print(f"precompiled runtime check skipped: {exc}", file=sys.stderr)
   source = "auto"
   fetched_chunked = False
   newly_installed = False
@@ -354,6 +364,15 @@ def fetch_after_onnx(manifest, reporter) -> None:
       raise OSError('precompiled artifact is rejected on this device')
     # The runtime is extracted by now; teach it where the firmware lives.
     patch_runtime_firmware_paths(manifest)
+    # Persist the extraction and the patch above, then mark the directory complete: the
+    # files are written into the page cache and nothing fsyncs them, which is how a power
+    # cut turns them into zero-byte files that look installed. Best effort only.
+    try:
+      from openpilot.selfdrive.modeld.precompiled_repair import flush_installed
+      if installed is not None:
+        flush_installed(installed)
+    except Exception as exc:
+      print(f"precompiled runtime flush skipped: {exc}", file=sys.stderr)
     # A reboot is only needed when something actually landed in this run: this code runs on
     # every boot, and touching the flag unconditionally left the "REBOOT" prompt on screen
     # until the next power cycle even though this boot installed nothing. The chunked path

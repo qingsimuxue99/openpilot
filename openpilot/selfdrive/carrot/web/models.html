@@ -431,7 +431,7 @@
   // The one place that says what the selected model still needs. It lives outside #banners
   // because that container is wiped on every list refresh (20 s), which used to make a
   // "ready - restart now" message vanish before it could be clicked.
-  function renderSelectedHint(status) {
+  function renderSelectedHint(status, meta) {
     const host = $("readyHint");
     if (!host) return;
     const model = selectedModel();
@@ -444,7 +444,13 @@
     const ready = deliveryReady(model);
     const phase = (status || {}).state || "";
     const detail = (status || {}).detail || "";
-    const sig = [model.sha256, ready, phase, detail, state.usbgpu.loading].join("|");
+    // status.json can still describe the *previous* model: the downloader only writes
+    // the new sha once the transfer starts. Never let that stale state pose as the
+    // selected model's progress or as a generic "waiting for the device" hint.
+    const matched = !!(meta && meta.matched);
+    const downloaderRunning = !!(meta && meta.downloaderRunning);
+    const sig = [model.sha256, ready, phase, detail, state.usbgpu.loading,
+                 matched, downloaderRunning].join("|");
     if (host.dataset.sig === sig) return;
     host.dataset.sig = sig;
     host.innerHTML = "";
@@ -471,8 +477,17 @@
       action.textContent = "立即重启";
       action.addEventListener("click", () => rebootNow(model, action));
     } else if (phase === "error") {
+      // A real failure wins over the stale-state hint: some error paths carry no
+      // sha256, and matching first would hide the actual reason behind "not started".
       wrap.className = "banner err";
       wrap.textContent = `“${model.label}”下载失败：${detail || "原因未知"}`;
+      action.textContent = "重新下载";
+      action.addEventListener("click", () => retryDownload(model, action));
+    } else if (!matched) {
+      wrap.className = downloaderRunning ? "banner warn" : "banner";
+      wrap.textContent = downloaderRunning
+        ? `已选择「${model.label}」，下载器已启动，正在准备传输…（当前状态仍属于上一个模型）`
+        : `已选择「${model.label}」，设备还没有开始下载；点「重新下载」即可开始。`;
       action.textContent = "重新下载";
       action.addEventListener("click", () => retryDownload(model, action));
     } else {
@@ -522,29 +537,35 @@
     const downloading = status.state === "downloading";
     const verifying = status.state === "verifying";
     state.transferBusy = downloading || verifying;
-    renderSelectedHint(status);
+    // The bar belongs to the *selected* model. Matching on status.sha256 used to paint
+    // 100% on the old card and leave the newly picked one empty with a vague hint.
+    const selSha = state.selected;
+    const matched = !!(selSha && status.sha256 && status.sha256 === selSha);
+    renderSelectedHint(status, { matched, downloaderRunning: !!status.downloader_running });
 
     const justFinished = wasBusy && !state.transferBusy;
-    const sha = status.sha256;
+    const sha = selSha || status.sha256;
     if (!sha) return justFinished;
     const card = document.querySelector(`[data-progress-for="${sha}"]`);
     if (!card) return justFinished;
     const pct = Math.max(0, Math.min(100, Number(status.progress) || 0));
+    // Keep the bar full through verifying/installing instead of snapping back to 0%.
+    const painting = (downloading || verifying || status.state === "installing") && matched;
     const fill = card.querySelector(".progress > i");
     if (fill) {
-      fill.style.width = downloading ? pct + "%"
+      fill.style.width = painting ? pct + "%"
         : (card.dataset.downloaded === "1" ? "100%" : "0%");
     }
     const amount = card.querySelector(".amount");
     if (amount) {
       // Same shape as the settings card: "512.0 MB / 751.2 MB · 66.8%"
-      amount.textContent = downloading && status.total_bytes
+      amount.textContent = (painting && status.total_bytes)
         ? `${fmtBytes(status.downloaded_bytes)} / ${fmtBytes(status.total_bytes)} · ${pct.toFixed(1)}%`
         : "";
     }
     // Live badge so the state is readable without opening the settings page.
     let badge = card.querySelector(".badge.dl");
-    if (downloading || verifying) {
+    if ((downloading || verifying) && matched) {
       if (!badge) {
         badge = document.createElement("span");
         badge.className = "badge dl";

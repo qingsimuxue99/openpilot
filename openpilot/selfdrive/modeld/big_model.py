@@ -152,6 +152,16 @@ def _write_state(active: BigModelManifest, previous: BigModelManifest | None, ca
 
 
 def fetch_manifest(manifest_url: str = DEFAULT_MANIFEST_URL, timeout: float = 15.0) -> BigModelManifest:
+  # fork hook: the web picker stores its choice in models.json, not in the branch's
+  # boot pin. DEFAULT_MANIFEST_URL always equals one of the reviewed catalog URLs
+  # below, so without this early return that loop short-circuits and every new-model
+  # pick silently re-checks the old pinned model. Only the default URL is affected:
+  # explicit --manifest-url / env overrides keep the original behaviour untouched.
+  if manifest_url == DEFAULT_MANIFEST_URL:
+    from openpilot.selfdrive.modeld.model_catalog import selected_manifest
+    if (picked := selected_manifest()) is not None:
+      return picked
+
   # Reviewed catalog pins are resolved without network and stay fixed this boot.
   for entry in big_model_catalog.catalog().values():
     if manifest_url == entry['manifest_url']:

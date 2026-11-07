@@ -6,6 +6,7 @@ from openpilot.selfdrive.ui.layouts.settings.carrot import CarrotLayout
 from openpilot.selfdrive.ui.layouts.settings.developer import DeveloperLayout
 from openpilot.selfdrive.ui.layouts.settings.device import DeviceLayout
 from openpilot.selfdrive.ui.layouts.settings.firehose import FirehoseLayout
+from openpilot.selfdrive.ui.layouts.settings.model import ModelLayout
 from openpilot.selfdrive.ui.layouts.settings.software import SoftwareLayout
 from openpilot.selfdrive.ui.layouts.settings.toggles import TogglesLayout
 from openpilot.selfdrive.ui.layouts.settings.usbgpu import UsbGpuLayout
@@ -42,6 +43,7 @@ class PanelType(IntEnum):
   DEVELOPER = 5
   EGPU = 6
   CARROT = 7
+  MODEL = 8
 
 
 @dataclass
@@ -68,6 +70,7 @@ class SettingsLayout(Widget):
       # 与相邻的「萝卜」一样直接硬编码中文，不走 .po 翻译。
       PanelType.TOGGLES: PanelInfo(tr_noop("设定"), TogglesLayout()),
       PanelType.SOFTWARE: PanelInfo(tr_noop("Software"), SoftwareLayout()),
+      PanelType.MODEL: PanelInfo(tr_noop("模型"), ModelLayout()),
       PanelType.CARROT: PanelInfo(tr_noop("萝卜"), CarrotLayout()),
       # 数据洪流（Firehose）已屏蔽：firehose.py 代码保留不删，仅从侧边栏隐藏该 UI 入口
       # PanelType.FIREHOSE: PanelInfo(tr_noop("Firehose"), FirehoseLayout()),

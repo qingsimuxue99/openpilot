@@ -24,7 +24,10 @@ DESCRIPTIONS = {
   'driver_camera': tr_noop("Preview the driver facing camera to ensure that driver monitoring has good visibility. (vehicle must be off)"),
   'reset_calibration': tr_noop("openpilot requires the device to be mounted within 4° left or right and within 5° up or 9° down."),
   'review_guide': tr_noop("Review the rules, features, and limitations of openpilot"),
+  'device_mode': tr_noop("设置模式：临时断开与原车连通，显示连车时被隐藏的常规设置项；上线模式：恢复原车正常工作。切换约 1 秒生效，重启设备自动回到上线模式。"),
 }
+
+DEVICE_MODE_FILE = "/data/carrot_state/device_mode"
 
 
 class DeviceLayout(Widget):
@@ -53,9 +56,16 @@ class DeviceLayout(Widget):
     self._power_off_btn = dual_button_item(lambda: tr("Reboot"), lambda: tr("Power Off"),
                                            left_callback=self._reboot_prompt, right_callback=self._power_off_prompt)
 
+    self._device_mode_btn = button_item(
+      lambda: tr("上线 / 设置模式"),
+      lambda: tr("进入上线模式") if self._is_setup_mode() else tr("进入设置模式"),
+      lambda: tr(DESCRIPTIONS['device_mode']),
+      callback=self._toggle_device_mode)
+
     items = [
       text_item(lambda: tr("Dongle ID"), self._params.get("DongleId") or (lambda: tr("N/A"))),
       text_item(lambda: tr("Serial"), self._params.get("HardwareSerial") or (lambda: tr("N/A"))),
+      self._device_mode_btn,
       # 已隐藏：配对设备（Pair Device）——下方 self._pair_device_btn 的定义与回调保留，仅从显示列表移除
       self._reset_calib_btn,
       # 已隐藏：车内摄像头（Driver Camera）
@@ -65,6 +75,38 @@ class DeviceLayout(Widget):
       self._power_off_btn,
     ]
     return items
+
+  @staticmethod
+  def _is_setup_mode() -> bool:
+    try:
+      with open(DEVICE_MODE_FILE, "r") as f:
+        return f.read().strip() == "setup"
+    except OSError:
+      return False
+
+  @staticmethod
+  def _set_setup_mode(enabled: bool) -> None:
+    os.makedirs(os.path.dirname(DEVICE_MODE_FILE), exist_ok=True)
+    tmp = DEVICE_MODE_FILE + ".tmp"
+    with open(tmp, "w") as f:
+      f.write("setup" if enabled else "onroad")
+    os.replace(tmp, DEVICE_MODE_FILE)
+
+  def _toggle_device_mode(self):
+    if ui_state.engaged:
+      gui_app.push_widget(alert_dialog(tr("Disengage to switch mode")))
+      return
+
+    target = not self._is_setup_mode()
+    body = (tr("进入设置模式：临时断开与原车连通，用于查看连车时隐藏的设置项。重启后自动恢复上线。")
+            if target else tr("进入上线模式：恢复与原车连通，openpilot 正常工作。"))
+
+    def on_result(result: DialogResult):
+      if result != DialogResult.CONFIRM or ui_state.engaged:
+        return
+      self._set_setup_mode(target)
+
+    gui_app.push_widget(ConfirmDialog(body, tr("CONFIRM"), callback=on_result))
 
   def _offroad_transition(self):
     self._power_off_btn.action_item.right_button.set_visible(ui_state.is_offroad())

@@ -11,7 +11,7 @@ def scene():
           steeringPressed=False, steeringTorque=0., steerFaultTemporary=False, steerFaultPermanent=False,
           tbtRearInputsAvailable=True, tbtRightRearBlocked=False, rightBlindspot=False,
           rightLaneLine=10, leftBlinker=False, rightBlinker=False, aEgo=0.)
-  model = NS(laneLineProbs=[.9]*4, meta=NS(laneChangeAvailableRight=True, laneWidthRight=3.5,
+  model = NS(laneLineProbs=[.9]*4, laneLines=[NS(y=[y]*9) for y in (-5.4,-1.8,1.8,5.4)], roadEdges=[NS(y=[-8.]*9),NS(y=[8.]*9)], meta=NS(laneChangeAvailableRight=True, laneWidthRight=3.5,
              desireState=[0.]*8, laneChangeState='off', laneChangeDirection='none'))
   nav = NS(xTurnInfo=2, xDistToTurn=230., atcType='none', carrotCmdIndex=0, carrotCmd='', carrotArg='')
   return {'cs': cs, 'model': model, 'nav': nav, 'enabled': True, 'valid': True, 'front_clear': True}
@@ -26,7 +26,7 @@ def arm(tbt, s, start=10.):
 @pytest.mark.parametrize('obj,field,value', [
   ('nav','xTurnInfo',1), ('nav','xTurnInfo',3), ('nav','xDistToTurn',323.),
   ('nav','xDistToTurn',0.), ('nav','xDistToTurn',float('nan')),
-  ('cs','vEgo',8.), ('cs','gearShifter','park'), ('cs','canValid',False),
+  ('cs','vEgo',2.5), ('cs','gearShifter','park'), ('cs','canValid',False),
   ('cs','trailerConnected',True), ('cs','steeringPressed',True),
   ('cs','tbtRearInputsAvailable',False), ('cs','tbtRightRearBlocked',True),
   ('cs','rightLaneLine',11), ('cs','rightLaneLine',20),
@@ -185,6 +185,7 @@ def test_real_lamp_feedback_uses_unchanged_desire_path(monkeypatch):
 @pytest.mark.parametrize('ordinary', ['none', 'turn', 'lane'])
 @pytest.mark.parametrize('atc,addon,torque,blocked,expected', [
   (1, True, 0, False, True), (2, True, 0, False, True),
+  (1, 350, 0, False, True), (1, 500, 0, False, True), (1, 501, 0, False, False),
   (1, False, 0, False, False), (2, False, 0, False, False),
   (0, True, 0, False, False), (3, True, 0, False, False), (4, True, 0, False, False),
   (1, True, 1, False, False), (2, True, 0, True, False),
@@ -384,3 +385,24 @@ def test_front_gap_must_stay_clear_during_confirmation_and_waiting():
   assert t.phase == 'cancelled'
   s['front_clear'] = True
   assert arm(t, s, 12.25) is None
+
+
+@pytest.mark.parametrize('limit,distance,expected', [(0,100,False),(250,250,True),(250,251,False),
+  (300,300,True),(300,301,False),(350,325,True),(400,399,True),(400,401,False),(500,499,True),
+  (501,100,False),(-1,100,False),(float('nan'),100,False)])
+def test_configured_distance_window(limit, distance, expected):
+  inputs = scene()
+  inputs['distance_limit'] = limit
+  inputs['nav'].xDistToTurn = distance
+  assert bool(arm(TbtBlinker(), inputs)) == expected
+
+
+def test_live_distance_disable_and_reduction_end_existing_request():
+  for limit in (0, 250):
+    inputs = scene()
+    inputs['distance_limit'] = 400
+    inputs['nav'].xDistToTurn = 350
+    controller = TbtBlinker()
+    assert arm(controller, inputs)
+    inputs['distance_limit'] = limit
+    assert controller.update(11.1, **inputs) is None

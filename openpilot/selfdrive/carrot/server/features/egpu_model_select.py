@@ -306,7 +306,43 @@ def usbgpu_runtime() -> dict[str, Any]:
     return {}
 
 
+def _reviewed_key(sha: str) -> str | None:
+  """The reviewed catalog's key for `sha`, when it lists that model at all."""
+  try:
+    from openpilot.common import big_model_catalog
+    for key, entry in big_model_catalog.catalog().items():
+      if not isinstance(entry, dict):
+        continue
+      egpu = entry.get('egpu')
+      if isinstance(egpu, dict) and egpu.get('sha256') == sha:
+        return key
+  except Exception:
+    return None
+  return None
+
+
+def _align_with_reviewed_catalog() -> None:
+  """Adopt the reviewed catalog's choice once that model is the one running.
+
+  Upstream's External driving model page keeps its own selection file, so a pick
+  made there left `selected` pointing at an older model: this page then announced
+  that older model was "ready, reboot to enable" while modeld ran another one.
+  Only follow the reviewed choice once the boot's active model is that same model,
+  so a switch still downloading here is never overwritten.
+  """
+  try:
+    from openpilot.common import big_model_catalog
+    key = big_model_catalog.effective_id()
+    sha = big_model_catalog.catalog()[key]['egpu']['sha256']
+    if model_catalog.selected_sha() == sha or _active_sha() != sha:
+      return
+    model_catalog.select(sha)
+  except Exception:
+    pass
+
+
 def build_models_payload() -> dict[str, Any]:
+  _align_with_reviewed_catalog()
   local = model_catalog.list_models()
   by_sha = {item['sha256']: item for item in local}
   selected = model_catalog.selected_sha()
@@ -398,6 +434,17 @@ async def api_select(request: web.Request) -> web.Response:
 
   if not model_catalog.select(sha):
     return web.json_response({'ok': False, 'error': 'unknown model'}, status=404)
+
+  # Mirror the pick into the reviewed catalog too: that one decides the boot's
+  # DEFAULT_MANIFEST_URL, so a choice recorded only here gets replaced by the old
+  # reviewed pick on the next boot - the downloader would silently re-activate it.
+  key = _reviewed_key(sha)
+  if key is not None:
+    try:
+      from openpilot.common import big_model_catalog
+      big_model_catalog.select(key)
+    except Exception:
+      pass
 
   # Drive the download from the picker itself: the boot downloader's first attempt can run
   # before DNS is up, and a deferred fetch stayed invisible until the next boot.

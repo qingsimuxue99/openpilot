@@ -132,3 +132,12 @@ def noo(key):
 
 if __name__ == '__main__':
   print(freeze_boot())
+  # This runs once per boot, before the build and modeld, which makes it the one place
+  # a torn precompiled runtime can be repaired without the user having a shell: a power
+  # cut during extraction leaves a directory that ensure_precompiled() reuses forever.
+  try:
+    from openpilot.selfdrive.modeld.precompiled_repair import repair_installed
+    for action in repair_installed():
+      print(action)
+  except Exception:
+    pass  # never block a boot over model-cache housekeeping

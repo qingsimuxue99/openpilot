@@ -1,6 +1,9 @@
 from aiohttp import web
 
 from . import (
+  assistant_drive,
+  assistant_settings,
+  assistant_tools,
   bluetooth,
   carrot_navi,
   cars,
@@ -33,6 +36,9 @@ from . import (
 
 
 def register_all(app: web.Application) -> None:
+  assistant_drive.register(app)
+  assistant_settings.register(app)
+  assistant_tools.register(app)
   bluetooth.register(app)
   static.register(app)
   intro.register(app)
