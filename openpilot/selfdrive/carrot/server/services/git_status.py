@@ -13,6 +13,8 @@ GIT_STATUS_TTL = 600.0
 GIT_STATUS_POLL_INTERVAL = 60.0
 FETCH_TIMEOUT = 25.0
 GIT_TIMEOUT = 8.0
+# 自动 fetch 总开关（False = 设备端永不主动联网拉取，默认）
+AUTO_FETCH_ENABLED = False
 
 _cache: dict[str, Any] | None = None
 _lock: asyncio.Lock | None = None
@@ -106,9 +108,12 @@ async def _read_status() -> dict[str, Any]:
   remote_branch = tracking["remote_branch"]
   upstream = tracking["upstream"]
 
-  fetch_rc = 0
-  fetch_out = ""
-  if remote and remote_branch:
+  # 设备无法直连 GitHub：周期性 fetch 每次超时/中断都会在 .git/objects/pack
+  # 留下 tmp_pack_* 临时包（曾累积约 8 GiB）。这里彻底关闭自动 fetch，
+  # 只报告本地仓库状态；更新走本机中转推送链。
+  # fetch_rc != 0 -> available=False，auto_update 不会用过期 behind 触发自动 pull。
+  fetch_rc, fetch_out = 1, "auto fetch disabled (local status only)"
+  if AUTO_FETCH_ENABLED and remote and remote_branch:
     refspec = f"+refs/heads/{remote_branch}:refs/remotes/{remote}/{remote_branch}"
     fetch_rc, fetch_out = await _git(["fetch", "--quiet", remote, refspec], timeout=FETCH_TIMEOUT)
 

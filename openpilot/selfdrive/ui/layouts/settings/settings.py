@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from collections.abc import Callable
 from openpilot.selfdrive.ui.layouts.settings.carrot import CarrotLayout
+from openpilot.selfdrive.ui.layouts.settings.cleanup import CleanupLayout
 from openpilot.selfdrive.ui.layouts.settings.developer import DeveloperLayout
 from openpilot.selfdrive.ui.layouts.settings.device import DeviceLayout
 from openpilot.selfdrive.ui.layouts.settings.firehose import FirehoseLayout
@@ -44,6 +45,7 @@ class PanelType(IntEnum):
   EGPU = 6
   CARROT = 7
   MODEL = 8
+  CLEANUP = 9
 
 
 @dataclass
@@ -76,6 +78,8 @@ class SettingsLayout(Widget):
       # PanelType.FIREHOSE: PanelInfo(tr_noop("Firehose"), FirehoseLayout()),
       PanelType.DEVELOPER: PanelInfo(tr_noop("Developer"), DeveloperLayout()),
       PanelType.EGPU: PanelInfo(tr_noop("eGPU"), UsbGpuLayout()),
+      # 「垃圾清理」按用户要求放在侧边栏 eGPU 下方：只读扫描 + 选择性删除 + 保护规则
+      PanelType.CLEANUP: PanelInfo(tr_noop("垃圾清理"), CleanupLayout()),
     }
 
     self._font_medium = gui_app.font(FontWeight.MEDIUM)
