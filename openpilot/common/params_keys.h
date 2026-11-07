@@ -146,6 +146,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"UsbGpuStartupFailed", {CLEAR_ON_MANAGER_START | CLEAR_ON_IGNITION_ON, BOOL}},
     {"UseWideCamera", {PERSISTENT, BOOL, "1"}},
     {"Version", {PERSISTENT, STRING}},
+    {"device_go_off_road", {CLEAR_ON_MANAGER_START, BOOL}},
 
     // carrot
     {"LongitudinalPersonalityMax", {PERSISTENT, INT, "3"}},
