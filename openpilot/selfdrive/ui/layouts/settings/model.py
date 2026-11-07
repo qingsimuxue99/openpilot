@@ -4,7 +4,8 @@
 模型时间取自 commaai/openpilot 上游提交记录（model_id 里嵌着 commit / PR 号），
 平时只用随代码携带的历史快照，只有大佬模型库出现新模型时才现拉一次上游历史。
 所有 HTTP 请求都在后台线程执行，绝不阻塞 raylib 的渲染主线程；面板不可见时
-不轮询。这里只做「选择 / 下载 / 进度 / 重启生效」，删除模型等破坏性操作仍留在网页端。
+不轮询。这里做「选择 / 下载 / 删除 / 进度 / 重启生效」；删除直接调用与网页端
+同源的 remove 接口，能不能删由服务端统一把关，面板只负责二次确认与结果显示。
 
 不对网页服务做任何假设：服务没起来时面板显示可读的提示，不抛异常、不空白。
 """
@@ -20,20 +21,24 @@ from collections.abc import Callable
 import pyray as rl
 
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.system.ui.lib.application import (gui_app, TextAlignment,
+from openpilot.system.ui.lib.application import (gui_app, FontWeight, TextAlignment,
                                                  TextAlignmentVertical)
+from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.widgets import DialogResult, Widget
+from openpilot.system.ui.widgets.button import Button, ButtonStyle
 from openpilot.system.ui.widgets.confirm_dialog import ConfirmDialog
 from openpilot.system.ui.widgets.label import gui_label
-from openpilot.system.ui.widgets.list_view import (ITEM_TEXT_VALUE_COLOR, ItemAction, ListItem,
-                                                   button_item, simple_item, text_item)
+from openpilot.system.ui.widgets.list_view import (BUTTON_HEIGHT, BUTTON_WIDTH, ITEM_TEXT_FONT_SIZE,
+                                                   ITEM_TEXT_VALUE_COLOR, TEXT_PADDING, ItemAction,
+                                                   ListItem, button_item, simple_item, text_item)
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 
 BASE_URL = "http://127.0.0.1:7000"
 MODELS_URL = BASE_URL + "/api/egpu/models"
 STATUS_URL = BASE_URL + "/api/egpu/model"
 SELECT_URL = BASE_URL + "/api/egpu/models/select"
+REMOVE_URL = BASE_URL + "/api/egpu/models/remove"
 
 # 上游 big_driving_tinygrad.pkl 的提交历史，用来给模型标注「上游提交日期」。
 UPSTREAM_COMMITS_URL = (
@@ -213,6 +218,24 @@ def model_button_text(entry: dict, selected_sha) -> str:
   return "使用" if entry.get("downloaded") else "下载"
 
 
+def can_delete_model(entry: dict | None, selected, running, busy: bool,
+                     deleting: bool, onroad: bool) -> bool:
+  """删除按钮是否可用；与服务端 remove 接口的拒绝条件保持一致。
+
+  服务端会拦：行驶中(engaged)、当前生效(active)、modeld 运行中(running)、
+  已选中(selected)。这里先挡一道，避免出现「点了必然失败」的按钮；
+  真正删除时服务端仍会再复核一次，面板不自己碰任何模型文件。
+  """
+  if not entry or not entry.get("downloaded"):
+    return False
+  sha = entry.get("sha256")
+  if not isinstance(sha, str) or len(sha) != 64:
+    return False
+  if sha == selected or sha == running or entry.get("active") or entry.get("selected"):
+    return False
+  return not (busy or deleting or onroad)
+
+
 def model_value_text(entry: dict, running_sha, date: str | None = None) -> str:
   # 双方都不能为空：缺 sha256 的条目与 running=None 会「None == None」误判成运行中
   sha = entry.get("sha256")
@@ -294,8 +317,59 @@ class _ProgressAction(ItemAction):
     return False
 
 
+class _ModelRowAction(ItemAction):
+  """模型行右侧：左边显示「已下载 · 大小 · 日期」，右边并排「下载/使用」+「删除」。
+
+  两个按钮各自带 click_callback，直接调面板方法，不借用 ListItem.callback，
+  这样一次点击只会命中其中一个按钮，不会互相抢。
+  """
+
+  GAP = 20
+
+  def __init__(self, get_value, get_primary_text, get_primary_enabled,
+               get_delete_enabled, on_primary, on_delete):
+    super().__init__(width=2 * BUTTON_WIDTH + self.GAP + TEXT_PADDING)
+    self._get_value = get_value
+    self._get_primary_text = get_primary_text
+    self._get_primary_enabled = get_primary_enabled
+    self._get_delete_enabled = get_delete_enabled
+    self._font = gui_app.font(FontWeight.NORMAL)
+    self._primary = Button("", click_callback=on_primary,
+                           button_style=ButtonStyle.LIST_ACTION, text_padding=0)
+    self._delete = Button("", click_callback=on_delete,
+                          button_style=ButtonStyle.DANGER, text_padding=0)
+
+  def set_touch_valid_callback(self, touch_callback):
+    super().set_touch_valid_callback(touch_callback)
+    self._primary.set_touch_valid_callback(touch_callback)
+    self._delete.set_touch_valid_callback(touch_callback)
+
+  def get_width_hint(self) -> float:
+    text_width = measure_text_cached(self._font, self._get_value(), ITEM_TEXT_FONT_SIZE).x
+    return text_width + 2 * BUTTON_WIDTH + self.GAP + TEXT_PADDING * 2
+
+  def _render(self, rect: rl.Rectangle):
+    primary_x = rect.x + rect.width - 2 * BUTTON_WIDTH - self.GAP
+    delete_x = rect.x + rect.width - BUTTON_WIDTH
+    button_y = rect.y + (rect.height - BUTTON_HEIGHT) / 2
+
+    self._primary.set_text(self._get_primary_text())
+    self._primary.set_enabled(bool(self._get_primary_enabled()))
+    self._primary.render(rl.Rectangle(primary_x, button_y, BUTTON_WIDTH, BUTTON_HEIGHT))
+
+    self._delete.set_text("删除")
+    self._delete.set_enabled(bool(self._get_delete_enabled()))
+    self._delete.render(rl.Rectangle(delete_x, button_y, BUTTON_WIDTH, BUTTON_HEIGHT))
+
+    value_w = max(0.0, rect.width - 2 * BUTTON_WIDTH - self.GAP - TEXT_PADDING)
+    gui_label(rl.Rectangle(rect.x, rect.y, value_w, rect.height), self._get_value(),
+              font_size=ITEM_TEXT_FONT_SIZE, color=ITEM_TEXT_VALUE_COLOR,
+              alignment=TextAlignment.LEFT, alignment_vertical=TextAlignmentVertical.MIDDLE)
+    return False
+
+
 class ModelLayout(Widget):
-  """「模型」面板：列出模型库、一键选择并下载、实时显示进度。"""
+  """「模型」面板：列出模型库、一键选择并下载/删除、实时显示进度。"""
 
   def __init__(self):
     super().__init__()
@@ -312,6 +386,9 @@ class ModelLayout(Widget):
     self._visible = False
     self._refreshing = False
     self._picking = False
+    self._deleting = False
+    self._delete_msg = ""
+    self._delete_at = 0.0
     self._last_refresh = 0.0
     # 手动刷新的可见反馈：阶段、结果文案、完成时刻、时间戳
     self._refresh_phase = "idle"   # idle / busy / ok / fail
@@ -350,21 +427,25 @@ class ModelLayout(Widget):
       self._run_item,
       self._refresh_btn,
       self._reboot_btn,
-      simple_item(lambda: tr("按上游提交日期排序 · 点右侧按钮下载")),
+      simple_item(lambda: tr("按上游提交日期排序 · 左键下载/使用 · 右键删除")),
     ]
 
     # 固定预创建列表行：Scroller 不支持运行中删行，用可见性控制数量，
     # 用 callable 让标题/按钮/数值每帧读取最新数据。
     self._rows: list[ListItem] = []
     for i in range(MAX_MODELS):
-      row = button_item(
-        lambda i=i: self._row_title(i),
-        lambda i=i: self._row_button(i),
-        lambda i=i: self._row_desc(i),
-        callback=lambda i=i: self._on_pick(i),
-        enabled=lambda i=i: self._row_enabled(i),
+      row = ListItem(
+        title=lambda i=i: self._row_title(i),
+        description=lambda i=i: self._row_desc(i),
+        action_item=_ModelRowAction(
+          lambda i=i: self._row_value(i),
+          lambda i=i: self._row_button(i),
+          lambda i=i: self._row_enabled(i),
+          lambda i=i: self._row_delete_enabled(i),
+          lambda i=i: self._on_pick(i),
+          lambda i=i: self._on_delete(i),
+        ),
       )
-      row.action_item.set_value(lambda i=i: self._row_value(i))
       row.set_visible(lambda i=i: i < len(self._models))
       self._rows.append(row)
       items.append(row)
@@ -555,6 +636,8 @@ class ModelLayout(Widget):
   def _state_text(self) -> str:
     if self._error:
       return "读取失败"
+    if self._delete_msg and time.monotonic() - self._delete_at < 12.0:
+      return self._delete_msg
     if self._pick_error:
       return self._pick_error
     return status_text(self._status, self._selected)
@@ -606,9 +689,7 @@ class ModelLayout(Widget):
     sha = str(entry.get("sha256") or "")
     date = self._dates.get(sha)
     head = f"上游提交 {date}" if date else "上游提交日期未知"
-    text = f"{head} · 标识 {sha[:12]} · 点击后设为当前模型"
-    if not entry.get("downloaded"):
-      text += "并开始下载"
+    text = f"{head} · 标识 {sha[:12]} · 左键下载/使用 · 右键删除本地文件"
     note = (entry.get("delivery_state") or {}).get("note") or ""
     return text + (" · " + note if note else "")
 
@@ -617,6 +698,54 @@ class ModelLayout(Widget):
     if not entry or self._picking:
       return False
     return entry.get("sha256") != self._selected
+
+  def _row_delete_enabled(self, index: int) -> bool:
+    entry = self._entry(index)
+    try:
+      onroad = bool(ui_state.is_onroad())
+    except Exception:
+      onroad = True  # 读不到行驶状态就保守禁用
+    busy = bool(self._status.get("state") in BUSY_STATES or self._picking)
+    return can_delete_model(entry, self._selected, self._running,
+                            busy, self._deleting, onroad)
+
+  def _on_delete(self, index: int):
+    entry = self._entry(index)
+    if not self._row_delete_enabled(index):
+      return
+    sha = str(entry.get("sha256") or "")
+    label = str(entry.get("label") or sha[:12])[:16]
+
+    def confirm(result: DialogResult):
+      if result == DialogResult.CONFIRM:
+        self._do_delete(sha)
+
+    gui_app.push_widget(ConfirmDialog(f"确定删除「{label}」？删除后可重新下载。",
+                                     "删除", callback=confirm))
+
+  def _do_delete(self, sha: str):
+    """只调网页端同源的 remove 接口；面板自己不碰任何模型文件。"""
+    if self._deleting:
+      return
+    self._deleting = True
+    self._delete_msg = "正在删除模型…"
+    self._delete_at = time.monotonic()
+
+    def run():
+      try:
+        result = _post_json(REMOVE_URL, {"sha256": sha}, timeout=30.0)
+        if result.get("ok"):
+          self._delete_msg = "已删除 · 可重新下载"
+        else:
+          self._delete_msg = "删除失败：" + str(result.get("error") or "未知原因")
+      except Exception as exc:
+        self._delete_msg = f"删除失败：{type(exc).__name__}"
+      finally:
+        self._deleting = False
+        self._delete_at = time.monotonic()
+        self._last_refresh = 0.0  # 立刻刷新列表，让该行变回「下载」
+
+    threading.Thread(target=run, name="model-picker-remove", daemon=True).start()
 
   # ---- Widget 生命周期 ----------------------------------------------------
   def show_event(self):
