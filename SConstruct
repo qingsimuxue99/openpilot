@@ -245,18 +245,7 @@ Export('envCython', 'np_version')
 Export('env', 'arch', 'acados', 'ffmpeg_libs')
 
 # Setup cache dir
-cache_dir = os.environ.get('SCONS_CACHE_DIR') or ('/data/scons_cache' if arch == "larch64" else '/tmp/scons_cache')
-# Hold a stable, external guard for the entire SCons process, including clean,
-# so cooperating builds and cleanup cannot overlap. Builds wait for each other.
-# atexit retains the handle even after this SConstruct scope is discarded.
-import atexit
-from pathlib import Path
-from openpilot.common.scons_cache_lock import acquire_cache_lock
-try:
-  _cache_guard = acquire_cache_lock(Path(cache_dir), os.environ.get("SCONS_CACHE_LOCK_FD"), timeout=300)
-except (OSError, RuntimeError, ValueError) as exc:
-  raise SCons.Errors.UserError(str(exc)) from exc
-atexit.register(_cache_guard.close)
+cache_dir = '/data/scons_cache' if arch == "larch64" else '/tmp/scons_cache'
 CacheDir(cache_dir)
 Clean(["."], cache_dir)
 
@@ -310,9 +299,7 @@ SConscript([
   'openpilot/selfdrive/ui/SConscript',
   'openpilot/system/ui/lib/native/SConscript',
   'openpilot/selfdrive/carrot/realtime/SConscript',
-  'openpilot/selfdrive/carrot/cluster/SConscript',
   'openpilot/selfdrive/carrot/radar_motion/SConscript',
-  'openpilot/selfdrive/navigation/SConscript',
   'opendbc_repo/opendbc/can/SConscript',
 ])
 
@@ -325,7 +312,4 @@ if arch != "larch64":
   ])
 
 
-# Compilation database generation can end a clean without removing outputs.
-# Skip this build-only step when cleaning.
-if not GetOption('clean'):
-  env.CompilationDatabase('compile_commands.json')
+env.CompilationDatabase('compile_commands.json')
