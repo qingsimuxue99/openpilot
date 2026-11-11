@@ -7,6 +7,7 @@ from openpilot.selfdrive.ui.mici.layouts.settings.device import DeviceLayoutMici
 from openpilot.selfdrive.ui.mici.layouts.settings.developer import DeveloperLayoutMici
 from openpilot.selfdrive.ui.mici.layouts.settings.firehose import FirehoseLayout
 from openpilot.selfdrive.ui.mici.layouts.settings.usbgpu import UsbGpuLayoutMici
+from openpilot.selfdrive.ui.layouts.settings.cleanup_mici import CleanupLayoutMici
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 
@@ -47,6 +48,11 @@ class SettingsLayout(NavScroller):
                           ui_state.params.get("GitBranch") == "carrot-egpu")
     usbgpu_btn.set_click_callback(lambda: gui_app.push_widget(usbgpu_panel))
 
+    # 「垃圾清理」按用户要求放在 eGPU 下方（常显，不受 eGPU 是否存在限制）
+    cleanup_panel = CleanupLayoutMici()
+    cleanup_btn = SettingsBigButton("垃圾清理", "", gui_app.texture("icons_mici/settings/device_icon.png", 72, 58))
+    cleanup_btn.set_click_callback(lambda: gui_app.push_widget(cleanup_panel))
+
     self._scroller.add_widgets([
       toggles_btn,
       network_btn,
@@ -55,6 +61,7 @@ class SettingsLayout(NavScroller):
       #BigDialogButton("manual", "", "icons_mici/settings/manual_icon.png", "Check out the mici user\nmanual at comma.ai/setup"),
       firehose_btn,
       usbgpu_btn,
+      cleanup_btn,
       developer_btn,
     ])
 
