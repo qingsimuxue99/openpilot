@@ -60,13 +60,6 @@ def hud_module(monkeypatch):
     def render(self, rect):
       pass
 
-  class FakeRecButton:
-    def __init__(self, *args):
-      self.is_pressed = False
-
-    def render(self, rect):
-      pass
-
   class Widget:
     def __init__(self):
       pass
@@ -117,7 +110,6 @@ def hud_module(monkeypatch):
     ),
     "openpilot.system.ui.lib.text_draw": SimpleNamespace(draw_text_ui_style=lambda *args, **kwargs: None),
     "openpilot.system.ui.widgets": SimpleNamespace(Widget=Widget),
-    "openpilot.system.ui.widgets.rec_button": SimpleNamespace(RecButton=FakeRecButton),
   }
   for name, stub in stubs.items():
     monkeypatch.setitem(sys.modules, name, stub)
@@ -656,50 +648,3 @@ def test_vehicle_navigation_profile_does_not_force_speed_with_cruise_off(hud_mod
   assert override.label == "MAX"
   assert override.speed_color_mode == 0
   assert not override.force_persist
-
-
-def test_rec_button_is_anchored_above_egpu_badge():
-  """录屏按钮必须存在，并锚定在 eGPU 铭牌正上方。
-
-  位置用 rect 右边界 + 铭牌高度 + 间隙计算，不能跟着铭牌的实际宽度走，
-  否则 eGPU 插拔时按钮会左右跳动。
-  """
-  tree = ast.parse(HUD_RENDERER_PATH.read_text(encoding="utf-8"))
-  cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "HudRenderer")
-  methods = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
-  assert "_draw_rec_button" in methods, "大屏缺少录屏按钮绘制"
-  src = ast.unparse(methods["_draw_rec_button"])
-  assert "rect.width - margin - d" in src, "按钮 x 必须锚定屏幕右边界"
-  assert "badge_h" in src, "按钮 y 必须参考铭牌高度"
-  assert "gap" in src, "按钮与铭牌之间必须留间隙，不能接触"
-  assert "_rec_button.render" in src
-
-  # 小屏同步
-  mici_path = Path(__file__).parents[1] / "mici" / "onroad" / "hud_renderer.py"
-  mtree = ast.parse(mici_path.read_text(encoding="utf-8"))
-  mcls = next(n for n in ast.walk(mtree) if isinstance(n, ast.ClassDef) and n.name == "HudRenderer")
-  mmethods = {n.name: n for n in mcls.body if isinstance(n, ast.FunctionDef)}
-  assert "_draw_rec_button" in mmethods, "小屏缺少录屏按钮绘制"
-  msrc = ast.unparse(mmethods["_draw_rec_button"])
-  assert "rect.width - margin - d" in msrc
-  assert "gap" in msrc
-
-
-def test_rec_button_geometry_is_integer_only():
-  """pyray 的几何接口只接受整数。
-
-  历史上 V9 把缩放系数改成小数后，rl.draw_ellipse 抛 TypeError，
-  UI 每帧崩溃 → 设备卡在开机 logo。录屏按钮同理，尺寸必须先取整。
-  """
-  path = Path(__file__).parents[3] / "system" / "ui" / "widgets" / "rec_button.py"
-  tree = ast.parse(path.read_text(encoding="utf-8"))
-  cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "RecButton")
-  render = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_render")
-  for node in ast.walk(render):
-    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
-      continue
-    if not node.func.attr.startswith("draw_"):
-      continue
-    for arg in node.args:
-      assert not (isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Div)), \
-        "几何参数不能直接用浮点除法结果（pyray 只接受整数）"

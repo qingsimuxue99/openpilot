@@ -45,59 +45,22 @@ if TICI:
     precision mediump float;
     in vec2 fragTexCoord;
     uniform samplerExternalOES texture0;
-    uniform vec2 uTexel;
     out vec4 fragColor;
     void main() {
-      // 锐化：4 邻域 unsharp。UI 上这块画面近 2000px 宽，而流只有 1280x720，
-      // 放大 1.6 倍后双线性插值把边缘糊掉了，这里把边缘找回来。
-      vec3 c  = texture(texture0, fragTexCoord).rgb;
-      vec3 cl = texture(texture0, fragTexCoord - vec2(uTexel.x, 0.0)).rgb;
-      vec3 cr = texture(texture0, fragTexCoord + vec2(uTexel.x, 0.0)).rgb;
-      vec3 cu = texture(texture0, fragTexCoord + vec2(0.0, uTexel.y)).rgb;
-      vec3 cd = texture(texture0, fragTexCoord - vec2(0.0, uTexel.y)).rgb;
-      vec3 rgb = clamp(c * 2.0 - 0.25 * (cl + cr + cu + cd), 0.0, 1.0);
-
-      // 对比度校正：camerad 出来的是 limited range（Y 16~235），
-      // 当成 full range 用会把黑位抬到 0.063、白位压到 0.92，对比度被压缩，
-      // 画面就发灰雾蒙蒙。乘 1.25 恰好把 limited range 拉回 full range。
-      // （原来这里是 pow(rgb, 1/1.28)，把暗部整体抬起来 —— 提亮变成了发灰。）
-      rgb = clamp((rgb - 0.5) * 1.25 + 0.5, 0.0, 1.0);
-      fragColor = vec4(rgb, 1.0);
+      vec4 color = texture(texture0, fragTexCoord);
+      fragColor = vec4(pow(color.rgb, vec3(1.0/1.28)), color.a);
     }
     """
 else:
-  # 大屏（c3）走 YUV 纹理路径。
-  #
-  # 之前这里是「原始 YUV 直接转 RGB」，既没有对比度校正也没有锐化：
-  #   1) camerad 出来的是 limited range（Y 16~235），当成 full range 用，
-  #      黑位被抬到 0.063、白位压到 0.92，对比度被压缩 —— 看起来雾蒙蒙、发灰。
-  #      乘 1.2 的对比度恰好把 limited range 拉回 full range。
-  #      （小屏 engaged 分支早就用了同样的 +20% 对比度，大屏一直没跟上。）
-  #   2) UI 上这块画面有近 2000px 宽，而流只有 1280x720，放大 1.6 倍后
-  #      双线性插值把边缘糊掉了 —— 这里对亮度做 4 邻域锐化把边缘找回来。
-  #
-  # 纯显示层改动，不触碰采集/编码/控制链路。
   FRAME_FRAGMENT_SHADER = VERSION + """
     in vec2 fragTexCoord;
     uniform sampler2D texture0;
     uniform sampler2D texture1;
-    uniform vec2 uTexel;
     out vec4 fragColor;
     void main() {
-      // 锐化：只对 Y（亮度）做 4 邻域 unsharp，色度平面不采样，省一半开销
-      float y  = texture(texture0, fragTexCoord).r;
-      float yl = texture(texture0, fragTexCoord - vec2(uTexel.x, 0.0)).r;
-      float yr = texture(texture0, fragTexCoord + vec2(uTexel.x, 0.0)).r;
-      float yu = texture(texture0, fragTexCoord + vec2(0.0, uTexel.y)).r;
-      float yd = texture(texture0, fragTexCoord - vec2(0.0, uTexel.y)).r;
-      float ys = clamp(y * 2.0 - 0.25 * (yl + yr + yu + yd), 0.0, 1.0);
-
+      float y = texture(texture0, fragTexCoord).r;
       vec2 uv = texture(texture1, fragTexCoord).ra - 0.5;
-      vec3 rgb = vec3(ys + 1.402*uv.y, ys - 0.344*uv.x - 0.714*uv.y, ys + 1.772*uv.x);
-
-      // 对比度校正：把 limited range 拉回 full range，画面不再发灰
-      rgb = clamp((rgb - 0.5) * 1.2 + 0.5, 0.0, 1.0);
-      fragColor = vec4(rgb, 1.0);
+      fragColor = vec4(y + 1.402*uv.y, y - 0.344*uv.x - 0.714*uv.y, y + 1.772*uv.x, 1.0);
     }
     """
 
@@ -120,9 +83,6 @@ class CameraView(Widget):
     self.last_connection_attempt: float = 0.0
     self.shader = rl.load_shader_from_memory(VERTEX_SHADER, FRAME_FRAGMENT_SHADER)
     self._texture1_loc: int = rl.get_shader_location(self.shader, "texture1") if not TICI else -1
-    # 锐化用的纹理步长（源纹理的 1/宽、1/高）
-    # uTexel 在两条渲染路径（EGL / YUV）里都要用，所以不管 TICI 都取
-    self._texel_loc: int = rl.get_shader_location(self.shader, "uTexel")
 
     self.frame: VisionBuf | None = None
     self.texture_y: rl.Texture | None = None
@@ -235,14 +195,6 @@ class CameraView(Widget):
     elif not self.client.is_connected():
       # ensure we clear the displayed frame when the connection is lost
       self.frame = None
-
-    # 锐化用的纹理步长。放在这里而不是 _render_textures 里，
-    # 是因为小屏还有一条 EGL 渲染路径（不走 _render_textures），
-    # 放这里两条路径都能拿到。
-    if self.frame is not None and self._texel_loc >= 0:
-      rl.set_shader_value(self.shader, self._texel_loc,
-                        rl.Vector2(1.0 / max(1, self.frame.width), 1.0 / max(1, self.frame.height)),
-                        rl.ShaderUniformDataType.SHADER_UNIFORM_VEC2)
 
     if not self.frame:
       self._draw_placeholder(rect)

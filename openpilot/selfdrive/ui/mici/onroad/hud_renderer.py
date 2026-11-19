@@ -20,7 +20,6 @@ from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.text_draw import draw_text_ui_style
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.rec_button import RecButton
 from openpilot.system.ui.lib.overlay_cache import OverlayLayer
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.cereal import log
@@ -202,7 +201,6 @@ class HudRenderer(Widget):
 
     self._turn_intent = TurnIntent()
     # 录屏按钮：悬在 eGPU 铭牌正上方（大小屏同步，小屏按比例缩小）
-    self._rec_button = RecButton(48)
     # self._torque_bar = TorqueBar() # 아이콘에 토크 적용: 토크바 미사용
     self._torque_filter = FirstOrderFilter(0, 0.1, 1 / gui_app.target_fps) # 아이콘에 토크 적용: LowPassFilter
 
@@ -324,17 +322,7 @@ class HudRenderer(Widget):
     self._draw_steering_wheel(rect)
 
     self._draw_egpu_badge(rect)
-    self._draw_rec_button(rect)
 
-  def _draw_rec_button(self, rect: rl.Rectangle) -> None:
-    """录屏按钮：悬在 eGPU 铭牌正上方（大小屏同步，尺寸按小屏等比缩小）。"""
-    d = 48
-    gap = 20
-    margin = 20
-    badge_h = 108
-    x = rect.x + rect.width - margin - d
-    y = rect.y + rect.height - badge_h - margin - gap - d
-    self._rec_button.render(rl.Rectangle(int(x), int(y), d, d))
 
   def _draw_egpu_badge(self, rect: rl.Rectangle) -> None:
     # Keep runtime state visible while the shared USB hub re-enumerates; a

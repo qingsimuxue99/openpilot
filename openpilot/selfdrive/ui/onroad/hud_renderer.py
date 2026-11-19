@@ -13,7 +13,6 @@ from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.text_draw import draw_text_ui_style
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.rec_button import RecButton
 from openpilot.system.ui.lib.overlay_cache import OverlayLayer, DisplayClock
 
 # Constants
@@ -167,8 +166,6 @@ class HudRenderer(Widget):
     self._font_display = gui_app.font(FontWeight.DISPLAY)
 
     self._exp_button = ExpButton(UI_CONFIG.button_size, UI_CONFIG.wheel_icon_size)
-    # 录屏按钮：悬在 eGPU 铭牌正上方，位置锚定右下角固定坐标
-    self._rec_button = RecButton(76)
 
     self._txt_speed_bg = gui_app.texture('images/speed_bg.png')
 
@@ -329,25 +326,12 @@ class HudRenderer(Widget):
     self._draw_date_time(rect)
     self._draw_tpms(rect)
     self._draw_egpu_badge(rect)
-    self._draw_rec_button(rect)
     self._draw_cruise_speed_animation(rect)
     draw_bsd_panel(ui_state.sm, rect, font=self._font_display)  # amapnavi 盲区图标 / 四角距离
 
   def user_interacting(self) -> bool:
     return self._exp_button.is_pressed
 
-  def _draw_rec_button(self, rect: rl.Rectangle) -> None:
-    """录屏按钮：悬在 eGPU 铭牌正上方。
-
-    位置锚定右下角固定坐标，不随 eGPU 铭牌出现/消失而跳动。
-    """
-    d = 76
-    gap = 34
-    margin = 20
-    badge_h = 108
-    x = rect.x + rect.width - margin - d
-    y = rect.y + rect.height - badge_h - margin - gap - d
-    self._rec_button.render(rl.Rectangle(int(x), int(y), d, d))
 
   def _draw_egpu_badge(self, rect: rl.Rectangle) -> None:
     # Keep runtime state visible while the shared USB hub re-enumerates; a
@@ -1524,7 +1508,6 @@ class HudRenderer(Widget):
     self._draw_carrot_device_state(bx, by)
 
     self._draw_turn_info_hud(rect)
-
 
 
 class PlotRenderer:
