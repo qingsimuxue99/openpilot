@@ -506,11 +506,27 @@
 
         <section id="logsDashcamPanel" class="logs-panel" role="tabpanel" aria-labelledby="logsTabDashcam">
           <div id="dashcamStatus" class="dashcam-status" hidden></div>
+          <div class="logs-bulkbar" data-logs-bulk="dashcam">
+            <label class="logs-bulkbar__select">
+              <input type="checkbox" class="logs-bulkbar__check" data-logs-bulk-check="dashcam">
+              <span data-logs-bulk-label="dashcam"></span>
+            </label>
+            <span class="logs-bulkbar__count" data-logs-bulk-count="dashcam"></span>
+            <button type="button" class="logs-bulkbar__btn logs-bulkbar__btn--danger" data-logs-bulk-delete="dashcam" disabled></button>
+          </div>
           <div id="dashcamRoutes" class="dashcam-routes"></div>
         </section>
 
         <section id="logsScreenPanel" class="logs-panel" role="tabpanel" hidden aria-labelledby="logsTabScreen">
           <div id="screenrecordStatus" class="dashcam-status" hidden></div>
+          <div class="logs-bulkbar" data-logs-bulk="screen">
+            <label class="logs-bulkbar__select">
+              <input type="checkbox" class="logs-bulkbar__check" data-logs-bulk-check="screen">
+              <span data-logs-bulk-label="screen"></span>
+            </label>
+            <span class="logs-bulkbar__count" data-logs-bulk-count="screen"></span>
+            <button type="button" class="logs-bulkbar__btn logs-bulkbar__btn--danger" data-logs-bulk-delete="screen" disabled></button>
+          </div>
           <div id="screenrecordVideos" class="screenrecord-list"></div>
         </section>
       </div>

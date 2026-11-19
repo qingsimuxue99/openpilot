@@ -1,6 +1,7 @@
 import asyncio
 import mimetypes
 import os
+import shutil
 import threading
 import time
 from urllib.parse import quote
@@ -27,6 +28,7 @@ from .report import build_route_report
 from .read_state import read_dashcam_read_state, write_dashcam_recent_segment
 from .summary_sources import build_route_summary_source
 from .paths import (
+  cache_path,
   file_size_label,
   relative_time,
   route_name,
@@ -445,6 +447,32 @@ async def api_dashcam_replay_source_file(request: web.Request) -> web.StreamResp
   })
 
 
+async def api_dashcam_delete_segment(request: web.Request) -> web.Response:
+  """删除一段行车记录（rlog/qlog/qcamera 整个目录）。
+
+  segment_dir() 负责安全校验：名字必须是 <route>--<数字>，且路径必须落在
+  DASHCAM_ROOT 之下，不存在则 404，避免越权删除任意文件。
+  """
+  segment = request.match_info.get("segment", "")
+  segment_path = segment_dir(segment)
+  try:
+    shutil.rmtree(segment_path)
+  except OSError as e:
+    raise web.HTTPInternalServerError(text=f"failed to delete segment: {e}")
+
+  # 缓存与时间线索引一起失效，否则列表里还会出现已删的段
+  invalidate_segment_time_cache()
+  for kind in ("video", "preview", "thumbnail"):
+    for ext in (".mp4", ".jpg", ".png", ".ts"):
+      cached = cache_path(kind, segment, ext)
+      try:
+        if os.path.isfile(cached):
+          os.remove(cached)
+      except OSError:
+        pass
+  return web.json_response({"ok": True, "segment": segment})
+
+
 async def api_dashcam_download(request: web.Request) -> web.StreamResponse:
   segment = request.match_info.get("segment", "")
   kind = (request.match_info.get("kind", "") or "").strip()
@@ -592,6 +620,7 @@ def register(app: web.Application) -> None:
   app.router.add_get("/api/dashcam/replay-source/{segment}", api_dashcam_replay_source)
   app.router.add_get("/api/dashcam/replay-source/{segment}/{kind}", api_dashcam_replay_source_file)
   app.router.add_get("/api/dashcam/download/{segment}/{kind}", api_dashcam_download)
+  app.router.add_delete("/api/dashcam/segment/{segment}", api_dashcam_delete_segment)
   app.router.add_post("/api/dashcam/upload/summary", api_dashcam_upload_summary)
   app.router.add_post("/api/dashcam/upload/test", api_dashcam_upload_test)
   app.router.add_post("/api/dashcam/upload/start", api_dashcam_upload_start)

@@ -1421,3 +1421,62 @@
     font-size: 12.5px;
   }
 }
+
+/* ── 日志页批量操作工具栏（行车记录 / 屏幕录制） ───────────────────────── */
+.logs-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 10px;
+  font-size: 13px;
+  color: var(--md-on-surface);
+}
+
+.logs-bulkbar__select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.logs-bulkbar__check,
+.logs-row__check input {
+  width: 18px;
+  height: 18px;
+  accent-color: #4caf50;
+  cursor: pointer;
+}
+
+.logs-bulkbar__count {
+  opacity: .72;
+  font-variant-numeric: tabular-nums;
+}
+
+.logs-bulkbar__btn {
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--md-outline-var) 44%, transparent);
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.logs-bulkbar__btn--danger {
+  color: #ff6b6b;
+  border-color: color-mix(in srgb, #ff6b6b 45%, transparent);
+}
+
+.logs-bulkbar__btn:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+/* 屏幕录制行内的选择框 */
+.logs-row__check {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}

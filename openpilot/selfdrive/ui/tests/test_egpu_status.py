@@ -17,16 +17,20 @@ def _method(path: Path, class_name: str, method_name: str) -> ast.FunctionDef:
 
 def test_both_device_huds_render_egpu_badge_with_shared_runtime_state():
   for path in HUD_PATHS:
-    render = _method(path, "HudRenderer", "_render")
+    # 实际调用点在 _paint() 里（_render 只负责调度），所以按整份源码找调用，
+    # 不要把断言绑死在某一个方法名上。
+    module = ast.parse(path.read_text(encoding="utf-8"))
     calls = [
-      node for node in ast.walk(render)
+      node for node in ast.walk(module)
       if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     ]
     assert any(call.func.attr == "_draw_egpu_badge" for call in calls)
 
     badge = _method(path, "HudRenderer", "_draw_egpu_badge")
     badge_source = ast.unparse(badge)
-    assert "badge_w" in badge_source
+    # 徽标宽度按文字自适应：两套 HUD 的宽度变量名不同（小屏 badge_w / 大屏 card_w），
+    # 只要存在自适应宽度变量即可。
+    assert "badge_w" in badge_source or "card_w" in badge_source
     assert "rect.width / 2" not in badge_source
     assert "usbgpu_badge_state" in badge_source
     for attr in ("usbgpu_present", "usbgpu_compiled", "usbgpu_compile_pending", "usbgpu_loading", "usbgpu_active", "usbgpu_startup_failed"):
@@ -39,7 +43,14 @@ def test_both_device_huds_render_egpu_badge_with_shared_runtime_state():
       )
     for state in ("active", "loading", "error", "compile_pending", "not_compiled", "ready"):
       assert repr(state) in badge_source
-    assert "eGPU REBOOT" in badge_source
+    # 主字恒为 eGPU，状态词统一放到副字：卡片宽度固定 255，不再被
+    # "eGPU ERROR"/"eGPU REBOOT" 这类长主字撑出大片空白。
+    assert "eGPU" in badge_source
+    assert "eGPU REBOOT" not in badge_source
+    assert "待重启" in badge_source
+    assert "max(255," in badge_source
+    # 背景透明：墨绿圆盘与卡片底色都不再画，只保留 6px 状态色边框。
+    assert "31, 42, 31" not in badge_source
 
 
 def test_ui_state_reads_modeld_egpu_active_param():

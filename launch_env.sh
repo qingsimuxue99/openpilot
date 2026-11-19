@@ -20,3 +20,9 @@ if [ -z "$AGNOS_VERSION" ]; then
 fi
 
 export STAGING_ROOT="/data/safe_staging"
+
+# eGPU 功率上限：runtime 通过 AM_SMU.set_power_limit() 写 SMU 寄存器生效，
+# 属于运行时设置 —— GPU 每次断电重启都会丢，所以必须在开机环境里固化，
+# 否则每次开机显卡都是不限功率运行。
+export AM_POWER_LIMIT=120
+export AM_POWER_LIMIT_PRECOMPILED=120

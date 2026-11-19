@@ -28,6 +28,7 @@ const screenrecordState = {
   loadingMore: false,
   loadSeq: 0,
   videos: [],
+  selected: new Set(),
   rowHeight: 80,
   windowStart: 0,
   windowEnd: 0,
@@ -100,6 +101,11 @@ function screenrecordRowNode(video, index, existingRows) {
   if (existing) {
     existing.style.setProperty("--i", String(index));
     existing.classList.remove("ui-stagger-item");
+    // 复用旧节点时必须同步勾选状态：全选/取消全选会重新渲染，
+    // 但行节点被复用，HTML 里的 checked 属性不会自动更新，
+    // 结果是「计数变了、行内方框却没勾上」，用户看着像没生效。
+    const box = existing.querySelector('input[data-action="screenrecord-select"]');
+    if (box) box.checked = screenrecordState.selected.has(id);
     return existing;
   }
   const template = document.createElement("template");
@@ -165,7 +171,11 @@ function screenrecordVideoRowHtml(video, index = 0) {
   const date = escapeHtml(formatRelativeEpoch(video.modifiedEpoch) || localizeRelativeLabel(video.modifiedLabel || video.relativeModifiedLabel) || "-");
   const size = escapeHtml(formatLogBytes(video.size));
   const ext = escapeHtml((video.ext || "video").toUpperCase());
+  const checked = screenrecordState.selected.has(String(video.id || "")) ? " checked" : "";
   return `<article class="screenrecord-row ui-stagger-item" style="--i:${index}" data-action="play-screenrecord" data-id="${id}" data-name="${name}">
+    <label class="logs-row__check">
+      <input type="checkbox" data-action="screenrecord-select" data-id="${id}"${checked} aria-label="${escapeHtml(getUIText("select_video", "Select recording"))}">
+    </label>
     <div class="screenrecord-row__thumb" aria-hidden="true">
       <img class="logs-lazy-img" loading="lazy" decoding="async" fetchpriority="low" data-src="${screenrecordApiPath("thumbnail", video.id || "")}" alt="">
     </div>
@@ -208,6 +218,7 @@ function renderScreenrecordVideos(options = {}) {
   const nextSignature = `${screenrecordState.signature || screenrecordVideosSignature(videos)}|${view.start}:${view.end}|${screenrecordState.loadingMore ? "more" : ""}`;
   if (preserve && host.dataset.signature === nextSignature) {
     hydrateLogsLazyImages(host);
+    updateScreenrecordBulkUi();
     return;
   }
   patchScreenrecordWindow(host, videos, view);
@@ -218,6 +229,7 @@ function renderScreenrecordVideos(options = {}) {
   setScreenrecordLoadingMoreUi(screenrecordState.loadingMore);
   hydrateLogsLazyImages(host);
   requestAnimationFrame(() => screenrecordMeasureRowHeight(host));
+  updateScreenrecordBulkUi();
 }
 
 async function loadScreenrecordVideos({ silent = false, append = false } = {}) {
@@ -260,6 +272,10 @@ async function loadScreenrecordVideos({ silent = false, append = false } = {}) {
     screenrecordState.loading = false;
     screenrecordState.loadingMore = false;
     setScreenrecordLoadingMoreUi(false);
+    // 工具栏「全选」的可用状态取决于列表数量。首帧渲染时列表还是空的，
+    // 全选框会被置成 disabled，用户在那之前点它没有任何反应（disabled 的
+    // checkbox 不派发 change 事件）。列表到位后必须主动刷新一次。
+    updateScreenrecordBulkUi();
     renderScreenrecordVideos({ animate: !silent });
     if (!silent && logsScrollTops.screen === 0) restoreLogsScrollTop("screen", { reset: true });
   } catch (e) {
@@ -307,6 +323,71 @@ async function showScreenrecordInfo(id, name) {
   });
 }
 
+function screenrecordSelectedIds() {
+  return Array.from(screenrecordState.selected || []);
+}
+
+function setScreenrecordSelection(id, checked) {
+  const key = String(id || "");
+  if (!key) return;
+  if (checked) screenrecordState.selected.add(key);
+  else screenrecordState.selected.delete(key);
+  updateScreenrecordBulkUi();
+}
+
+function selectAllScreenrecordVideos(checked) {
+  const videos = screenrecordState.videos || [];
+  const ids = videos.map((video) => String(video?.id || "")).filter(Boolean);
+  screenrecordState.selected = new Set(checked ? ids : []);
+  renderScreenrecordVideos({ preserve: false });
+  updateScreenrecordBulkUi();
+}
+
+function updateScreenrecordBulkUi() {
+  const count = screenrecordSelectedIds().length;
+  const total = (screenrecordState.videos || []).length;
+  const check = document.querySelector('[data-logs-bulk-check="screen"]');
+  const label = document.querySelector('[data-logs-bulk-count="screen"]');
+  const btn = document.querySelector('[data-logs-bulk-delete="screen"]');
+  if (check) {
+    check.checked = total > 0 && count === total;
+    check.indeterminate = count > 0 && count < total;
+    check.disabled = total === 0;
+  }
+  if (label) label.textContent = getUIText("selected_count", "{count} selected", { count });
+  if (btn) btn.disabled = count === 0;
+}
+
+async function deleteSelectedScreenrecordVideos() {
+  const ids = screenrecordSelectedIds();
+  if (!ids.length) return;
+  const confirmed = await openAppDialog({
+    mode: "confirm",
+    title: getUIText("delete", "Delete"),
+    message: getUIText("delete_selected_confirm", "Delete {count} selected recordings?").replace("{count}", String(ids.length)),
+    confirmLabel: getUIText("delete", "Delete"),
+    cancelLabel: getUIText("cancel", "Cancel"),
+  });
+  if (!confirmed) return;
+  let failed = 0;
+  for (const id of ids) {
+    try {
+      const response = await fetch(screenrecordApiPath("video", id), { method: "DELETE" });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json.ok === false) failed += 1;
+    } catch (e) {
+      failed += 1;
+    }
+  }
+  screenrecordState.selected = new Set();
+  await loadScreenrecordVideos({ silent: false });
+  updateScreenrecordBulkUi();
+  showAppToast(
+    failed ? getUIText("delete_selected_partial", "Some recordings could not be deleted") : getUIText("video_deleted", "Recording deleted"),
+    { tone: failed ? "error" : "success" },
+  );
+}
+
 async function deleteScreenrecordVideo(id, name) {
   const confirmed = await openAppDialog({
     mode: "confirm",
@@ -327,8 +408,7 @@ async function deleteScreenrecordVideo(id, name) {
   }
 }
 
-async function showScreenrecordMenu(id, name) {
-  if (!id) return;
+async function showScreenrecordMenu(id, name) {  if (!id) return;
   const video = (screenrecordState.videos || []).find((entry) => String(entry?.id || "") === String(id));
   const meta = [
     formatRelativeEpoch(video?.modifiedEpoch) || localizeRelativeLabel(video?.modifiedLabel || video?.relativeModifiedLabel || ""),
@@ -360,12 +440,17 @@ async function showScreenrecordMenu(id, name) {
 }
 
 export {
+  deleteSelectedScreenrecordVideos,
   loadScreenrecordVideos,
   openScreenrecordPlayer,
   renderScreenrecordVideos,
   scheduleScreenrecordWindowRender,
   screenrecordApiPath,
+  screenrecordSelectedIds,
   screenrecordShouldLoadMore,
   screenrecordState,
+  selectAllScreenrecordVideos,
+  setScreenrecordSelection,
   showScreenrecordMenu,
+  updateScreenrecordBulkUi,
 };

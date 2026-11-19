@@ -13,6 +13,7 @@ from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.text_draw import draw_text_ui_style
 from openpilot.system.ui.widgets import Widget
+from openpilot.system.ui.widgets.rec_button import RecButton
 from openpilot.system.ui.lib.overlay_cache import OverlayLayer, DisplayClock
 
 # Constants
@@ -166,6 +167,8 @@ class HudRenderer(Widget):
     self._font_display = gui_app.font(FontWeight.DISPLAY)
 
     self._exp_button = ExpButton(UI_CONFIG.button_size, UI_CONFIG.wheel_icon_size)
+    # 录屏按钮：悬在 eGPU 铭牌正上方，位置锚定右下角固定坐标
+    self._rec_button = RecButton(76)
 
     self._txt_speed_bg = gui_app.texture('images/speed_bg.png')
 
@@ -326,11 +329,25 @@ class HudRenderer(Widget):
     self._draw_date_time(rect)
     self._draw_tpms(rect)
     self._draw_egpu_badge(rect)
+    self._draw_rec_button(rect)
     self._draw_cruise_speed_animation(rect)
     draw_bsd_panel(ui_state.sm, rect, font=self._font_display)  # amapnavi 盲区图标 / 四角距离
 
   def user_interacting(self) -> bool:
     return self._exp_button.is_pressed
+
+  def _draw_rec_button(self, rect: rl.Rectangle) -> None:
+    """录屏按钮：悬在 eGPU 铭牌正上方。
+
+    位置锚定右下角固定坐标，不随 eGPU 铭牌出现/消失而跳动。
+    """
+    d = 76
+    gap = 34
+    margin = 20
+    badge_h = 108
+    x = rect.x + rect.width - margin - d
+    y = rect.y + rect.height - badge_h - margin - gap - d
+    self._rec_button.render(rl.Rectangle(int(x), int(y), d, d))
 
   def _draw_egpu_badge(self, rect: rl.Rectangle) -> None:
     # Keep runtime state visible while the shared USB hub re-enumerates; a
@@ -343,14 +360,18 @@ class HudRenderer(Widget):
     state = usbgpu_badge_state(ui_state.usbgpu_compiled, ui_state.usbgpu_loading,
                                ui_state.usbgpu_active, ui_state.usbgpu_startup_failed,
                                ui_state.usbgpu_compile_pending)
-    text = "eGPU REBOOT" if state == "compile_pending" else "eGPU ERROR" if state == "error" else "eGPU"
+    # 主字恒为 "eGPU"：状态词统一交给副字（26px）。旧版把状态塞进主字
+    # （"eGPU ERROR" ≈198px、"eGPU REBOOT" ≈240px），卡片宽度被它们撑住，
+    # 下限 312 也就顺带留了 116px 空白。改到副字后最长文案降到 ≈127px。
+    text = "eGPU"
+    badge_text = None
     if (getattr(ui_state, "usbgpu_delivery_badge", None) and
         not (ui_state.usbgpu_active or ui_state.usbgpu_loading or ui_state.usbgpu_startup_failed)):
-      text, state = ui_state.usbgpu_delivery_badge
+      badge_text, state = ui_state.usbgpu_delivery_badge
     if getattr(ui_state, 'jetlink_badge', None) and not ui_state.usbgpu_active:
-      text, state = ui_state.jetlink_badge
+      badge_text, state = ui_state.jetlink_badge
     if getattr(ui_state, 'usbgpu_recovery_badge', None) and not ui_state.usbgpu_active:
-      text, state = ui_state.usbgpu_recovery_badge
+      badge_text, state = ui_state.usbgpu_recovery_badge
     color = {
       "active": COLORS.GREEN_210,
       "loading": COLORS.YELLOW_210,
@@ -360,7 +381,6 @@ class HudRenderer(Widget):
       "ready": COLORS.WHITE_210,
     }[state]
     # carrot card pinned to the bottom-right corner
-    font = gui_app.font(FontWeight.DISPLAY) if not text.isascii() else self._font_semi_bold
 
     # 副标题先算出来，卡片宽度才能按最长文字自适应，长文案不会被裁掉
     frac, lines, pcolor = progress_info()
@@ -370,38 +390,49 @@ class HudRenderer(Widget):
       sub = f"下载 {pct}"
     elif reboot:
       sub = "请重启"
+    elif badge_text:
+      sub = badge_text
     else:
       sub = {
         "active": "已连接", "loading": "加载中", "error": "错误",
         "compile_pending": "待重启", "not_compiled": "待编译", "ready": "就绪",
       }.get(state, "")
 
+    # 主字或副字含中文时必须用带 CJK 字形的 DISPLAY 字体，否则会画成乱码。
+    font = gui_app.font(FontWeight.DISPLAY) if not (text.isascii() and sub.isascii()) else self._font_semi_bold
+
     # 2 倍等比放大：原版 156x54 / 主字18 / 副字13 -> 312x108 / 36 / 26
     # 造型、配色、右下角位置不变；宽度按最长文字自适应，长文案不裁字
     main_size, sub_size = 36, 26
-    icon_box, pad_right = 108, 40
+    icon_box, pad_right = 108, 20
     text_w = max(measure_text_cached(font, text, main_size).x,
                  measure_text_cached(font, sub, sub_size).x)
-    card_w = max(312, icon_box + text_w + pad_right)
+    # 固定宽度 255 = 图标区 108 + 最长副字（"下载 100%" ≈127）+ 右边距 20。
+    # 外部 badge 文案长度不可控，命中更长时自动加宽，绝不裁字。
+    card_w = max(255, icon_box + text_w + pad_right)
     card_h = 108
     margin = 20
     card_x = rect.x + rect.width - card_w - margin
     card_y = rect.y + rect.height - card_h - margin
-    card = rl.Rectangle(int(card_x), int(card_y), card_w, card_h)
-    rl.draw_rectangle_rounded(card, 0.35, 24, rl.Color(0, 0, 0, 160))
+    card = rl.Rectangle(int(card_x), int(card_y), int(card_w), card_h)
+    # 背景透明：卡片底色与胡萝卜的墨绿圆盘都不画，只保留 6px 状态色边框。
     rl.draw_rectangle_rounded_lines_ex(card, 0.35, 24, 6, color)
 
     # carrot on the left side of the card
-    cx, cy = int(card_x + 60), int(card_y + card_h / 2 - 2)
-    r = 36
-    rl.draw_circle(cx, cy, r, rl.Color(31, 42, 31, 255))
+    # 圆环放大到 r=45，正好把整只萝卜包住；萝卜的形心与环心、卡片中心对齐，
+    # 上下各留 9.5px，不再探出卡片（原版叶顶在 -6、主字字顶在 -9，都越界）。
+    cx, cy = int(card_x + 56), int(card_y + card_h // 2)
+    r = 45
     rl.draw_circle_lines(cx, cy, r, rl.Color(76, 175, 80, 255))
     if pct is not None and frac > 0:
       ring_color = pcolor if pcolor is not None else COLORS.YELLOW_210
       rl.draw_ring(rl.Vector2(cx, cy), r - 8, r, -90.0, -90.0 + 360.0 * frac, 48, ring_color)
     orange = rl.Color(239, 125, 35, 255)
     dark_orange = rl.Color(215, 105, 25, 255)
-    top_y = cy - 28
+    # 图形自身的形心比环心高 13.5px（一根胖椭圆 + 顶圆 + 叶片，形心偏上），
+    # 这里整体下移 13.5，让萝卜与圆环同心。
+    fy = cy + 13.5
+    top_y = fy - 28
     # ② 一体胖椭圆：一根竖椭圆当身体 + 顶圆，没有额外的底圆。
     # 轮廓一笔到底，任何角度都不会读成「下面接了个球」；全是正面图元，
     # 也彻底避开背面剔除的坑（amapnavi 箭头画完不会恢复剔除）。
@@ -409,23 +440,29 @@ class HudRenderer(Widget):
       rl.rl_disable_backface_culling()
     except Exception:
       pass
-    rl.draw_ellipse(cx, cy + 1, 19, 30, orange)
-    rl.draw_circle(cx, top_y + 2, 19, orange)
+    rl.draw_ellipse(cx, int(fy + 1), 19, 30, orange)
+    rl.draw_circle(cx, int(top_y + 2), 19, orange)
     leaf, leaf2 = rl.Color(76, 175, 80, 255), rl.Color(93, 196, 89, 255)
-    rl.draw_ellipse(cx - 12, top_y - 6, 6, 16, leaf)
-    rl.draw_ellipse(cx, top_y - 12, 6, 18, leaf2)
-    rl.draw_ellipse(cx + 12, top_y - 6, 6, 16, leaf)
-    rl.draw_rectangle_rounded(rl.Rectangle(cx - 12, cy - 8, 24, 4), 0.5, 8, dark_orange)
-    rl.draw_rectangle_rounded(rl.Rectangle(cx - 10, cy + 8, 20, 4), 0.5, 8, dark_orange)
+    rl.draw_ellipse(cx - 12, int(top_y - 6), 6, 16, leaf)
+    rl.draw_ellipse(cx, int(top_y - 12), 6, 18, leaf2)
+    rl.draw_ellipse(cx + 12, int(top_y - 6), 6, 16, leaf)
+    rl.draw_rectangle_rounded(rl.Rectangle(cx - 12, int(fy - 8), 24, 4), 0.5, 8, dark_orange)
+    rl.draw_rectangle_rounded(rl.Rectangle(cx - 10, int(fy + 8), 20, 4), 0.5, 8, dark_orange)
     try:
       rl.rl_enable_backface_culling()
     except Exception:
       pass
 
     # text on the right side of the card
-    tx = card_x + icon_box
-    rl.draw_text_ex(font, text, rl.Vector2(tx, card_y + 18), main_size, 0, color)
-    rl.draw_text_ex(font, sub, rl.Vector2(tx, card_y + 66), sub_size, 0, color)
+    # rl.draw_text_ex 的 position 是文字左上角（不是基线），别按基线算。
+    # 两行共用文字区中轴（icon_box → card_w-pad_right 的中心）水平居中；
+    # 垂直上主字字顶 16、副字字顶 66：两行之间留 14px 空隙，
+    # 整块（16~92）在 108 高的卡片里居中，两行都不会沉到框底。
+    text_cx = card_x + (icon_box + (card_w - pad_right)) / 2
+    main_w = measure_text_cached(font, text, main_size).x
+    sub_w = measure_text_cached(font, sub, sub_size).x
+    rl.draw_text_ex(font, text, rl.Vector2(text_cx - main_w / 2, card_y + 16), main_size, 0, color)
+    rl.draw_text_ex(font, sub, rl.Vector2(text_cx - sub_w / 2, card_y + 66), sub_size, 0, color)
 
   def _draw_set_speed(self, rect: rl.Rectangle) -> None:
     """Draw the MAX speed indicator box."""

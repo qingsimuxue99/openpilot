@@ -663,6 +663,72 @@ function dashcamSelectedForRoute(entry) {
   return dashcamSegmentsForRoute(entry).filter((segment) => dashcamState.selected.has(segment));
 }
 
+function dashcamAllSegments() {
+  const out = [];
+  for (const entry of dashcamState.routes || []) {
+    for (const segment of dashcamSegmentsForRoute(entry)) {
+      if (!out.includes(segment)) out.push(segment);
+    }
+  }
+  return out;
+}
+
+function selectAllDashcamSegments(checked) {
+  const all = dashcamAllSegments();
+  if (checked) {
+    for (const segment of all) dashcamState.selected.add(segment);
+  } else {
+    dashcamState.selected = new Set();
+  }
+  renderDashcamRoutes({ animate: false });
+  updateDashcamBulkUi();
+}
+
+function updateDashcamBulkUi() {
+  const count = (dashcamState.selected?.size || 0);
+  const total = dashcamAllSegments().length;
+  const check = document.querySelector('[data-logs-bulk-check="dashcam"]');
+  const label = document.querySelector('[data-logs-bulk-count="dashcam"]');
+  const btn = document.querySelector('[data-logs-bulk-delete="dashcam"]');
+  if (check) {
+    check.checked = total > 0 && count === total;
+    check.indeterminate = count > 0 && count < total;
+    check.disabled = total === 0;
+  }
+  if (label) label.textContent = getUIText("selected_count", "{count} selected", { count });
+  if (btn) btn.disabled = count === 0;
+}
+
+async function deleteSelectedDashcamSegments() {
+  const segments = Array.from(dashcamState.selected || []);
+  if (!segments.length) return;
+  const confirmed = await openAppDialog({
+    mode: "confirm",
+    title: getUIText("delete", "Delete"),
+    message: getUIText("delete_selected_confirm", "Delete {count} selected recordings?").replace("{count}", String(segments.length)),
+    confirmLabel: getUIText("delete", "Delete"),
+    cancelLabel: getUIText("cancel", "Cancel"),
+  });
+  if (!confirmed) return;
+  let failed = 0;
+  for (const segment of segments) {
+    try {
+      const response = await fetch(dashcamApiPath("segment", segment), { method: "DELETE" });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json.ok === false) failed += 1;
+    } catch (e) {
+      failed += 1;
+    }
+  }
+  dashcamState.selected = new Set();
+  await loadDashcamRoutes();
+  updateDashcamBulkUi();
+  showAppToast(
+    failed ? getUIText("delete_selected_partial", "Some recordings could not be deleted") : getUIText("video_deleted", "Recording deleted"),
+    { tone: failed ? "error" : "success" },
+  );
+}
+
 function dashcamSegmentReadStatusTag(segment) {
   return createLogsSegmentStatusTag(
     dashcamReadStateStore.statusFor(segment),
@@ -962,6 +1028,7 @@ function updateDashcamRouteSelectionUi(route) {
     input.checked = dashcamState.selected.has(segment);
   });
   card.dataset.renderKey = dashcamRouteRenderKey(entry);
+  updateDashcamBulkUi();
 
   return true;
 }
@@ -1124,6 +1191,10 @@ async function loadDashcamRoutes({ silent = false, append = false } = {}) {
     dashcamState.loading = false;
     dashcamState.loadingMore = false;
     setDashcamLoadingMoreUi(false);
+    // 工具栏的「全选」可用状态取决于已加载的段数。首帧渲染时 routes 还是空的，
+    // 全选框会被置成 disabled，用户在那之前点它没有任何反应（disabled 的
+    // checkbox 不派发 change 事件）。路由到位后必须主动刷新一次。
+    updateDashcamBulkUi();
     renderDashcamRoutes({ animate: append });
     if (!silent && logsScrollTops.dashcam === 0) restoreLogsScrollTop("dashcam", { reset: true });
     requestAnimationFrame(() => {
@@ -2057,6 +2128,7 @@ export {
   dashcamSortDirection,
   dashcamState,
   dashcamWindowNeedsRender,
+  deleteSelectedDashcamSegments,
   loadDashcamRoutes,
   markDashcamScrollBusy,
   maybeLoadMoreDashcamRoutes,
@@ -2066,12 +2138,14 @@ export {
   resumeDashcamUploadJobIfNeeded,
   scheduleDashcamWindowRender,
   scheduleSegmentListScrollPersist,
+  selectAllDashcamSegments,
   setDashcamLoadingMoreUi,
   setDashcamSort,
   showDashcamRouteMenu,
   showDashcamSegmentMenu,
   startDashcamAutoRefresh,
   toggleDashcamRouteSelectAll,
+  updateDashcamBulkUi,
   updateDashcamRouteSelectionUi,
   uploadDashcamSegments,
   uploadRecentDashcamSegments,

@@ -14,6 +14,7 @@ import {
   dashcamSortDirection,
   dashcamState,
   dashcamWindowNeedsRender,
+  deleteSelectedDashcamSegments,
   loadDashcamReadState,
   loadDashcamRoutes,
   markDashcamScrollBusy,
@@ -24,17 +25,20 @@ import {
   resumeDashcamUploadJobIfNeeded,
   scheduleDashcamWindowRender,
   scheduleSegmentListScrollPersist,
+  selectAllDashcamSegments,
   setDashcamLoadingMoreUi,
   setDashcamSort,
   showDashcamRouteMenu,
   showDashcamSegmentMenu,
   startDashcamAutoRefresh,
   toggleDashcamRouteSelectAll,
+  updateDashcamBulkUi,
   updateDashcamRouteSelectionUi,
   uploadDashcamSegments,
   uploadRecentDashcamSegments,
 } from "./dashcam.js";
 import {
+  deleteSelectedScreenrecordVideos,
   loadScreenrecordVideos,
   openScreenrecordPlayer,
   renderScreenrecordVideos,
@@ -42,7 +46,10 @@ import {
   screenrecordApiPath,
   screenrecordShouldLoadMore,
   screenrecordState,
+  selectAllScreenrecordVideos,
+  setScreenrecordSelection,
   showScreenrecordMenu,
+  updateScreenrecordBulkUi,
 } from "./screenrecord.js";
 
 // Logs page — shared infra used by both the Dashcam and Screen Recording tabs.
@@ -931,13 +938,50 @@ function bindLogsPage() {
       if (actionEl.dataset.action === "download-screenrecord") {
         const id = actionEl.dataset.id || "";
         if (id) window.open(screenrecordApiPath("download", id), "_blank", "noopener");
-      } else if (actionEl.dataset.action === "screenrecord-menu") {
-        showScreenrecordMenu(actionEl.dataset.id || "", actionEl.dataset.name || "").catch(() => {});
-      } else if (actionEl.dataset.action === "play-screenrecord") {
-        openScreenrecordPlayer(actionEl.dataset.id || "", actionEl.dataset.name || "");
-      }
-    });
+    } else if (actionEl.dataset.action === "screenrecord-menu") {
+      showScreenrecordMenu(actionEl.dataset.id || "", actionEl.dataset.name || "").catch(() => {});
+    } else if (actionEl.dataset.action === "screenrecord-select") {
+      // 复选框：只切换选中状态，不要触发整行播放
+    } else if (actionEl.dataset.action === "play-screenrecord") {
+      openScreenrecordPlayer(actionEl.dataset.id || "", actionEl.dataset.name || "");
+    }
+  });
+  screenHost.addEventListener("change", (ev) => {
+    const input = ev.target;
+    if (!input?.matches?.('input[data-action="screenrecord-select"]')) return;
+    setScreenrecordSelection(input.dataset.id || "", input.checked);
+  });
   }
+  bindLogsBulkBars();
+  }
+
+function bindLogsBulkBars() {
+  // 日志页两个面板（行车记录 / 屏幕录制）的「全选 + 删除选中」工具栏
+  const bars = document.querySelectorAll(".logs-bulkbar");
+  for (const bar of bars) {
+    if (bar.dataset.bound === "1") continue;
+    bar.dataset.bound = "1";
+    const kind = bar.dataset.logsBulk || "";
+    const check = bar.querySelector("[data-logs-bulk-check]");
+    const label = bar.querySelector("[data-logs-bulk-label]");
+    const del = bar.querySelector("[data-logs-bulk-delete]");
+    if (label) label.textContent = getUIText("select_all", "Select all");
+    if (del) del.textContent = getUIText("delete_selected", "Delete selected");
+    if (check) {
+      check.addEventListener("change", () => {
+        if (kind === "screen") selectAllScreenrecordVideos(check.checked);
+        else if (kind === "dashcam") selectAllDashcamSegments(check.checked);
+      });
+    }
+    if (del) {
+      del.addEventListener("click", () => {
+        if (kind === "screen") deleteSelectedScreenrecordVideos().catch(() => {});
+        else if (kind === "dashcam") deleteSelectedDashcamSegments().catch(() => {});
+      });
+    }
+  }
+  updateDashcamBulkUi();
+  updateScreenrecordBulkUi();
 }
 
 function initLogsPage() {
