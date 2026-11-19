@@ -515,7 +515,12 @@ class GuiApplication:
     except Exception as e:
       print(f"[REC] hardware recorder import failed: {type(e).__name__} {e}")
       return False
-    rec_w, rec_h = 960, 540
+    # 录制分辨率 640x360：GPU->CPU 回读的耗时与像素量成正比
+    # （实测 1280x720 +32.5ms、960x540 +17ms、640x360 +12.7ms），
+    # 而等待 GPU 的那部分是固定开销，降分辨率省不掉。
+    # 这里优先保证帧率：640x360 对「看清路况」是够的，
+    # 想要更清晰可以改这个值（代价是帧率下降）。
+    rec_w, rec_h = 640, 360
     if self._scaled_width and self._scaled_width < rec_w:
       rec_w, rec_h = self._scaled_width, self._scaled_height
     try:
@@ -1160,6 +1165,21 @@ class GuiApplication:
         # Start/stop can happen during widget rendering. Pair begin/end with the
         # target selected at frame start, never a newly allocated recording one.
         render_texture = self._render_texture
+        # 硬件录屏：GPU->CPU 回读放在**帧首**而不是帧末。
+        #
+        # 原因：glReadPixels 会等 GPU 把排在它前面的命令全部做完。
+        # 放在帧末时，前面排着这一帧刚提交的整套 HUD 绘制，于是回读要干等
+        # GPU 画完（实测 13.4ms）。放到帧首时，GPU 队列里只剩上一帧的工作，
+        # 回读明显更快（实测 9.9ms，降 26%）。
+        # 代价是录到的是上一帧画面（延迟一帧），录屏完全无感。
+        if self._hw_recorder is not None and render_texture is not None:
+          self._record_frame_idx += 1
+          if self._record_frame_idx > getattr(self, "_record_warmup_frames", 0) \
+             and self._record_frame_idx % self._record_every_n == 0:
+            try:
+              self._hw_recorder.submit(self._capture_record_frame(render_texture))
+            except Exception as e:
+              print(f"[REC] capture failed: {type(e).__name__} {e}")
         if render_texture:
           rl.begin_texture_mode(render_texture)
           self.render_framebuffer = render_texture.id
@@ -1190,16 +1210,7 @@ class GuiApplication:
           rl.end_texture_mode()
           # 硬件录屏：UI 纹理已在 GPU 上画完，先缩放到录制分辨率再回读，
           # 避免全分辨率回读 + 软件编码把渲染管线拖死。
-          if self._hw_recorder is not None:
-            self._record_frame_idx += 1
-            # 刚启动录屏的前几帧不做回读：此时 GPU 管线还在消化整帧 HUD，
-            # 立刻回读会把渲染彻底堵死（实测 FPS 掉到 6）。
-            if self._record_frame_idx > getattr(self, "_record_warmup_frames", 0) \
-               and self._record_frame_idx % self._record_every_n == 0:
-              try:
-                self._hw_recorder.submit(self._capture_record_frame(render_texture))
-              except Exception as e:
-                print(f"[REC] capture failed: {type(e).__name__} {e}")
+          # 回读已挪到帧首（见上方注释），这里不再重复抓帧。
           rl.begin_drawing()
           rl.clear_background(rl.BLACK)
           src_rect = rl.Rectangle(0, 0, float(self._scaled_width), -float(self._scaled_height))

@@ -234,10 +234,9 @@ class VenusH264Recorder:
   """硬件 H.264 编码录屏器。调用方在 UI 线程 submit()，编码在后台线程完成。"""
 
   def __init__(self, path: str, width: int, height: int, fps: int,
-               # 码率：行驶时画面变化剧烈（路面纹理、树影、护栏），
-               # 6Mbps 会顶满上限导致画面发糊。实测 Venus 硬编每帧仅 1.7ms，
-               # 码率提高对性能无压力，故提到 9Mbps。
-               bitrate: int = 9_000_000, gop: int = 30, queue_size: int = 4):
+               # 码率：640x360 每秒 30 帧，6Mbps 已经很富余；
+               # 行驶时画面变化剧烈（路面纹理、树影、护栏），码率给够才不会发糊。
+               bitrate: int = 6_000_000, gop: int = 30, queue_size: int = 4):
     self.path = path
     self.width = width
     self.height = height
