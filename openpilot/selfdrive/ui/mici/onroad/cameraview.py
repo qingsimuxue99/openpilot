@@ -45,17 +45,26 @@ if TICI:
     precision mediump float;
     in vec2 fragTexCoord;
     uniform samplerExternalOES texture0;
+    uniform vec2 uTexel;
     out vec4 fragColor;
     uniform int engaged;
     uniform int enhance_driver;
 
     void main() {
-      vec4 color = texture(texture0, fragTexCoord);
+      // 锐化：4 邻域 unsharp，把放大插值糊掉的边缘找回来
+      vec3 c  = texture(texture0, fragTexCoord).rgb;
+      vec3 cl = texture(texture0, fragTexCoord - vec2(uTexel.x, 0.0)).rgb;
+      vec3 cr = texture(texture0, fragTexCoord + vec2(uTexel.x, 0.0)).rgb;
+      vec3 cu = texture(texture0, fragTexCoord + vec2(0.0, uTexel.y)).rgb;
+      vec3 cd = texture(texture0, fragTexCoord - vec2(0.0, uTexel.y)).rgb;
+      vec4 color = vec4(clamp(c * 2.0 - 0.25 * (cl + cr + cu + cd), 0.0, 1.0), 1.0);
+      // 对比度校正：所有状态都做（含未接管），否则画面又暗又灰
+      color.rgb = clamp((color.rgb - 0.5) * 1.25 + 0.5, 0.0, 1.0);
       if (engaged == 1) {
         float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));  // Luma
         color.rgb = mix(vec3(gray), color.rgb, 0.2);  // 20% saturation
-        color.rgb = clamp((color.rgb - 0.5) * 1.2 + 0.5, 0.0, 1.0);  // +20% contrast
-        color.rgb = pow(color.rgb, vec3(1.0/1.28));
+        // 之前这里还有 pow(rgb, 1/1.28) 的 gamma 提亮 —— 它把暗部整体抬起来，
+        // 正是画面「雾蒙蒙、发灰」的来源。对比度校正已经够用，这里去掉。
         fragColor = vec4(color.rgb, color.a);
       } else {
         color.rgb *= 0.85;  // 85% opacity
@@ -75,14 +84,21 @@ else:
     in vec2 fragTexCoord;
     uniform sampler2D texture0;
     uniform sampler2D texture1;
+    uniform vec2 uTexel;
     out vec4 fragColor;
     uniform int engaged;
     uniform int enhance_driver;
 
     void main() {
-      float y = texture(texture0, fragTexCoord).r;
+      // 锐化：只对 Y（亮度）做 4 邻域 unsharp，色度平面不采样，省一半开销
+      float y  = texture(texture0, fragTexCoord).r;
+      float yl = texture(texture0, fragTexCoord - vec2(uTexel.x, 0.0)).r;
+      float yr = texture(texture0, fragTexCoord + vec2(uTexel.x, 0.0)).r;
+      float yu = texture(texture0, fragTexCoord + vec2(0.0, uTexel.y)).r;
+      float yd = texture(texture0, fragTexCoord - vec2(0.0, uTexel.y)).r;
+      float ys = clamp(y * 2.0 - 0.25 * (yl + yr + yu + yd), 0.0, 1.0);
       vec2 uv = texture(texture1, fragTexCoord).ra - 0.5;
-      vec3 rgb = vec3(y + 1.402*uv.y, y - 0.344*uv.x - 0.714*uv.y, y + 1.772*uv.x);
+      vec3 rgb = vec3(ys + 1.402*uv.y, y - 0.344*uv.x - 0.714*uv.y, y + 1.772*uv.x);
       if (engaged == 1) {
         float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
         rgb = mix(vec3(gray), rgb, 0.2);  // 20% saturation
@@ -122,6 +138,8 @@ class CameraView(Widget):
     self.last_connection_attempt: float = 0.0
     self.shader = rl.load_shader_from_memory(VERTEX_SHADER, FRAME_FRAGMENT_SHADER)
     self._texture1_loc: int = rl.get_shader_location(self.shader, "texture1") if not TICI else -1
+    # 锐化用的纹理步长（源纹理的 1/宽、1/高）
+    self._texel_loc: int = rl.get_shader_location(self.shader, "uTexel")
     self._engaged_loc = rl.get_shader_location(self.shader, "engaged")
     self._engaged_val = rl.ffi.new("int[1]", [1])
     self._enhance_driver_loc = rl.get_shader_location(self.shader, "enhance_driver")
@@ -239,6 +257,14 @@ class CameraView(Widget):
     elif not self.client.is_connected():
       # ensure we clear the displayed frame when the connection is lost
       self.frame = None
+
+    # 锐化用的纹理步长。放在这里而不是 _render_textures 里，
+    # 是因为小屏还有一条 EGL 渲染路径（不走 _render_textures），
+    # 放这里两条路径都能拿到。
+    if self.frame is not None and self._texel_loc >= 0:
+      rl.set_shader_value(self.shader, self._texel_loc,
+                        rl.Vector2(1.0 / max(1, self.frame.width), 1.0 / max(1, self.frame.height)),
+                        rl.ShaderUniformDataType.SHADER_UNIFORM_VEC2)
 
     if not self.frame:
       self._draw_placeholder(rect)
