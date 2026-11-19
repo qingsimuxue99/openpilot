@@ -117,11 +117,17 @@ class _Mp4Writer:
     self.f.close()
 
   def _frame_durations(self) -> tuple[list[int], int]:
-    """按每帧的真实时间戳算出各帧时长（timescale 单位）。
+    """算出每帧时长（timescale 单位）。
 
-    UI 渲染帧率会波动（录屏时因为 GPU 回读会掉到 13~17fps），
-    所以不能假设等间隔。用真实时间戳算出来的时长表，
-    播放速度才与真实录制速度一致。
+    这里做的是「真实时长 + 均摊」：
+      - 用首末帧的真实时间戳算出**总时长**（保证播放速度与真实一致，
+        UI 帧率波动时也不会偏快/偏慢）；
+      - 再把这个总时长**均摊**到每一帧（保证帧间隔均匀，播放不顿）。
+
+    为什么不用逐帧的真实间隔：行驶时 UI 渲染会偶发变慢，某一帧的间隔
+    可能被拉到几百毫秒。逐帧照搬的话，mp4 里那一帧的时长就特别长，
+    播放时会明显「顿一下」——正是「速度一快就卡顿」的原因。
+    均摊之后总时长不变（速度依旧准确），帧间隔又均匀（播放顺滑）。
     """
     n = len(self.samples)
     if n == 0:
@@ -130,15 +136,11 @@ class _Mp4Writer:
     if len(ts) != n or any(t is None for t in ts):
       # 没有时间戳信息，退回固定 delta
       return [self.delta] * n, self.delta * n
-    durs = []
-    for i in range(n):
-      if i + 1 < n:
-        d_us = ts[i + 1] - ts[i]
-      else:
-        # 最后一帧用前面帧的平均间隔
-        d_us = int(sum(durs) / len(durs)) if durs else (self.delta * 1000000 // self.timescale)
-      durs.append(max(1, d_us * self.timescale // 1_000_000))
-    return durs, sum(durs)
+    total_us = ts[-1] - ts[0]
+    if total_us <= 0:
+      return [self.delta] * n, self.delta * n
+    avg = max(1, total_us * self.timescale // (1_000_000 * n))
+    return [avg] * n, avg * n
 
   def _build_stts(self, durations: list[int]) -> bytes:
     """生成变长 stts（时间到样本表），连续相同帧时长合并成一段。"""
@@ -232,7 +234,10 @@ class VenusH264Recorder:
   """硬件 H.264 编码录屏器。调用方在 UI 线程 submit()，编码在后台线程完成。"""
 
   def __init__(self, path: str, width: int, height: int, fps: int,
-               bitrate: int = 6_000_000, gop: int = 30, queue_size: int = 4):
+               # 码率：行驶时画面变化剧烈（路面纹理、树影、护栏），
+               # 6Mbps 会顶满上限导致画面发糊。实测 Venus 硬编每帧仅 1.7ms，
+               # 码率提高对性能无压力，故提到 9Mbps。
+               bitrate: int = 9_000_000, gop: int = 30, queue_size: int = 4):
     self.path = path
     self.width = width
     self.height = height

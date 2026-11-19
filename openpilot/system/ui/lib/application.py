@@ -521,13 +521,15 @@ class GuiApplication:
     try:
       out_path = self._new_record_path()
       rec = VenusH264Recorder(str(out_path), rec_w, rec_h, self._target_fps or _DEFAULT_FPS)
-      # 每 2 个渲染帧抓一帧（20fps UI -> 10fps 真实画面）。
-      # GPU->CPU 同步回读的实测成本与分辨率成正比（1280x720 约 +32.5ms/帧，
-      # 960x540 约 +17ms/帧），隔帧抓能把每帧额外开销压到 ~+7ms。
-      # 注意：recorder 内部会按 capture_every 自动修正 mp4 的时间戳步长，
-      # 所以录制出来的视频是正常速度，不会快进（原版靠 ffmpeg -r 做这个补偿，
-      # 硬件路径没有 ffmpeg，必须由 recorder 自己算）。
-      self._record_every_n = 2
+      # 每 1 个渲染帧抓一帧：视频帧率 = UI 实际帧率。
+      #
+      # 真车实测：行驶时 UI 帧率会掉到 6~10fps（摄像头画面每帧都在变，
+      # 纹理上传开销大），静止时能到 20fps。
+      # 之前每 2 帧抓一次，等于把视频帧率再砍一半 —— 真车上只剩 3~5fps，
+      # 播放起来非常卡（静止时因为 UI 有 20fps，看着反而不卡）。
+      # 现在每帧都抓，视频帧率就是 UI 帧率，不再额外减半。
+      # 时间戳由 recorder 按真实时长均摊，播放速度与实际一致。
+      self._record_every_n = 1
       rec.set_capture_rate(self._record_every_n)
       if not rec.start():
         return False
@@ -541,7 +543,9 @@ class GuiApplication:
     # 刚点下按钮的那一两秒最难受：此时 GPU 刚画完一整帧 HUD，紧接着的回读
     # 会把管线彻底堵住（实测 FPS 一度掉到 6）。先跳过前面若干帧不做回读，
     # 让 UI 先把渲染节奏稳下来，之后再开始采集。
-    self._record_warmup_frames = 30
+    # 真车录屏时 UI 只有 7~10fps，跳过 30 帧等于 3~4 秒没有画面，
+    # 18 帧（�� 2 秒）足够让渲染节奏稳下来。
+    self._record_warmup_frames = 18
     print(f"[REC] start (hardware {rec_w}x{rec_h}, every {self._record_every_n}) -> {out_path}")
     return True
 
